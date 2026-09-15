@@ -1,0 +1,41 @@
+# Local dev services for echoandaura. The Next.js app and the BullMQ worker run
+# on the host (`pnpm dev` / `pnpm worker`); Postgres and Redis run here.
+# Images are pinned to concrete majors (not :latest) for reproducibility —
+# CLAUDE.md: "Pin dependency versions exactly."
+services:
+  postgres:
+    image: postgres:17
+    container_name: echoandaura-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-echoandaura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_only_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-echoandaura}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echoandaura} -d ${POSTGRES_DB:-echoandaura}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: echoandaura-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:
