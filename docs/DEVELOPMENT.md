@@ -34,7 +34,8 @@ pnpm worker
 All configuration is read from `.env` (git-ignored). Start from `.env.example`,
 which documents every variable — database, Redis, better-auth, Resend, R2, and
 the organizer's bKash number. Never commit real secrets; a Write/Edit hook blocks
-obvious ones.
+obvious ones. See [ENVIRONMENT.md](ENVIRONMENT.md) for every variable and how to
+obtain each.
 
 ## Scripts
 
@@ -129,5 +130,7 @@ These are the points an "idiomatic simplification" tends to break.
 ## Further reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design and data model
+- [DIAGRAMS.md](DIAGRAMS.md) — ER, class, state, and sequence diagrams
+- [ENVIRONMENT.md](ENVIRONMENT.md) — environment variables and how to get them
 - [../CLAUDE.md](../CLAUDE.md) — the invariants, in full
 - [DECISIONS.md](DECISIONS.md) — architecture decision records

@@ -5,7 +5,8 @@ Status: ACTIVE · Owner: unassigned · Last updated: 2026-08-21
 The invariants that protect money and inventory live in
 [../CLAUDE.md](../CLAUDE.md) and are deliberately not repeated here in full —
 that file is kept short because it's loaded every turn. This doc is the
-longer-form system picture: how the pieces fit together and why.
+longer-form system picture: how the pieces fit together and why. Rendered
+diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md).
 
 ---
 
