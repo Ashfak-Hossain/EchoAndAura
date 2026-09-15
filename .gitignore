@@ -42,6 +42,10 @@ yarn-error.log*
 /playwright-report/
 /blob-report/
 
+# personal working notes — roadmap, session log, scaffold, tooling guide.
+# Kept on disk (read by the /prime and /wrap commands) 
+/notes/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

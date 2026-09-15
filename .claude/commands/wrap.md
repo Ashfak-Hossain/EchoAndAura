@@ -3,7 +3,7 @@ description: Close out the session — docs, ADR, commit
 ---
 
 1. Run `pnpm verify`. If it fails, stop and report; do not commit.
-2. Prepend a dated entry to `docs/PROGRESS.md`: what was done, decisions made,
+2. Prepend a dated entry to `notes/PROGRESS.md`: what was done, decisions made,
    the next slice, and any blockers.
 3. If a non-obvious architectural choice was made this session, add an ADR to
    `docs/DECISIONS.md`.

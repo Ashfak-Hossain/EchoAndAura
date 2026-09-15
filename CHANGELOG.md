@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here, newest first.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
-Entries are added at tag time per [docs/WORKFLOW.md § Git discipline](docs/WORKFLOW.md).
+Entries are added at tag time per [docs/DEVELOPMENT.md § Branching & commits](docs/DEVELOPMENT.md).
 
 ## [Unreleased]
 

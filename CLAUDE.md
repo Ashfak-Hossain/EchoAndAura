@@ -136,7 +136,7 @@ covering the failure path, not just the happy path.
   One slice complete and green before starting the next.
 - **Start every task in plan mode.** Present the plan, get approval, then write.
 - Run `pnpm verify` before saying a task is done. If it fails, it is not done.
-- Update `docs/PROGRESS.md` at the end of every session.
+- Update `notes/PROGRESS.md` at the end of every session.
 - Record non-obvious choices in `docs/DECISIONS.md` as a short ADR.
 - Pin dependency versions exactly. No `^` ranges.
 - Comment the WHY on money, inventory, and state-machine code.

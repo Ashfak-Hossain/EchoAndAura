@@ -3,8 +3,8 @@
 Status: DRAFT — not client-signed · Owner: unassigned · Last updated: 2026-08-21
 
 This is meant to be the signed scope — the single source of truth for what is
-and isn't in the MVP. It is currently a draft assembled from `CLAUDE.md` and
-`PHASES.md`; it has not been reviewed and confirmed with the client (Raj).
+and isn't in the MVP. It is currently a draft derived from `CLAUDE.md`; it has
+not been reviewed and confirmed with the client (Raj).
 Do not treat anything below as final until this status line changes to
 `ACTIVE — signed off`.
 
@@ -30,13 +30,10 @@ and this file is stale.
   system
 - Check-in via printed/exported list — no QR scanning at the gate
 
-See [PHASES.md](PHASES.md) for how this scope is sequenced into phases 0-4
-(MVP) and phases 5-7 (post-MVP hardening and depth).
-
 ## Explicit out-of-scope
 
-From `PHASES.md`'s "Post-launch" list and its stated rule: **everything
-unanswered is out of scope** for the 11 September date.
+Deferred to post-launch. **Everything not explicitly in scope above is out of
+scope** for the MVP.
 
 - bKash API integration, tokens, callbacks, reconciliation jobs (see
   [DECISIONS.md — ADR-001](DECISIONS.md))
@@ -48,8 +45,7 @@ unanswered is out of scope** for the 11 September date.
 
 ## Open decisions (TBD)
 
-These block work and are tracked as the current blockers in
-[PROGRESS.md](PROGRESS.md):
+These are open and block their respective phases:
 
 - **Domain name** — blocks email sending entirely (Resend needs a verified
   domain). BLOCKING.

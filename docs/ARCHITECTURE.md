@@ -116,7 +116,7 @@ generated — never hand-edited):
 - **`src/components/ui/` is shadcn-generated** and excluded from hand-editing
   by `.claude/settings.json` — regenerate via the CLI instead.
 
-Full target tree: [../SETUP.md § Directory structure](../SETUP.md).
+Full project structure: [DEVELOPMENT.md § Project structure](DEVELOPMENT.md).
 
 ## Deployment topology
 
