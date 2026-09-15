@@ -11,9 +11,13 @@ style preferences. Violating them causes financial loss or data corruption.
 
 ## Stack
 
-Next.js 15 App Router · Node 22 · TypeScript `strict` · Postgres 17 + Drizzle
-Redis 7 + BullMQ · Zod · better-auth (admin only) · pino · Resend + React Email
-shadcn/ui + Tailwind · Vitest + Playwright · Docker · Timezone `Asia/Dhaka`
+Next.js 16 App Router · React 19 · Node 26 · TypeScript `strict` · Postgres 17 +
+Drizzle 0.45 (postgres-js driver) · Redis 7 + BullMQ · Zod · better-auth (admin
+only) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
+Playwright · Docker · Timezone `Asia/Dhaka`
+
+> Latest majors were adopted at scaffold time — see [ADR-003](docs/DECISIONS.md).
+> Drizzle stays on stable 0.45 (1.0 is still pre-release).
 
 ---
 
