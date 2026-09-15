@@ -13,40 +13,42 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
 ## System diagram
 
 ```
-                         ┌──────────────────────┐
-   Buyer / Admin  ─────► │   Next.js 15 App      │
-   (browser)             │   (App Router)        │
-                         │                        │
-                         │  (public)/  events,    │
-                         │            register,   │
-                         │            ticket/[..] │
-                         │  (admin)/   verify,     │
-                         │            events CRUD  │
-                         │  api/       route         │
-                         │            handlers       │
+                         ┌──────────────────────────┐
+   Buyer / Admin  ─────► │   Next.js 15 App         │
+   (browser)             │   (App Router)           │
+                         │                          │
+                         │  (public)/ events,       │
+                         │            register,     │
+                         │            ticket/[..]   │
+                         │                          │
+                         │  (admin)/  verify,       │
+                         │            events CRUD   │
+                         │                          │
+                         │  api/      route         │
+                         │            handlers      │
                          └──────┬────────┬──────────┘
                                 │        │
                      src/server/│        │ enqueue job
                      (no next/* │        ▼
                       imports)  │   ┌───────────┐
-                                │   │  Redis 7   │
-                                │   │  BullMQ    │
+                                │   │  Redis 7  │
+                                │   │  BullMQ   │
                                 │   └─────┬─────┘
                                 │         │
                                 ▼         ▼
-                         ┌───────────┐ ┌──────────────┐
-                         │ Postgres  │ │ worker.ts     │
+                         ┌───────────┐ ┌────────────────┐
+                         │ Postgres  │ │ worker.ts      │
                          │    17     │ │ (tsx process)  │
-                         └───────────┘ │ - send email    │
-                                       │ - expire holds  │
+                         └───────────┘ │ - send email   │
+                                       │ - expire holds │
                                        └──────┬─────────┘
                                               │
                                     ┌─────────┴─────────┐
                                     ▼                   ▼
                                ┌─────────┐        ┌───────────┐
-                               │ Resend   │        │ R2 (S3)    │
-                               │ + React  │        │ event      │
-                               │ Email    │        │ images     │
+                               │ Resend  │        │ R2 (S3)   │
+                               │ + React │        │ event     │
+                               │ Email   │        │ images    │
                                └─────────┘        └───────────┘
 ```
 

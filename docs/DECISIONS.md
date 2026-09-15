@@ -49,7 +49,7 @@ Accepted because the alternative — overselling — is worse.
 the versions the original `CLAUDE.md § Stack` list assumed. `create-next-app@latest`
 and the subsequent installs resolved to newer majors.
 
-**Decision:** Build on the latest *stable* majors: Next.js 16 (was 15), React 19,
+**Decision:** Build on the latest _stable_ majors: Next.js 16 (was 15), React 19,
 Node 26 (runtime; `.nvmrc`), Tailwind 4, drizzle-orm 0.45 with the **postgres-js**
 driver (`postgres`, not `pg`), Vitest 5, Playwright 1.x. Drizzle 1.0 exists only
 as a pre-release (rc/beta) and was **not** adopted — the data layer stays on the
