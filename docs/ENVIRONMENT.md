@@ -52,6 +52,10 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
   `openssl rand -base64 32`. Keep it stable; rotating it invalidates all sessions.
 - `BETTER_AUTH_URL`: the app's base URL (`http://localhost:3000` in dev; the real
   domain in production).
+- **Create the admin account** (once, after `pnpm db:migrate`):
+  `pnpm admin:create <email> <password> [name]`. Public sign-up is disabled, so
+  this is the only way an account is created; running it again for the same
+  email fails cleanly.
 
 ### Resend (email) — Phase 4
 
