@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
@@ -17,7 +18,15 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   return (
     <div className="min-h-screen">
       <header className="flex items-center justify-between border-b px-4 py-3">
-        <span className="font-semibold">echoandaura admin</span>
+        <nav className="flex items-center gap-4 text-sm">
+          <span className="font-semibold">echoandaura admin</span>
+          <Link href="/admin" className="underline">
+            Dashboard
+          </Link>
+          <Link href="/admin/events" className="underline">
+            Events
+          </Link>
+        </nav>
         <form action={signOutAction}>
           <button type="submit" className="text-sm underline">
             Sign out

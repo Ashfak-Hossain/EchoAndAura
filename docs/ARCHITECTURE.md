@@ -116,6 +116,16 @@ generated — never hand-edited):
 - **Route handlers and server actions are thin (~15 lines).** Zod parse →
   call service → map result. Business logic in a route is the specific
   failure mode the `code-reviewer` subagent checks for.
+- **Services are factories; `src/server/container.ts` is the composition
+  root.** A service module depends only on repository _interfaces_
+  (`createEventsService(repo)`), so importing it never opens a database
+  connection; unit tests pass in-memory fakes, and the container wires the
+  real repositories for the app and the worker. Services throw typed domain
+  errors (`src/server/lib/errors.ts`); the app layer maps them to messages.
+  The events vertical (`repositories/events.repository.ts` →
+  `services/events.service.ts` → `app/admin/(protected)/events/actions.ts`)
+  is the reference implementation — see
+  [DECISIONS.md — ADR-005](DECISIONS.md).
 - **`src/components/ui/` is shadcn-generated** and excluded from hand-editing
   by `.claude/settings.json` — regenerate via the CLI instead.
 
