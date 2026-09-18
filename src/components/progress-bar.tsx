@@ -3,14 +3,16 @@ import { cn } from '@/lib/utils';
 interface Props {
   total: number;
   sold: number;
-  /** Held (reserved) stock — drawn as a marigold segment so it reads apart from sold (B3). */
+  /** Held (reserved) stock — a marigold segment so it reads apart from sold (B3). */
   held?: number;
+  /** Fully sold types render green (B3 "window closed" Early Bird). */
+  complete?: boolean;
   className?: string;
   label?: string;
 }
 
-/** Plain-div progress bar: charcoal = sold, marigold = held, ground = available. */
-export function ProgressBar({ total, sold, held = 0, className, label }: Props) {
+/** B3 plain-div bar: 10px, #EDEAE3 track, charcoal = sold, marigold = held. */
+export function ProgressBar({ total, sold, held = 0, complete, className, label }: Props) {
   const pct = (n: number) => (total > 0 ? Math.min(100, (n / total) * 100) : 0);
   return (
     <div
@@ -19,10 +21,13 @@ export function ProgressBar({ total, sold, held = 0, className, label }: Props) 
       aria-valuemin={0}
       aria-valuemax={total}
       aria-valuenow={sold + held}
-      className={cn('flex h-2 w-full overflow-hidden rounded-full bg-secondary', className)}
+      className={cn('flex h-2.5 w-full overflow-hidden rounded-[5px] bg-[#edeae3]', className)}
     >
-      <div className="h-full bg-foreground" style={{ width: `${pct(sold)}%` }} />
-      <div className="h-full bg-primary" style={{ width: `${pct(held)}%` }} />
+      <div
+        className={cn('h-full', complete ? 'bg-success' : 'bg-foreground')}
+        style={{ width: `${pct(sold)}%` }}
+      />
+      <div className="h-full bg-marigold" style={{ width: `${pct(held)}%` }} />
     </div>
   );
 }

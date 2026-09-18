@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { eventsService, ticketTypesService } from '@/server/container';
 import { ButtonLink } from '@/components/button-link';
 import { EmptyState } from '@/components/empty-state';
-import { PageHeader } from '@/components/page-header';
 import { StatusChip } from '@/components/status-chip';
 import { TabNav } from '@/components/tab-nav';
 import {
@@ -43,35 +42,25 @@ export default async function AdminEventsPage({ searchParams }: Props) {
   for (const e of events) counts[e.status] += 1;
   const visible = active === 'all' ? events : events.filter((e) => e.status === active);
 
-  // Sold / total per event from its ticket types (no order data yet).
-  const totals = new Map<string, { sold: number; total: number }>();
-  await Promise.all(
-    visible.map(async (e) => {
-      const types = await ticketTypesService.listForEvent(e.id);
-      totals.set(e.id, {
-        sold: types.reduce((n, t) => n + t.quantitySold, 0),
-        total: types.reduce((n, t) => n + t.quantityTotal, 0),
-      });
-    }),
-  );
+  // Sold / total per event in one aggregate query (no order data yet).
+  const capacity = await ticketTypesService.capacityForEvents(visible.map((e) => e.id));
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Events"
-        actions={<ButtonLink href="/admin/events/new">New event</ButtonLink>}
-      />
-
-      <TabNav
-        label="Filter by status"
-        active={active}
-        items={FILTERS.map((f) => ({
-          key: f.key,
-          label: f.label,
-          count: counts[f.key],
-          href: f.key === 'all' ? '/admin/events' : `/admin/events?status=${f.key}`,
-        }))}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabNav
+          label="Filter by status"
+          active={active}
+          variant="segmented"
+          items={FILTERS.map((f) => ({
+            key: f.key,
+            label: f.label,
+            count: counts[f.key],
+            href: f.key === 'all' ? '/admin/events' : `/admin/events?status=${f.key}`,
+          }))}
+        />
+        <ButtonLink href="/admin/events/new">New event</ButtonLink>
+      </div>
 
       {visible.length === 0 ? (
         <EmptyState
@@ -102,7 +91,7 @@ export default async function AdminEventsPage({ searchParams }: Props) {
             </TableHeader>
             <TableBody>
               {visible.map((event) => {
-                const t = totals.get(event.id) ?? { sold: 0, total: 0 };
+                const t = capacity.get(event.id) ?? { sold: 0, total: 0 };
                 return (
                   <TableRow key={event.id}>
                     <TableCell>

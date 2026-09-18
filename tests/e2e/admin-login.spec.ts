@@ -21,6 +21,12 @@ test.describe('admin login', () => {
       page.getByRole('alert').filter({ hasText: /invalid email or password/i }),
     ).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/login$/);
+
+    // B1 invalid state: email kept, password cleared, both fields marked.
+    await expect(page.getByLabel('Email')).toHaveValue(email);
+    await expect(page.getByLabel('Password')).toHaveValue('');
+    await expect(page.getByLabel('Email')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByLabel('Password')).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('correct credentials reach the dashboard; sign-out guards again', async ({ page }) => {
@@ -32,7 +38,11 @@ test.describe('admin login', () => {
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
-    await page.getByRole('button', { name: /sign out/i }).click();
+    // B2 has a Sign out in the sidebar footer and one in the header; either works.
+    await page
+      .getByRole('banner')
+      .getByRole('button', { name: /sign out/i })
+      .click();
     await expect(page).toHaveURL(/\/admin\/login$/);
 
     await page.goto('/admin');

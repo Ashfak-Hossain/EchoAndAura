@@ -37,7 +37,11 @@ export function FieldHint({ children }: { children: ReactNode }) {
  */
 export function FormAlert({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <Alert role="alert" variant="destructive">
+    <Alert
+      role="alert"
+      variant="destructive"
+      className="border-l-4 border-destructive/30 border-l-destructive bg-destructive-tint"
+    >
       {title ? <AlertTitle>{title}</AlertTitle> : null}
       <AlertDescription>{children}</AlertDescription>
     </Alert>

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/admin-shell';
-import { Button } from '@/components/ui/button';
 import { auth } from '@/lib/auth';
 import { signOutAction } from './actions';
 
@@ -18,11 +17,24 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   return (
     <AdminShell
       email={session.user.email}
-      signOut={
+      signOutQuiet={
         <form action={signOutAction}>
-          <Button type="submit" variant="ghost" size="sm" className="-ml-2">
+          <button
+            type="submit"
+            className="text-left text-[13px] text-[#a8a29a] hover:text-sidebar-accent-foreground"
+          >
             Sign out
-          </Button>
+          </button>
+        </form>
+      }
+      signOutButton={
+        <form action={signOutAction}>
+          <button
+            type="submit"
+            className="flex h-9 items-center rounded-lg border border-border-strong bg-card px-3.5 text-[13px] font-semibold hover:bg-secondary"
+          >
+            Sign out
+          </button>
         </form>
       }
     >

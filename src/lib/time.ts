@@ -43,3 +43,8 @@ export function formatRelative(date: Date, now: Date = new Date()): string {
   if (days < 7) return `${days} days ago`;
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy');
 }
+
+/** Short weekday form for prose, e.g. "Thu 1 Oct, 19:00" (B5 "dates in plain words"). */
+export function formatDhakaShort(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM, HH:mm');
+}

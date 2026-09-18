@@ -1,5 +1,6 @@
 import { TicketTypeInUseError, TicketTypeNotFoundError } from '@/server/lib/errors';
 import type {
+  EventCapacity,
   TicketTypeRecord,
   TicketTypesRepository,
 } from '@/server/repositories/ticket-types.repository';
@@ -24,6 +25,16 @@ export function createTicketTypesService(repo: TicketTypesRepository) {
   return {
     listForEvent(eventId: string): Promise<TicketTypeRecord[]> {
       return repo.listByEvent(eventId);
+    },
+
+    /** Capacity per event as a map; events with no ticket types get zeros. */
+    async capacityForEvents(eventIds: string[]): Promise<Map<string, EventCapacity>> {
+      const rows = await repo.capacityByEvent(eventIds);
+      const map = new Map(rows.map((r) => [r.eventId, r]));
+      for (const id of eventIds) {
+        if (!map.has(id)) map.set(id, { eventId: id, total: 0, sold: 0, held: 0 });
+      }
+      return map;
     },
 
     async getTicketType(id: string): Promise<TicketTypeRecord> {

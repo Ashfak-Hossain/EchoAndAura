@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { ticketTypes } from '@/db/schema';
 import {
@@ -29,8 +29,21 @@ export interface NewTicketType {
 
 export type TicketTypePatch = Partial<Omit<NewTicketType, 'eventId'>>;
 
+/** Capacity roll-up for one event, from a single GROUP BY query. */
+export interface EventCapacity {
+  eventId: string;
+  total: number;
+  sold: number;
+  held: number;
+}
+
 export interface TicketTypesRepository {
   listByEvent(eventId: string): Promise<TicketTypeRecord[]>;
+  /**
+   * Sold/held/total per event in ONE query — lists and the dashboard must
+   * never do a query per event (N+1 with a growing events table).
+   */
+  capacityByEvent(eventIds: string[]): Promise<EventCapacity[]>;
   findById(id: string): Promise<TicketTypeRecord | null>;
   /** @throws EventNotFoundError when `eventId` does not exist (FK). */
   insert(values: NewTicketType): Promise<TicketTypeRecord>;
@@ -65,6 +78,21 @@ export const ticketTypesRepository: TicketTypesRepository = {
   async findById(id) {
     const [row] = await db.select().from(ticketTypes).where(eq(ticketTypes.id, id)).limit(1);
     return row ?? null;
+  },
+
+  async capacityByEvent(eventIds) {
+    if (eventIds.length === 0) return [];
+    const rows = await db
+      .select({
+        eventId: ticketTypes.eventId,
+        total: sql<number>`coalesce(sum(${ticketTypes.quantityTotal}), 0)::int`,
+        sold: sql<number>`coalesce(sum(${ticketTypes.quantitySold}), 0)::int`,
+        held: sql<number>`coalesce(sum(${ticketTypes.quantityReserved}), 0)::int`,
+      })
+      .from(ticketTypes)
+      .where(inArray(ticketTypes.eventId, eventIds))
+      .groupBy(ticketTypes.eventId);
+    return rows;
   },
 
   async insert(values) {

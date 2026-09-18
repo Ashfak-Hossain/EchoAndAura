@@ -99,6 +99,7 @@ function fakeTicketTypes(countByEvent: Record<string, number> = {}): TicketTypes
       );
     },
     findById: unused,
+    capacityByEvent: unused,
     insert: unused,
     update: unused,
     delete: unused,

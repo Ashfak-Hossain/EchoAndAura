@@ -1,28 +1,53 @@
 import type { ReactNode } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface Props {
   label: string;
   value: ReactNode;
-  /** One line under the number: a trend, a zero-state truth, or an action link. */
+  /** One line under the number: a trend, a zero-state truth, or an action. */
   detail?: ReactNode;
-  /** Draw attention (B3: "Pending verification" is the urgent one). */
-  emphasis?: boolean;
+  /** Colour of the detail line: success for "All clear"/positive trends, accent for actions. */
+  detailTone?: 'muted' | 'success' | 'accent';
+  /** B3: the urgent card (Pending verification) is tinted while it needs attention. */
+  urgent?: boolean;
   className?: string;
 }
 
-/** S9 StatCard: overline label, display number, one detail line. */
-export function StatCard({ label, value, detail, emphasis, className }: Props) {
+/**
+ * S9/B3 StatCard: 12px card, 18px padding, 13px label, Archivo 36px number
+ * (tabular), 13px detail. Urgent = warning tint with dark-amber ink.
+ */
+export function StatCard({ label, value, detail, detailTone = 'muted', urgent, className }: Props) {
   return (
-    <Card className={cn('gap-0 py-5', emphasis && 'border-primary/60 bg-accent', className)}>
-      <CardContent className="flex flex-col gap-2 px-5">
-        <span className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
-          {label}
+    <div
+      className={cn(
+        'flex flex-col gap-2.5 rounded-xl border p-[18px]',
+        urgent
+          ? 'border-[#e8c48a] bg-warning-tint text-[#7a4600]'
+          : 'border-border bg-card shadow-sm',
+        className,
+      )}
+    >
+      <span className={cn('text-[13px] font-medium', urgent ? '' : 'text-muted-foreground')}>
+        {label}
+      </span>
+      <span className="font-heading tabular text-4xl leading-none font-semibold">{value}</span>
+      {detail ? (
+        <span
+          className={cn(
+            'text-[13px]',
+            urgent
+              ? 'font-semibold'
+              : detailTone === 'success'
+                ? 'font-medium text-success'
+                : detailTone === 'accent'
+                  ? 'font-semibold text-accent-ink'
+                  : 'text-muted-foreground',
+          )}
+        >
+          {detail}
         </span>
-        <span className="font-heading text-3xl leading-none font-semibold tabular">{value}</span>
-        {detail ? <span className="text-sm text-muted-foreground">{detail}</span> : null}
-      </CardContent>
-    </Card>
+      ) : null}
+    </div>
   );
 }

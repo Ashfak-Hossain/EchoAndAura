@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { Field, FormAlert, FormSuccess } from '@/components/form-field';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';

@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { ButtonLink } from '@/components/button-link';
 import { Field, FormAlert } from '@/components/form-field';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import type { TicketTypeFormState } from './actions';

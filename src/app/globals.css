@@ -37,6 +37,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-marigold: var(--marigold);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -84,13 +85,15 @@
   --border-strong: #c9c3b7;
   --input: #e3dfd7;
 
-  /* Ink & accent (S1): marigold primary with charcoal ink on it */
-  --primary: #eda43c;
-  --primary-foreground: #1c1a17;
+  /* Ink & accent (S1/S4): charcoal is the primary action colour; marigold is
+     the accent (chips, counts, the public Register CTA) — never admin buttons */
+  --primary: #1c1a17;
+  --primary-foreground: #fbfaf8;
   --accent: #fdf3e0;
   --accent-foreground: #1c1a17;
   --accent-ink: #8a5209;
-  --ring: #eda43c;
+  --marigold: #eda43c;
+  --ring: #1c1a17;
 
   /* Status (S1) */
   --success: #1f7a4c;
@@ -110,14 +113,14 @@
   --shadow-md: 0 4px 12px rgb(28 26 23 / 0.08);
   --shadow-lg: 0 12px 32px rgb(28 26 23 / 0.14);
 
-  /* Sidebar (B2): sits on the page ground, active item on accent tint */
-  --sidebar: #fbfaf8;
-  --sidebar-foreground: #1c1a17;
+  /* Sidebar (B2): charcoal panel, warm-light text, active row = light at 12% */
+  --sidebar: #1c1a17;
+  --sidebar-foreground: #c9c3b7;
   --sidebar-primary: #eda43c;
   --sidebar-primary-foreground: #1c1a17;
-  --sidebar-accent: #fdf3e0;
-  --sidebar-accent-foreground: #1c1a17;
-  --sidebar-border: #e3dfd7;
+  --sidebar-accent: rgb(251 250 248 / 0.12);
+  --sidebar-accent-foreground: #fbfaf8;
+  --sidebar-border: rgb(251 250 248 / 0.14);
   --sidebar-ring: #eda43c;
 
   /* Charts (B12, later): ink, accent, status hues */

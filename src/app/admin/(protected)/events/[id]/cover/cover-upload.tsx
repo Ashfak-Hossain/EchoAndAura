@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { COVER_IMAGE_MAX_BYTES, COVER_IMAGE_TYPES } from '@/server/lib/cover-image';
 import { FormAlert } from '@/components/form-field';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { createCoverUploadAction, removeCoverImageAction, setCoverImageAction } from './actions';
@@ -24,6 +24,7 @@ export function CoverUpload({ eventId, hasImage }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
   const busy = phase !== 'idle';
 
   async function onFileChosen(file: File | undefined) {
@@ -49,12 +50,13 @@ export function CoverUpload({ eventId, hasImage }: Props) {
       if (!prepared.ok) return setError(prepared.error);
 
       setPhase('uploading');
-      const put = await fetch(prepared.data.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
-      if (!put.ok) return setError(`Upload failed (${put.status}). Please try again.`);
+      setProgress({ loaded: 0, total: file.size });
+      const status = await putWithProgress(prepared.data.uploadUrl, file, (loaded) =>
+        setProgress({ loaded, total: file.size }),
+      );
+      if (status < 200 || status >= 300) {
+        return setError(`Upload failed (${status}). Please try again.`);
+      }
 
       setPhase('saving');
       const saved = await setCoverImageAction(eventId, prepared.data.key);
@@ -65,6 +67,7 @@ export function CoverUpload({ eventId, hasImage }: Props) {
       setError('Upload failed. Check your connection and try again.');
     } finally {
       setPhase('idle');
+      setProgress(null);
       if (inputRef.current) inputRef.current.value = '';
     }
   }
@@ -121,9 +124,22 @@ export function CoverUpload({ eventId, hasImage }: Props) {
           />
         </label>
         {label ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            {label}
-          </p>
+          <div role="status" className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <span>
+              {label}
+              {phase === 'uploading' && progress
+                ? ` · ${percent(progress)}% · ${mb(progress.loaded)} of ${mb(progress.total)} MB`
+                : ''}
+            </span>
+            {phase === 'uploading' && progress ? (
+              <div className="h-2.5 w-full overflow-hidden rounded-[5px] bg-[#edeae3]">
+                <div
+                  className="h-full bg-foreground transition-[width]"
+                  style={{ width: `${percent(progress)}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {error ? <FormAlert>{error}</FormAlert> : null}
         {hasImage ? (
@@ -141,3 +157,26 @@ export function CoverUpload({ eventId, hasImage }: Props) {
     </Card>
   );
 }
+
+/** PUT via XHR so the browser can report upload progress (fetch cannot). */
+function putWithProgress(
+  url: string,
+  file: File,
+  onProgress: (loaded: number) => void,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded);
+    };
+    xhr.onload = () => resolve(xhr.status);
+    xhr.onerror = () => reject(new Error('network'));
+    xhr.send(file);
+  });
+}
+
+const percent = (p: { loaded: number; total: number }) =>
+  p.total > 0 ? Math.min(100, Math.round((p.loaded / p.total) * 100)) : 0;
+const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1);

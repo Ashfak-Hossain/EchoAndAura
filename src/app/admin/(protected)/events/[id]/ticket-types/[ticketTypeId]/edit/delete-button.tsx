@@ -2,7 +2,7 @@
 
 import { useActionState } from 'react';
 import { FormAlert } from '@/components/form-field';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/button';
 import type { TicketTypeFormState } from '../../actions';
 
 interface Props {

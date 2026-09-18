@@ -12,6 +12,7 @@ import { type EditorTab, editorPath, isEditorTab } from '../editor-path';
 import { updateEventAction } from '../../actions';
 import { EventForm, type EventFormValues } from '../../event-form';
 import { CoverSection } from '../cover/cover-section';
+import { DatesInPlainWords } from '../dates-in-plain-words';
 import { StatusSection } from '../status/status-section';
 import { TicketTypesSection } from '../ticket-types/ticket-types-section';
 
@@ -66,7 +67,7 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         actions={
           event.status === 'published' ? (
             <ButtonLink
-              variant="outline"
+              variant="secondary"
               href={`/events/${event.slug}`}
               target="_blank"
               rel="noreferrer"
@@ -102,14 +103,19 @@ export default async function EditEventPage({ params, searchParams }: Props) {
       />
 
       {tab === 'details' ? (
-        <EventForm
-          key={event.updatedAt.toISOString()}
-          action={updateEventAction.bind(null, event.id)}
-          defaultValues={defaultValues}
-          submitLabel="Save changes"
-          saved={saved === '1'}
-          publicUrl={`/events/${event.slug}`}
-        />
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="max-w-[640px]">
+            <EventForm
+              key={event.updatedAt.toISOString()}
+              action={updateEventAction.bind(null, event.id)}
+              defaultValues={defaultValues}
+              submitLabel="Save changes"
+              saved={saved === '1'}
+              publicUrl={`/events/${event.slug}`}
+            />
+          </div>
+          <DatesInPlainWords event={event} />
+        </div>
       ) : null}
       {tab === 'cover' ? <CoverSection event={event} /> : null}
       {tab === 'ticket-types' ? (

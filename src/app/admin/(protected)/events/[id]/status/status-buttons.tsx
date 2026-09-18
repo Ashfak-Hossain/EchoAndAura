@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/button';
 import type { StatusActionState } from './actions';
 
 export interface StatusButton {
@@ -51,8 +51,8 @@ function StatusForm({ button }: { button: StatusButton }) {
   const variant = button.destructive
     ? 'destructive'
     : button.to === 'published'
-      ? 'default'
-      : 'outline';
+      ? 'primary'
+      : 'secondary';
 
   const submit = (
     <Button type="submit" variant={variant} disabled={disabled} title={button.disabledReason}>
