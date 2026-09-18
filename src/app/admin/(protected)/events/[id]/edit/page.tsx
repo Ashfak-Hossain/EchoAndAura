@@ -5,6 +5,7 @@ import { EventNotFoundError } from '@/server/lib/errors';
 import { toDhakaInput } from '@/lib/time';
 import { updateEventAction } from '../../actions';
 import { EventForm, type EventFormValues } from '../../event-form';
+import { CoverSection } from '../cover/cover-section';
 import { StatusSection } from '../status/status-section';
 import { TicketTypesSection } from '../ticket-types/ticket-types-section';
 
@@ -52,6 +53,8 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         submitLabel="Save changes"
         saved={saved === '1'}
       />
+      <hr />
+      <CoverSection event={event} />
       <hr />
       <StatusSection event={event} />
       <hr />

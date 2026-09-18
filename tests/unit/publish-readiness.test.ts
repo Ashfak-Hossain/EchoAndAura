@@ -7,6 +7,7 @@ const ready = {
     startsAt: new Date('2026-10-01T13:00:00Z'),
     registrationOpensAt: new Date('2026-09-11T13:00:00Z'),
     registrationClosesAt: new Date('2026-09-26T13:00:00Z'),
+    imageKey: 'events/e1/cover-abc.jpg',
   },
   ticketTypeCount: 3,
   now,
@@ -22,6 +23,12 @@ describe('publishReadiness', () => {
 
   it('requires at least one ticket type', () => {
     expect(codes({ ...ready, ticketTypeCount: 0 })).toEqual(['no_ticket_types']);
+  });
+
+  it('requires a cover image', () => {
+    expect(codes({ ...ready, event: { ...ready.event, imageKey: null } })).toEqual([
+      'no_cover_image',
+    ]);
   });
 
   it('requires the start to be in the future — starting exactly now is too late', () => {
@@ -61,12 +68,18 @@ describe('publishReadiness', () => {
 
   it('reports every problem at once, in checklist order, with messages', () => {
     const problems = publishReadiness({
-      event: { startsAt: new Date('2020-01-01T00:00:00Z'), registrationOpensAt: null, registrationClosesAt: null },
+      event: {
+        startsAt: new Date('2020-01-01T00:00:00Z'),
+        registrationOpensAt: null,
+        registrationClosesAt: null,
+        imageKey: null,
+      },
       ticketTypeCount: 0,
       now,
     });
     expect(problems.map((p) => p.code)).toEqual([
       'no_ticket_types',
+      'no_cover_image',
       'starts_in_past',
       'registration_window_invalid',
     ]);

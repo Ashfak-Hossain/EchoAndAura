@@ -1,4 +1,11 @@
 import {
+  type CoverImageMeta,
+  coverImageKey,
+  isCoverKeyForEvent,
+  validateCoverImage,
+} from '@/server/lib/cover-image';
+import {
+  CoverImageNotUploadedError,
   EventNotFoundError,
   EventNotPublishableError,
   EventStatusConflictError,
@@ -13,6 +20,7 @@ import type {
   EventsRepository,
 } from '@/server/repositories/events.repository';
 import type { TicketTypesRepository } from '@/server/repositories/ticket-types.repository';
+import type { ObjectStorage, UploadTarget } from '@/server/storage/object-storage';
 
 /**
  * Event business rules. Built by a factory that receives its repositories,
@@ -28,6 +36,8 @@ import type { TicketTypesRepository } from '@/server/repositories/ticket-types.r
 export interface EventsServiceOptions {
   /** Injectable clock for the readiness check. */
   now?: () => Date;
+  /** Where a failed best-effort cleanup is reported. */
+  warn?: (message: string, err: unknown) => void;
 }
 
 export interface CreateEventInput {
@@ -48,7 +58,8 @@ export type UpdateEventInput = CreateEventInput;
 export function createEventsService(
   repo: EventsRepository,
   ticketTypes: TicketTypesRepository,
-  { now = () => new Date() }: EventsServiceOptions = {},
+  storage: ObjectStorage,
+  { now = () => new Date(), warn = console.warn }: EventsServiceOptions = {},
 ) {
   async function getEvent(id: string): Promise<EventRecord> {
     const event = await repo.findById(id);
@@ -132,7 +143,71 @@ export function createEventsService(
       if (!updated) throw new EventStatusConflictError(id);
       return updated;
     },
+
+    /** Public URL for the cover image, or null when none is set. */
+    coverImageUrl(event: Pick<EventRecord, 'imageKey'>): string | null {
+      return event.imageKey ? storage.publicUrl(event.imageKey) : null;
+    },
+
+    /**
+     * Step 1 of the upload: validate what the browser says it will send and
+     * presign a PUT bound to exactly that type and size.
+     * @throws EventNotFoundError, CoverImageInvalidError
+     */
+    async createCoverUpload(id: string, meta: CoverImageMeta): Promise<UploadTarget> {
+      await getEvent(id);
+      validateCoverImage(meta);
+      return storage.createUploadUrl({
+        key: coverImageKey(id, meta.contentType),
+        contentType: meta.contentType,
+        size: meta.size,
+      });
+    },
+
+    /**
+     * Step 3: the browser reports the key it uploaded to. Trust nothing —
+     * the key must be one this event could have been issued, the object must
+     * exist, and what storage received must pass the same validation. The
+     * old object is deleted only after the row points at the new one, and
+     * never inside a transaction (Invariant 7).
+     * @throws EventNotFoundError, CoverImageNotUploadedError, CoverImageInvalidError
+     */
+    async setCoverImage(id: string, key: string): Promise<EventRecord> {
+      const event = await getEvent(id);
+      if (!isCoverKeyForEvent(key, id)) throw new CoverImageNotUploadedError(key);
+
+      const info = await storage.head(key);
+      if (!info || info.contentType === undefined || info.size === undefined) {
+        throw new CoverImageNotUploadedError(key);
+      }
+      validateCoverImage({ contentType: info.contentType, size: info.size });
+
+      const updated = await repo.setImageKey(id, key);
+      if (!updated) throw new EventNotFoundError(id);
+
+      if (event.imageKey && event.imageKey !== key) await bestEffortDelete(event.imageKey);
+      return updated;
+    },
+
+    /** @throws EventNotFoundError */
+    async removeCoverImage(id: string): Promise<EventRecord> {
+      const event = await getEvent(id);
+      const updated = await repo.setImageKey(id, null);
+      if (!updated) throw new EventNotFoundError(id);
+      if (event.imageKey) await bestEffortDelete(event.imageKey);
+      return updated;
+    },
   };
+
+  // An orphaned object costs a few KB; a failed delete must never undo a
+  // successful row update, so it is logged rather than thrown.
+  async function bestEffortDelete(key: string): Promise<void> {
+    try {
+      await storage.delete(key);
+    } catch (err: unknown) {
+      warn(`events.service: could not delete old cover image ${key}`, err);
+    }
+  }
 }
 
 export type EventsService = ReturnType<typeof createEventsService>;

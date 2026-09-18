@@ -15,19 +15,20 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 
 ## Quick reference
 
-| Variable                                                                                      | Required | First needed | Purpose                                                              |
-| --------------------------------------------------------------------------------------------- | -------- | ------------ | -------------------------------------------------------------------- |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                         | Yes      | Phase 0      | Credentials for the local Postgres container                         |
-| `DATABASE_URL`                                                                                | Yes      | Phase 0      | App's Postgres connection string                                     |
-| `TEST_DATABASE_URL`                                                                           | No       | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`) |
-| `REDIS_URL`                                                                                   | Yes      | Phase 3      | BullMQ queue connection                                              |
-| `BETTER_AUTH_SECRET`                                                                          | Yes      | Phase 1      | Signs admin auth sessions                                            |
-| `BETTER_AUTH_URL`                                                                             | Yes      | Phase 1      | Base URL for auth callbacks                                          |
-| `RESEND_API_KEY`                                                                              | Yes      | Phase 4      | Sends ticket emails                                                  |
-| `EMAIL_FROM`                                                                                  | Yes      | Phase 4      | From address (on a verified domain)                                  |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes      | Phase 1      | Cloudflare R2 for event images                                       |
-| `BKASH_RECEIVE_NUMBER`                                                                        | Yes      | Phase 3      | Organizer's bKash number shown to buyers                             |
-| `APP_TIMEZONE`                                                                                | Yes      | —            | App timezone (`Asia/Dhaka`)                                          |
+| Variable                                                                                    | Required   | First needed | Purpose                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | ---------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                       | Yes        | Phase 0      | Credentials for the local Postgres container                                                                                           |
+| `DATABASE_URL`                                                                              | Yes        | Phase 0      | App's Postgres connection string                                                                                                       |
+| `TEST_DATABASE_URL`                                                                         | No         | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`)                                                                   |
+| `REDIS_URL`                                                                                 | Yes        | Phase 3      | BullMQ queue connection                                                                                                                |
+| `BETTER_AUTH_SECRET`                                                                        | Yes        | Phase 1      | Signs admin auth sessions                                                                                                              |
+| `BETTER_AUTH_URL`                                                                           | Yes        | Phase 1      | Base URL for auth callbacks                                                                                                            |
+| `RESEND_API_KEY`                                                                            | Yes        | Phase 4      | Sends ticket emails                                                                                                                    |
+| `EMAIL_FROM`                                                                                | Yes        | Phase 4      | From address (on a verified domain)                                                                                                    |
+| `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes        | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                              |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally |
+| `BKASH_RECEIVE_NUMBER`                                                                      | Yes        | Phase 3      | Organizer's bKash number shown to buyers                                                                                               |
+| `APP_TIMEZONE`                                                                              | Yes        | —            | App timezone (`Asia/Dhaka`)                                                                                                            |
 
 ## How to obtain / prepare each
 
@@ -66,14 +67,56 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 4. `EMAIL_FROM`: an address on the verified domain, e.g.
    `echoandaura <tickets@yourdomain>`.
 
-### Cloudflare R2 (event images) — Phase 1
+### Object storage (event cover images) — Phase 1
 
-1. Cloudflare dashboard → R2 → create a bucket → set `R2_BUCKET`.
-2. Copy the account ID → `R2_ACCOUNT_ID`.
-3. R2 → Manage API Tokens → create an S3 API token →
-   `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY`.
-4. Enable public access (or attach a custom domain) → `R2_PUBLIC_URL`, the base
-   URL images are served from.
+The app talks to storage through the S3 API only. Locally that is **MinIO**
+(started by `docker compose up`); in production it is **Cloudflare R2**.
+Nothing in the code knows which — only the env vars differ.
+
+**Local (MinIO)** — works out of the box with the values in `.env.example`:
+
+```
+MINIO_ROOT_USER=minio
+MINIO_ROOT_PASSWORD=local_password
+R2_ENDPOINT=http://localhost:9000
+R2_ACCESS_KEY_ID=minio
+R2_SECRET_ACCESS_KEY=local_password
+R2_BUCKET=echoandaura
+R2_PUBLIC_URL=http://localhost:9000/echoandaura
+```
+
+`docker compose up -d --wait` starts MinIO and a one-shot `minio-init` that
+creates the bucket and makes objects publicly readable (like an R2 public
+bucket). Console: http://localhost:9001. MinIO allows browser uploads from
+any origin by default, so no CORS setup is needed locally.
+
+**Production (Cloudflare R2):**
+
+1. Cloudflare dashboard → R2 → create a bucket → `R2_BUCKET`.
+2. `R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com` (the account
+   ID is on the R2 overview page).
+3. R2 → Manage API Tokens → create a token with **Object Read & Write** on
+   that bucket → `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY`.
+4. Bucket → Settings → Public access: enable the `r2.dev` subdomain or attach
+   a custom domain → `R2_PUBLIC_URL` is that base URL (no trailing slash).
+5. Bucket → Settings → **CORS policy** — the browser PUTs directly to R2, so
+   the app origin must be allowed:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://<your-app-domain>"],
+       "AllowedMethods": ["PUT"],
+       "AllowedHeaders": ["Content-Type", "Content-Length"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+Uploads never pass through the Next.js server: the server presigns a PUT
+bound to the validated type and size, the browser uploads, and the server
+verifies the stored object before recording its key
+(see [DECISIONS.md — ADR-007](DECISIONS.md)).
 
 ### Manual bKash — Phase 3
 

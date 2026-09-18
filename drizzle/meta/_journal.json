@@ -15,6 +15,13 @@
       "when": 1789474272538,
       "tag": "0001_brown_shinobi_shaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789725085213,
+      "tag": "0002_tiresome_misty_knight",
+      "breakpoints": true
     }
   ]
 }

@@ -39,6 +39,8 @@ export interface EventsRepository {
    * Resolves null when it is not (changed concurrently, or no such event).
    */
   transitionStatus(id: string, from: EventStatus, to: EventStatus): Promise<EventRecord | null>;
+  /** Sets (or clears, with null) the cover image key. Resolves null when no row has this id. */
+  setImageKey(id: string, imageKey: string | null): Promise<EventRecord | null>;
 }
 
 // Slug uniqueness is enforced by the DB, never by a read-then-write check,
@@ -90,6 +92,15 @@ export const eventsRepository: EventsRepository = {
       .update(events)
       .set({ status: to, updatedAt: new Date() })
       .where(and(eq(events.id, id), eq(events.status, from)))
+      .returning();
+    return row ?? null;
+  },
+
+  async setImageKey(id, imageKey) {
+    const [row] = await db
+      .update(events)
+      .set({ imageKey, updatedAt: new Date() })
+      .where(eq(events.id, id))
       .returning();
     return row ?? null;
   },

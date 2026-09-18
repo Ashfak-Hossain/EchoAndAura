@@ -50,6 +50,20 @@ export class EventStatusConflictError extends DomainError {
   }
 }
 
+/** The file's type or size is not acceptable as an event cover image. */
+export class CoverImageInvalidError extends DomainError {
+  constructor(public readonly reason: string) {
+    super(reason);
+  }
+}
+
+/** The key does not belong to this event, or no object was uploaded for it. */
+export class CoverImageNotUploadedError extends DomainError {
+  constructor(public readonly key: string) {
+    super(`No valid uploaded cover image at "${key}"`);
+  }
+}
+
 export class TicketTypeNotFoundError extends DomainError {
   constructor(public readonly ticketTypeId: string) {
     super(`Ticket type ${ticketTypeId} not found`);

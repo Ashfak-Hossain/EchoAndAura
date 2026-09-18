@@ -1,4 +1,7 @@
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+
+const COVER_FIXTURE = path.join(__dirname, 'fixtures', 'cover.png');
 
 // Requires a seeded admin (pnpm admin:create) matching these credentials.
 const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
@@ -29,6 +32,11 @@ async function addTicketType(page: Page, name: string, price: string, quantity: 
   await expect(page).toHaveURL(/\/edit$/);
 }
 
+async function uploadCover(page: Page) {
+  await page.getByTestId('cover-file').setInputFiles(COVER_FIXTURE);
+  await expect(page.getByTestId('cover-image')).toBeVisible();
+}
+
 const status = (page: Page) => page.getByTestId('event-status');
 
 test.describe('admin event publishing', () => {
@@ -42,17 +50,21 @@ test.describe('admin event publishing', () => {
     await createEvent(page, `E2E Publish ${Date.now()}`);
     await expect(status(page)).toHaveText('draft');
 
-    // Not ready: no ticket types → Publish disabled, checklist says why.
+    // Not ready: no ticket types, no cover → Publish disabled, checklist says why.
     const publish = page.getByRole('button', { name: /^publish$/i });
     await expect(publish).toBeDisabled();
     const checklist = page.getByRole('list', { name: /publish readiness/i });
     await expect(checklist.getByRole('listitem').filter({ hasText: /ticket type/ })).toHaveText(
       /^✗/,
     );
+    await expect(checklist.getByRole('listitem').filter({ hasText: /cover image/ })).toHaveText(
+      /^✗/,
+    );
 
     await addTicketType(page, 'Early Bird', '800', '100');
     await addTicketType(page, 'General', '1200', '400');
     await addTicketType(page, 'VIP', '3500', '50');
+    await uploadCover(page);
 
     // Ready: every check passes, Publish enabled.
     for (const item of await checklist.getByRole('listitem').all()) {
@@ -83,6 +95,7 @@ test.describe('admin event publishing', () => {
   test('an event that has already started cannot be published', async ({ page }) => {
     await createEvent(page, `E2E Past ${Date.now()}`, '2020-01-01T19:00');
     await addTicketType(page, 'General', '10', '10');
+    await uploadCover(page);
 
     const publish = page.getByRole('button', { name: /^publish$/i });
     await expect(publish).toBeDisabled();

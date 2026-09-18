@@ -19,10 +19,21 @@ const CHECK_VIOLATION = '23514';
 export function findPostgresError(err: unknown): postgres.PostgresError | null {
   let current: unknown = err;
   for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    if (current instanceof postgres.PostgresError) return current;
+    if (isPostgresError(current)) return current;
     current = current.cause;
   }
   return null;
+}
+
+/**
+ * Shape check rather than `instanceof`: in dev, the pooled client is cached
+ * on globalThis across HMR reloads while this module is re-evaluated, so the
+ * error can come from a different copy of the `postgres` module.
+ */
+function isPostgresError(err: Error): err is postgres.PostgresError {
+  return (
+    err.name === 'PostgresError' && typeof (err as { code?: unknown }).code === 'string'
+  );
 }
 
 function violates(err: unknown, code: string, constraint: string): boolean {

@@ -51,7 +51,10 @@ export const events = pgTable('events', {
   registrationOpensAt: timestamp('registration_opens_at', { withTimezone: true }),
   registrationClosesAt: timestamp('registration_closes_at', { withTimezone: true }),
   status: eventStatus('status').notNull().default('draft'),
-  imageUrl: text('image_url'),
+  // Object-storage key of the cover image (e.g. events/<id>/cover-x.jpg), not
+  // a URL: the public URL is derived at render time, so moving buckets or
+  // changing the public domain never touches rows.
+  imageKey: text('image_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
