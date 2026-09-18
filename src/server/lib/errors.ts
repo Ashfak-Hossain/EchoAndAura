@@ -23,6 +23,33 @@ export class EventNotFoundError extends DomainError {
   }
 }
 
+/** The event state machine forbids this move (see event-status.ts). */
+export class InvalidEventTransitionError extends DomainError {
+  constructor(
+    public readonly from: string,
+    public readonly to: string,
+  ) {
+    super(`Cannot change event status from "${from}" to "${to}"`);
+  }
+}
+
+/** Publishing was refused by the readiness check; `problems` lists why. */
+export class EventNotPublishableError extends DomainError {
+  constructor(public readonly problems: readonly string[]) {
+    super(`Event is not ready to publish: ${problems.join('; ')}`);
+  }
+}
+
+/**
+ * The conditional status UPDATE matched no row: the event's status changed
+ * since it was read (another admin tab), or the event is gone.
+ */
+export class EventStatusConflictError extends DomainError {
+  constructor(public readonly eventId: string) {
+    super(`Event ${eventId} status changed concurrently; reload and try again`);
+  }
+}
+
 export class TicketTypeNotFoundError extends DomainError {
   constructor(public readonly ticketTypeId: string) {
     super(`Ticket type ${ticketTypeId} not found`);

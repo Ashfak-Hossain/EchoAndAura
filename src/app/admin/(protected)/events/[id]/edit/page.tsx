@@ -5,6 +5,7 @@ import { EventNotFoundError } from '@/server/lib/errors';
 import { toDhakaInput } from '@/lib/time';
 import { updateEventAction } from '../../actions';
 import { EventForm, type EventFormValues } from '../../event-form';
+import { StatusSection } from '../status/status-section';
 import { TicketTypesSection } from '../ticket-types/ticket-types-section';
 
 interface Props {
@@ -44,9 +45,6 @@ export default async function EditEventPage({ params, searchParams }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Edit event</h1>
-      <p className="text-sm text-neutral-600">
-        Status: <span className="font-mono">{event.status}</span>
-      </p>
       <EventForm
         key={event.updatedAt.toISOString()}
         action={updateEventAction.bind(null, event.id)}
@@ -54,6 +52,8 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         submitLabel="Save changes"
         saved={saved === '1'}
       />
+      <hr />
+      <StatusSection event={event} />
       <hr />
       <TicketTypesSection eventId={event.id} />
     </section>

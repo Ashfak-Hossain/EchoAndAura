@@ -1,4 +1,10 @@
-import { EventNotFoundError } from '@/server/lib/errors';
+import {
+  EventNotFoundError,
+  EventNotPublishableError,
+  EventStatusConflictError,
+} from '@/server/lib/errors';
+import { type EventStatus, assertEventTransition } from '@/server/lib/event-status';
+import { type PublishProblem, publishReadiness } from '@/server/lib/publish-readiness';
 import { defaultRegistrationWindow } from '@/server/lib/registration-window';
 import { slugify } from '@/server/lib/slug';
 import type {
@@ -6,15 +12,23 @@ import type {
   EventRecord,
   EventsRepository,
 } from '@/server/repositories/events.repository';
+import type { TicketTypesRepository } from '@/server/repositories/ticket-types.repository';
 
 /**
- * Event business rules. Built by a factory that receives its repository, so
- * this module never imports the database: unit tests pass an in-memory fake,
- * and `src/server/container.ts` wires the real one for the app.
+ * Event business rules. Built by a factory that receives its repositories,
+ * so this module never imports the database: unit tests pass in-memory
+ * fakes and a fixed clock; `src/server/container.ts` wires the real ones.
  *
- * Status is not touched here: events are created as `draft`, and
- * publish/unpublish is a separate service concern (later slice).
+ * Events are created as `draft`. Status moves go through `changeEventStatus`
+ * only: the state machine in event-status.ts decides what is legal, the
+ * readiness check decides whether publishing is allowed, and the repository
+ * applies the change with a conditional UPDATE.
  */
+
+export interface EventsServiceOptions {
+  /** Injectable clock for the readiness check. */
+  now?: () => Date;
+}
 
 export interface CreateEventInput {
   title: string;
@@ -31,17 +45,28 @@ export interface CreateEventInput {
 
 export type UpdateEventInput = CreateEventInput;
 
-export function createEventsService(repo: EventsRepository) {
+export function createEventsService(
+  repo: EventsRepository,
+  ticketTypes: TicketTypesRepository,
+  { now = () => new Date() }: EventsServiceOptions = {},
+) {
+  async function getEvent(id: string): Promise<EventRecord> {
+    const event = await repo.findById(id);
+    if (!event) throw new EventNotFoundError(id);
+    return event;
+  }
+
+  async function readinessOf(event: EventRecord): Promise<PublishProblem[]> {
+    const types = await ticketTypes.listByEvent(event.id);
+    return publishReadiness({ event, ticketTypeCount: types.length, now: now() });
+  }
+
   return {
     listEvents(): Promise<EventRecord[]> {
       return repo.list();
     },
 
-    async getEvent(id: string): Promise<EventRecord> {
-      const event = await repo.findById(id);
-      if (!event) throw new EventNotFoundError(id);
-      return event;
-    },
+    getEvent,
 
     /** @throws EventSlugTakenError (from the repository) on a duplicate slug. */
     createEvent(input: CreateEventInput): Promise<EventRecord> {
@@ -78,6 +103,33 @@ export function createEventsService(repo: EventsRepository) {
       };
       const updated = await repo.update(id, patch);
       if (!updated) throw new EventNotFoundError(id);
+      return updated;
+    },
+
+    /** What currently blocks publishing (empty = ready). Shown on the edit page. */
+    async publishReadinessFor(id: string): Promise<PublishProblem[]> {
+      return readinessOf(await getEvent(id));
+    },
+
+    /**
+     * The only way an event's status changes.
+     * @throws EventNotFoundError, InvalidEventTransitionError,
+     *   EventNotPublishableError, EventStatusConflictError
+     */
+    async changeEventStatus(id: string, to: EventStatus): Promise<EventRecord> {
+      const event = await getEvent(id);
+      assertEventTransition(event.status, to);
+
+      if (to === 'published') {
+        const problems = await readinessOf(event);
+        if (problems.length > 0) {
+          throw new EventNotPublishableError(problems.map((p) => p.message));
+        }
+      }
+
+      // Conditional on the status we validated against; null means it moved.
+      const updated = await repo.transitionStatus(id, event.status, to);
+      if (!updated) throw new EventStatusConflictError(id);
       return updated;
     },
   };

@@ -1,11 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { EventNotFoundError, EventSlugTakenError } from '@/server/lib/errors';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  EventNotFoundError,
+  EventNotPublishableError,
+  EventSlugTakenError,
+  EventStatusConflictError,
+  InvalidEventTransitionError,
+} from '@/server/lib/errors';
 import type {
   EventPatch,
   EventRecord,
   EventsRepository,
   NewEvent,
 } from '@/server/repositories/events.repository';
+import type {
+  TicketTypeRecord,
+  TicketTypesRepository,
+} from '@/server/repositories/ticket-types.repository';
 import { createEventsService } from '@/server/services/events.service';
 
 /**
@@ -56,16 +66,44 @@ function fakeRepo(seed: EventRecord[] = []) {
       rows.set(id, row);
       return row;
     },
+    // Conditional like the real UPDATE ... WHERE status = from.
+    async transitionStatus(id, from, to) {
+      const existing = rows.get(id);
+      if (!existing || existing.status !== from) return null;
+      const row = { ...existing, status: to, updatedAt: new Date() };
+      rows.set(id, row);
+      return row;
+    },
   };
   return { repo, rows };
 }
+
+/** Ticket-types repository stub: only `listByEvent` matters to the events service. */
+function fakeTicketTypes(countByEvent: Record<string, number> = {}): TicketTypesRepository {
+  const unused = () => Promise.reject(new Error('not used by events service'));
+  return {
+    async listByEvent(eventId) {
+      return Array.from(
+        { length: countByEvent[eventId] ?? 0 },
+        (_, i) => ({ id: `tt-${i}`, eventId }) as TicketTypeRecord,
+      );
+    },
+    findById: unused,
+    insert: unused,
+    update: unused,
+    delete: unused,
+  };
+}
+
+const NOW = new Date('2026-09-18T10:00:00Z');
+const clock = { now: () => NOW };
 
 const startsAt = new Date('2026-10-01T13:00:00Z');
 
 describe('eventsService.createEvent', () => {
   it('derives the slug from the title and fills the default registration window', async () => {
     const { repo } = fakeRepo();
-    const svc = createEventsService(repo);
+    const svc = createEventsService(repo, fakeTicketTypes(), clock);
 
     const event = await svc.createEvent({ title: 'Launch Night 2026', startsAt });
 
@@ -76,7 +114,7 @@ describe('eventsService.createEvent', () => {
   });
 
   it('respects an explicit slug and explicit registration window', async () => {
-    const svc = createEventsService(fakeRepo().repo);
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
     const opens = new Date('2026-09-01T00:00:00Z');
     const closes = new Date('2026-09-30T00:00:00Z');
 
@@ -94,7 +132,7 @@ describe('eventsService.createEvent', () => {
   });
 
   it('fills only the missing registration bound', async () => {
-    const svc = createEventsService(fakeRepo().repo);
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
     const closes = new Date('2026-09-30T00:00:00Z');
 
     const event = await svc.createEvent({ title: 'X', startsAt, registrationClosesAt: closes });
@@ -106,7 +144,7 @@ describe('eventsService.createEvent', () => {
   // Failure path: uniqueness is the repository/DB's job; the service must let
   // the typed error through untouched so the action can name the field.
   it('surfaces EventSlugTakenError on a duplicate slug', async () => {
-    const svc = createEventsService(fakeRepo().repo);
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
     await svc.createEvent({ title: 'Same Title', startsAt });
 
     await expect(svc.createEvent({ title: 'Same Title', startsAt })).rejects.toBeInstanceOf(
@@ -117,7 +155,7 @@ describe('eventsService.createEvent', () => {
 
 describe('eventsService.updateEvent / getEvent', () => {
   it('throws EventNotFoundError for an unknown id', async () => {
-    const svc = createEventsService(fakeRepo().repo);
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
     await expect(svc.getEvent('missing')).rejects.toBeInstanceOf(EventNotFoundError);
     await expect(svc.updateEvent('missing', { title: 'X', startsAt })).rejects.toBeInstanceOf(
       EventNotFoundError,
@@ -126,7 +164,7 @@ describe('eventsService.updateEvent / getEvent', () => {
 
   it('replaces the editable fields and re-derives blanks', async () => {
     const { repo, rows } = fakeRepo();
-    const svc = createEventsService(repo);
+    const svc = createEventsService(repo, fakeTicketTypes(), clock);
     const created = await svc.createEvent({
       title: 'Old',
       venue: 'Dhaka',
@@ -146,12 +184,103 @@ describe('eventsService.updateEvent / getEvent', () => {
   });
 
   it('surfaces EventSlugTakenError when renaming onto another event slug', async () => {
-    const svc = createEventsService(fakeRepo().repo);
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
     await svc.createEvent({ title: 'First', startsAt });
     const second = await svc.createEvent({ title: 'Second', startsAt });
 
     await expect(
       svc.updateEvent(second.id, { title: 'Second', slug: 'first', startsAt }),
     ).rejects.toBeInstanceOf(EventSlugTakenError);
+  });
+});
+
+describe('eventsService.changeEventStatus', () => {
+  async function draftEvent(ticketTypeCount: number) {
+    const { repo, rows } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes({ 'id-1': ticketTypeCount }), clock);
+    const event = await svc.createEvent({ title: 'Launch', startsAt });
+    return { svc, repo, rows, event };
+  }
+
+  it('publishes a ready draft', async () => {
+    const { svc, event } = await draftEvent(3);
+    const published = await svc.changeEventStatus(event.id, 'published');
+    expect(published.status).toBe('published');
+  });
+
+  it('refuses to publish without ticket types, listing every problem, without touching status', async () => {
+    const { svc, repo, event } = await draftEvent(0);
+    const spy = vi.spyOn(repo, 'transitionStatus');
+
+    const err = await svc.changeEventStatus(event.id, 'published').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EventNotPublishableError);
+    expect((err as EventNotPublishableError).problems).toEqual(['Add at least one ticket type']);
+    expect(spy).not.toHaveBeenCalled();
+    expect((await svc.getEvent(event.id)).status).toBe('draft');
+  });
+
+  it('refuses to publish an event that has already started', async () => {
+    const { repo } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes({ 'id-1': 1 }), {
+      now: () => new Date('2030-01-01T00:00:00Z'),
+    });
+    const event = await svc.createEvent({ title: 'Past', startsAt });
+    await expect(svc.changeEventStatus(event.id, 'published')).rejects.toBeInstanceOf(
+      EventNotPublishableError,
+    );
+  });
+
+  it('walks the full lifecycle: publish → unpublish → archive → restore', async () => {
+    const { svc, event } = await draftEvent(1);
+    expect((await svc.changeEventStatus(event.id, 'published')).status).toBe('published');
+    expect((await svc.changeEventStatus(event.id, 'draft')).status).toBe('draft');
+    expect((await svc.changeEventStatus(event.id, 'archived')).status).toBe('archived');
+    expect((await svc.changeEventStatus(event.id, 'draft')).status).toBe('draft');
+  });
+
+  // Failure paths.
+  it('throws InvalidEventTransitionError before any repository write', async () => {
+    const { svc, repo, event } = await draftEvent(1);
+    const spy = vi.spyOn(repo, 'transitionStatus');
+    await expect(svc.changeEventStatus(event.id, 'draft')).rejects.toBeInstanceOf(
+      InvalidEventTransitionError,
+    );
+    await svc.changeEventStatus(event.id, 'archived');
+    await expect(svc.changeEventStatus(event.id, 'published')).rejects.toBeInstanceOf(
+      InvalidEventTransitionError,
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws EventStatusConflictError when the status moved under us', async () => {
+    const { svc, repo, rows, event } = await draftEvent(1);
+    // Simulate another admin publishing between our read and our write.
+    const original = repo.transitionStatus.bind(repo);
+    vi.spyOn(repo, 'transitionStatus').mockImplementation(async (id, from, to) => {
+      rows.set(id, { ...rows.get(id)!, status: 'published' });
+      return original(id, from, to);
+    });
+    await expect(svc.changeEventStatus(event.id, 'published')).rejects.toBeInstanceOf(
+      EventStatusConflictError,
+    );
+    expect(rows.get(event.id)?.status).toBe('published');
+  });
+
+  it('throws EventNotFoundError for an unknown id', async () => {
+    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), clock);
+    await expect(svc.changeEventStatus('missing', 'published')).rejects.toBeInstanceOf(
+      EventNotFoundError,
+    );
+    await expect(svc.publishReadinessFor('missing')).rejects.toBeInstanceOf(EventNotFoundError);
+  });
+});
+
+describe('eventsService.publishReadinessFor', () => {
+  it('reports the same problems the publish gate uses', async () => {
+    const { repo } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes(), clock);
+    const event = await svc.createEvent({ title: 'X', startsAt });
+    const problems = await svc.publishReadinessFor(event.id);
+    expect(problems.map((p) => p.code)).toEqual(['no_ticket_types']);
   });
 });

@@ -11,5 +11,5 @@ import { ticketTypesRepository } from '@/server/repositories/ticket-types.reposi
 import { createEventsService } from '@/server/services/events.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 
-export const eventsService = createEventsService(eventsRepository);
+export const eventsService = createEventsService(eventsRepository, ticketTypesRepository);
 export const ticketTypesService = createTicketTypesService(ticketTypesRepository);

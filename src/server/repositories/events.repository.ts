@@ -1,7 +1,8 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { events } from '@/db/schema';
 import { EventSlugTakenError } from '@/server/lib/errors';
+import type { EventStatus } from '@/server/lib/event-status';
 import { isUniqueViolation } from '@/server/lib/pg-errors';
 
 /**
@@ -33,6 +34,11 @@ export interface EventsRepository {
   insert(values: NewEvent): Promise<EventRecord>;
   /** Resolves null when no row has this id. @throws EventSlugTakenError */
   update(id: string, patch: EventPatch): Promise<EventRecord | null>;
+  /**
+   * Conditional status change: succeeds only if the row is still in `from`.
+   * Resolves null when it is not (changed concurrently, or no such event).
+   */
+  transitionStatus(id: string, from: EventStatus, to: EventStatus): Promise<EventRecord | null>;
 }
 
 // Slug uniqueness is enforced by the DB, never by a read-then-write check,
@@ -75,5 +81,16 @@ export const eventsRepository: EventsRepository = {
     } catch (err: unknown) {
       rethrowSlugConflict(err, patch.slug);
     }
+  },
+
+  async transitionStatus(id, from, to) {
+    // The `status = from` predicate makes this atomic: two admin tabs both
+    // publishing can't both succeed, and no read-then-write window exists.
+    const [row] = await db
+      .update(events)
+      .set({ status: to, updatedAt: new Date() })
+      .where(and(eq(events.id, id), eq(events.status, from)))
+      .returning();
+    return row ?? null;
   },
 };

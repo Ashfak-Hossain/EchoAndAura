@@ -86,6 +86,22 @@ A fuller narrative of the state machine summarized in `CLAUDE.md`:
 Every transition above writes a row to `order_events` (`CLAUDE.md`,
 Invariant 6) — that table, not application logs, is the audit trail.
 
+## Event status flow
+
+Events have their own, smaller state machine, validated in code the same
+way (`src/server/lib/event-status.ts`; see
+[DECISIONS.md — ADR-006](DECISIONS.md)):
+
+```
+draft ⇄ published
+draft → archived · published → archived · archived → draft
+```
+
+`draft → published` is gated by a readiness check (at least one ticket
+type, start in the future, valid registration window). The status change
+itself is a conditional `UPDATE … WHERE status = <expected>`, so two admin
+sessions can't race each other.
+
 ## Data model overview
 
 Entities and their relationships, not full DDL (that lives in `drizzle/`,
