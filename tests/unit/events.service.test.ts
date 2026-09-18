@@ -52,6 +52,9 @@ function fakeRepo(seed: EventRecord[] = []) {
     async list() {
       return [...rows.values()];
     },
+    async listByStatus(statuses) {
+      return [...rows.values()].filter((r) => statuses.includes(r.status));
+    },
     async findById(id) {
       return rows.get(id) ?? null;
     },
@@ -212,6 +215,36 @@ describe('eventsService.createEvent', () => {
     await expect(svc.createEvent({ title: 'Same Title', startsAt })).rejects.toBeInstanceOf(
       EventSlugTakenError,
     );
+  });
+
+  // ADR-010: the column only ever holds allowlisted HTML, never raw input.
+  it('sanitises the description on write and stores an empty editor as null', async () => {
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
+
+    const dirty = await svc.createEvent({
+      title: 'A',
+      startsAt,
+      description: '<p onclick="x()">Hi <b>there</b></p><script>alert(1)</script>',
+    });
+    expect(dirty.description).toBe('<p>Hi <strong>there</strong></p>');
+
+    const plain = await svc.createEvent({ title: 'B', startsAt, description: 'Tom & Jerry' });
+    expect(plain.description).toBe('<p>Tom &amp; Jerry</p>');
+
+    const empty = await svc.createEvent({ title: 'C', startsAt, description: '<p></p>' });
+    expect(empty.description).toBeNull();
+
+    const updated = await svc.updateEvent(empty.id, {
+      title: 'C',
+      startsAt,
+      description: '<p><a href="javascript:alert(1)">x</a></p>',
+    });
+    expect(updated.description).not.toContain('javascript:');
   });
 });
 
@@ -469,7 +502,12 @@ describe('eventsService cover image', () => {
 describe('eventsService.getPublicEvent', () => {
   async function setup() {
     const { repo, rows } = fakeRepo();
-    const svc = createEventsService(repo, fakeTicketTypes({ 'id-1': 2 }), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      repo,
+      fakeTicketTypes({ 'id-1': 2 }),
+      fakeStorage().storage,
+      clock,
+    );
     const event = await svc.createEvent({ title: 'Public', startsAt });
     return { svc, repo, rows, event };
   }
@@ -489,5 +527,87 @@ describe('eventsService.getPublicEvent', () => {
 
     await repo.transitionStatus(event.id, 'published', 'archived');
     await expect(svc.getPublicEvent(event.slug)).resolves.toBeTruthy();
+  });
+});
+
+describe('eventsService.getHomePage', () => {
+  const ticketTypesWithCapacity = (
+    capacity: Record<string, { total: number; sold: number; held: number; from: number | null }>,
+  ): TicketTypesRepository => ({
+    ...fakeTicketTypes(),
+    // One roll-up call for every event shown — the test asserts it is one.
+    capacityByEvent: vi.fn(async (ids: string[]) =>
+      ids
+        .filter((id) => id in capacity)
+        .map((id) => ({
+          eventId: id,
+          total: capacity[id]!.total,
+          sold: capacity[id]!.sold,
+          held: capacity[id]!.held,
+          fromPricePaisa: capacity[id]!.from,
+        })),
+    ),
+  });
+
+  const seed = (id: string, status: EventRecord['status'], startsAt: Date): EventRecord =>
+    ({
+      id,
+      slug: id,
+      title: id,
+      description: null,
+      venue: null,
+      startsAt,
+      endsAt: null,
+      registrationOpensAt: new Date('2026-01-01T00:00:00Z'),
+      registrationClosesAt: new Date(startsAt.getTime() - 86_400_000),
+      status,
+      imageKey: status === 'published' ? `events/${id}/cover-x.png` : null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    }) as EventRecord;
+
+  it('decorates hero, also-upcoming and past with phase, price and cover in one capacity query', async () => {
+    const { repo } = fakeRepo([
+      seed('soon', 'published', new Date('2026-10-01T13:00:00Z')),
+      seed('later', 'published', new Date('2026-11-14T12:30:00Z')),
+      seed('gone', 'archived', new Date('2026-03-01T13:00:00Z')),
+      seed('draft', 'draft', new Date('2026-10-20T13:00:00Z')),
+    ]);
+    const tt = ticketTypesWithCapacity({
+      soon: { total: 100, sold: 40, held: 10, from: 80_000 },
+      later: { total: 50, sold: 50, held: 0, from: 60_000 },
+    });
+    const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
+
+    const home = await svc.getHomePage();
+
+    expect(home.featured?.event.id).toBe('soon');
+    expect(home.featured?.phase).toBe('open');
+    expect(home.featured?.fromPricePaisa).toBe(80_000);
+    expect(home.featured?.coverUrl).toBe('https://cdn.test/events/soon/cover-x.png');
+
+    expect(home.alsoUpcoming.map((h) => h.event.id)).toEqual(['later']);
+    expect(home.alsoUpcoming[0]?.phase).toBe('sold_out');
+
+    expect(home.past.map((h) => h.event.id)).toEqual(['gone']);
+    expect(home.past[0]?.phase).toBe('past');
+    expect(home.past[0]?.fromPricePaisa).toBeNull();
+
+    expect(tt.capacityByEvent).toHaveBeenCalledTimes(1);
+    expect(tt.capacityByEvent).toHaveBeenCalledWith(['soon', 'later', 'gone']);
+  });
+
+  it('returns the dormant state when nothing is published and upcoming', async () => {
+    const { repo } = fakeRepo([seed('gone', 'archived', new Date('2026-03-01T13:00:00Z'))]);
+    const svc = createEventsService(
+      repo,
+      ticketTypesWithCapacity({}),
+      fakeStorage().storage,
+      clock,
+    );
+    const home = await svc.getHomePage();
+    expect(home.featured).toBeNull();
+    expect(home.alsoUpcoming).toEqual([]);
+    expect(home.past).toHaveLength(1);
   });
 });

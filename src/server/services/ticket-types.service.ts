@@ -32,7 +32,9 @@ export function createTicketTypesService(repo: TicketTypesRepository) {
       const rows = await repo.capacityByEvent(eventIds);
       const map = new Map(rows.map((r) => [r.eventId, r]));
       for (const id of eventIds) {
-        if (!map.has(id)) map.set(id, { eventId: id, total: 0, sold: 0, held: 0 });
+        if (!map.has(id)) {
+          map.set(id, { eventId: id, total: 0, sold: 0, held: 0, fromPricePaisa: null });
+        }
       }
       return map;
     },

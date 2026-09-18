@@ -68,6 +68,53 @@ test.describe('admin events', () => {
     await expect(page).toHaveURL(/\/admin\/events\/new$/);
   });
 
+  test('rich-text description: formatting survives a save and unsafe HTML does not', async ({
+    page,
+  }) => {
+    await page.goto('/admin/events/new');
+    await page.getByLabel('Title', { exact: true }).fill(`Rich text ${Date.now()}`);
+    await page.getByLabel(/^Starts at/).fill('2030-10-01T19:00');
+
+    const editor = page.getByLabel('Description');
+    await editor.click();
+    await page
+      .getByRole('toolbar', { name: /formatting/i })
+      .getByRole('button', { name: 'Bold' })
+      .click();
+    await page.keyboard.type('Four acts');
+    await page
+      .getByRole('toolbar', { name: /formatting/i })
+      .getByRole('button', { name: 'Bold' })
+      .click();
+    await page.keyboard.type(', one night.');
+    await page.keyboard.press('Enter');
+    await page
+      .getByRole('toolbar', { name: /formatting/i })
+      .getByRole('button', { name: 'Bullet list' })
+      .click();
+    await page.keyboard.type('Doors 18:30');
+    // Pasted markup is text to the editor; the server strips it regardless.
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('<script>alert(1)</script>');
+
+    await page.getByRole('button', { name: /create event/i }).click();
+    await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}\/edit$/);
+
+    // Reloaded from the database into the editor, still formatted.
+    const saved = page.getByLabel('Description');
+    await expect(saved.locator('strong')).toHaveText('Four acts');
+    await expect(saved.locator('ul li').first()).toHaveText('Doors 18:30');
+    await expect(saved.locator('script')).toHaveCount(0);
+
+    // A blank editor is stored as no description, not an empty paragraph.
+    await saved.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Backspace');
+    await page.getByRole('button', { name: /save changes/i }).click();
+    await expect(page.getByRole('status').filter({ hasText: /event saved/i })).toBeVisible();
+    await expect(page.getByLabel('Description')).toHaveText('');
+  });
+
   test('cross-field validation blocks an end before the start', async ({ page }) => {
     await page.goto('/admin/events/new');
     await page.getByLabel('Title', { exact: true }).fill('Bad dates');

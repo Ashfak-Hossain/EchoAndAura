@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DESCRIPTION_MAX, buildEventMetadata, siteUrl } from '@/lib/seo';
+import {
+  DESCRIPTION_MAX,
+  HOME_TAGLINE,
+  buildEventMetadata,
+  buildHomeMetadata,
+  siteUrl,
+} from '@/lib/seo';
 
 const event = {
   slug: 'echo-aura-live-dhaka',
@@ -42,9 +48,24 @@ describe('buildEventMetadata', () => {
       fromPricePaisa: 80_000,
       siteUrl: site,
     });
-    expect(m.description).toBe('Thu 1 Oct 2026, 19:00 (Dhaka) · ICCB Hall 4, Dhaka · tickets from ৳800.00');
+    expect(m.description).toBe(
+      'Thu 1 Oct 2026, 19:00 (Dhaka) · ICCB Hall 4, Dhaka · tickets from ৳800.00',
+    );
     expect((m.openGraph as { images?: unknown[] }).images).toEqual([]);
     expect((m.twitter as { card?: string }).card).toBe('summary');
+  });
+
+  it('flattens a rich-text description to plain text', () => {
+    const m = buildEventMetadata({
+      event: {
+        ...event,
+        description: '<h2>Line-up</h2><p>Four <strong>acts</strong> &amp; more.</p>',
+      },
+      coverUrl: null,
+      fromPricePaisa: null,
+      siteUrl: site,
+    });
+    expect(m.description).toBe('Line-up Four acts & more.');
   });
 
   it('collapses whitespace and truncates long descriptions on a word boundary', () => {
@@ -58,5 +79,35 @@ describe('buildEventMetadata', () => {
     expect(m.description!.length).toBeLessThanOrEqual(DESCRIPTION_MAX);
     expect(m.description!.endsWith('…')).toBe(true);
     expect(m.description).not.toMatch(/ …$/);
+  });
+});
+
+describe('buildHomeMetadata', () => {
+  it('names the next event and uses its cover when there is a live event', () => {
+    const m = buildHomeMetadata({
+      featured: {
+        title: event.title,
+        startsAt: event.startsAt,
+        venue: event.venue,
+        coverUrl: cover,
+      },
+      siteUrl: site,
+    });
+    expect(m.title).toEqual({ absolute: 'echoandaura' });
+    expect(m.description).toContain(
+      'Next: Echo & Aura Live — Dhaka — Thu 1 Oct 2026, 19:00 (Dhaka)',
+    );
+    expect(m.description!.length).toBeLessThanOrEqual(DESCRIPTION_MAX);
+    expect(m.alternates?.canonical).toBe(site);
+    const og = m.openGraph as { url?: string; images?: unknown[] };
+    expect(og.url).toBe(site);
+    expect(og.images).toEqual([{ url: cover, width: 1200, height: 630, alt: event.title }]);
+  });
+
+  it('falls back to the brand line with no image when dormant', () => {
+    const m = buildHomeMetadata({ featured: null, siteUrl: site });
+    expect(m.description).toBe(HOME_TAGLINE);
+    expect((m.openGraph as { images?: unknown[] }).images).toEqual([]);
+    expect((m.twitter as { card?: string }).card).toBe('summary');
   });
 });

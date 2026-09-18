@@ -35,6 +35,8 @@ export interface EventCapacity {
   total: number;
   sold: number;
   held: number;
+  /** Lowest ticket price in paisa; null when the event has no ticket types. */
+  fromPricePaisa: number | null;
 }
 
 export interface TicketTypesRepository {
@@ -88,6 +90,7 @@ export const ticketTypesRepository: TicketTypesRepository = {
         total: sql<number>`coalesce(sum(${ticketTypes.quantityTotal}), 0)::int`,
         sold: sql<number>`coalesce(sum(${ticketTypes.quantitySold}), 0)::int`,
         held: sql<number>`coalesce(sum(${ticketTypes.quantityReserved}), 0)::int`,
+        fromPricePaisa: sql<number>`min(${ticketTypes.pricePaisa})::int`,
       })
       .from(ticketTypes)
       .where(inArray(ticketTypes.eventId, eventIds))

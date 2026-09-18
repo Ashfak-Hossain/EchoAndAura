@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { descriptionToPlainText } from '@/server/lib/description';
 import { formatBDT } from '@/server/lib/money';
 import { formatDhakaLong } from '@/lib/time';
 
@@ -71,8 +72,53 @@ export function buildEventMetadata({
   };
 }
 
+export const HOME_TAGLINE =
+  'Live events in Dhaka — named tickets, paid by bKash, checked by a person.';
+
+export interface HomeMetadataInput {
+  /** The hero event, if any: its cover becomes the share image. */
+  featured: { title: string; startsAt: Date; venue: string | null; coverUrl: string | null } | null;
+  siteUrl: string;
+}
+
+/**
+ * Metadata for the home page (A1). With a live event, the share preview
+ * names it and uses its cover; otherwise the brand line stands alone.
+ */
+export function buildHomeMetadata({ featured, siteUrl }: HomeMetadataInput): Metadata {
+  const description = featured
+    ? truncate(
+        `Next: ${featured.title} — ${formatDhakaLong(featured.startsAt)} (Dhaka)${featured.venue ? `, ${featured.venue}` : ''}. ${HOME_TAGLINE}`,
+        DESCRIPTION_MAX,
+      )
+    : HOME_TAGLINE;
+  const image = featured?.coverUrl ?? null;
+
+  return {
+    title: { absolute: SITE_NAME },
+    description,
+    alternates: { canonical: siteUrl },
+    openGraph: {
+      type: 'website',
+      siteName: SITE_NAME,
+      url: siteUrl,
+      title: SITE_NAME,
+      description,
+      locale: 'en_GB',
+      images: image ? [{ url: image, width: 1200, height: 630, alt: featured?.title ?? '' }] : [],
+    },
+    twitter: {
+      card: image ? 'summary_large_image' : 'summary',
+      title: SITE_NAME,
+      description,
+      images: image ? [image] : [],
+    },
+  };
+}
+
 function summarise(event: EventMetadataInput['event'], fromPricePaisa: number | null): string {
-  const text = event.description?.replace(/\s+/g, ' ').trim();
+  // The stored description may be rich-text HTML (ADR-010); meta wants text.
+  const text = descriptionToPlainText(event.description);
   if (text) return truncate(text, DESCRIPTION_MAX);
 
   const parts = [`${formatDhakaLong(event.startsAt)} (Dhaka)`];

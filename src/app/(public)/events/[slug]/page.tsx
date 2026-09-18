@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';
 import { eventPhase } from '@/server/lib/event-phase';
+import { RichText } from '@/components/rich-text';
 import { facebookPageUrl } from '@/lib/env.public';
 import { buildEventMetadata, siteUrl } from '@/lib/seo';
 import { formatDhakaLong } from '@/lib/time';
@@ -126,13 +127,10 @@ export default async function PublicEventPage({ params }: Props) {
 
             {!past ? <ShareRow url={pageUrl} title={event.title} /> : null}
 
-            {event.description ? (
-              <div className="flex max-w-160 flex-col gap-3 text-[15px] leading-relaxed text-pretty text-[#4a4640] lg:text-[17px] lg:leading-[1.65]">
-                {event.description.split(/\n\s*\n/).map((para, i) => (
-                  <p key={i}>{para}</p>
-                ))}
-              </div>
-            ) : null}
+            <RichText
+              description={event.description}
+              className="max-w-160 text-[15px] text-pretty text-[#4a4640] lg:text-[17px]"
+            />
 
             {/* Mobile ticket list; on desktop the panel carries it. */}
             <section className="flex flex-col gap-2.5 lg:hidden" aria-labelledby="tickets-heading">

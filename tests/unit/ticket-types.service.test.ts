@@ -6,6 +6,7 @@ import {
   TicketTypeNotFoundError,
 } from '@/server/lib/errors';
 import type {
+  EventCapacity,
   NewTicketType,
   TicketTypeRecord,
   TicketTypesRepository,
@@ -30,13 +31,21 @@ function fakeRepo(seed: TicketTypeRecord[] = []) {
       return rows.get(id) ?? null;
     },
     async capacityByEvent(eventIds) {
-      const out = new Map<string, { eventId: string; total: number; sold: number; held: number }>();
+      const out = new Map<string, EventCapacity>();
       for (const r of rows.values()) {
         if (!eventIds.includes(r.eventId)) continue;
-        const c = out.get(r.eventId) ?? { eventId: r.eventId, total: 0, sold: 0, held: 0 };
+        const c = out.get(r.eventId) ?? {
+          eventId: r.eventId,
+          total: 0,
+          sold: 0,
+          held: 0,
+          fromPricePaisa: null,
+        };
         c.total += r.quantityTotal;
         c.sold += r.quantitySold;
         c.held += r.quantityReserved;
+        c.fromPricePaisa =
+          c.fromPricePaisa === null ? r.pricePaisa : Math.min(c.fromPricePaisa, r.pricePaisa);
         out.set(r.eventId, c);
       }
       return [...out.values()];
@@ -188,14 +197,38 @@ describe('ticketTypesService.deleteTicketType', () => {
 describe('ticketTypesService.capacityForEvents', () => {
   it('rolls up per event and fills zeros for events without ticket types', async () => {
     const { repo } = fakeRepo([
-      record({ id: 'a1', eventId: EVENT_ID, quantityTotal: 100, quantitySold: 30, quantityReserved: 5 }),
-      record({ id: 'a2', eventId: EVENT_ID, quantityTotal: 50, quantitySold: 10, quantityReserved: 0 }),
+      record({
+        id: 'a1',
+        eventId: EVENT_ID,
+        quantityTotal: 100,
+        quantitySold: 30,
+        quantityReserved: 5,
+      }),
+      record({
+        id: 'a2',
+        eventId: EVENT_ID,
+        quantityTotal: 50,
+        quantitySold: 10,
+        quantityReserved: 0,
+      }),
     ]);
     const svc = createTicketTypesService(repo);
 
     const map = await svc.capacityForEvents([EVENT_ID, 'event-empty']);
 
-    expect(map.get(EVENT_ID)).toEqual({ eventId: EVENT_ID, total: 150, sold: 40, held: 5 });
-    expect(map.get('event-empty')).toEqual({ eventId: 'event-empty', total: 0, sold: 0, held: 0 });
+    expect(map.get(EVENT_ID)).toEqual({
+      eventId: EVENT_ID,
+      total: 150,
+      sold: 40,
+      held: 5,
+      fromPricePaisa: expect.any(Number),
+    });
+    expect(map.get('event-empty')).toEqual({
+      eventId: 'event-empty',
+      total: 0,
+      sold: 0,
+      held: 0,
+      fromPricePaisa: null,
+    });
   });
 });

@@ -10,7 +10,10 @@ import {
   EventNotPublishableError,
   EventStatusConflictError,
 } from '@/server/lib/errors';
+import { descriptionToHtml } from '@/server/lib/description';
 import { type EventStatus, assertEventTransition } from '@/server/lib/event-status';
+import { type EventPhase, eventPhase } from '@/server/lib/event-phase';
+import { type HomeSelection, selectHomeEvents } from '@/server/lib/home-events';
 import { type PublishProblem, publishReadiness } from '@/server/lib/publish-readiness';
 import { defaultRegistrationWindow } from '@/server/lib/registration-window';
 import { slugify } from '@/server/lib/slug';
@@ -58,6 +61,15 @@ export interface CreateEventInput {
 
 export type UpdateEventInput = CreateEventInput;
 
+/** One event as the home page shows it: hero, "also upcoming" card or past row. */
+export interface HomeEvent {
+  event: EventRecord;
+  phase: EventPhase;
+  /** Lowest ticket price in paisa; null when no ticket types exist. */
+  fromPricePaisa: number | null;
+  coverUrl: string | null;
+}
+
 export function createEventsService(
   repo: EventsRepository,
   ticketTypes: TicketTypesRepository,
@@ -100,13 +112,46 @@ export function createEventsService(
       return { event, ticketTypes: await ticketTypes.listByEvent(event.id) };
     },
 
+    /**
+     * The home page read model (A1): hero, "also upcoming", past strip.
+     * One events query, one capacity GROUP BY for every event shown — never
+     * a query per event.
+     */
+    async getHomePage(at: Date = now()): Promise<HomeSelection<HomeEvent>> {
+      const visible = await repo.listByStatus(['published', 'archived']);
+      const picked = selectHomeEvents(visible, at);
+      const shown = [picked.featured, ...picked.alsoUpcoming, ...picked.past].filter(
+        (e): e is EventRecord => e !== null,
+      );
+      const capacity = new Map(
+        (await ticketTypes.capacityByEvent(shown.map((e) => e.id))).map((c) => [c.eventId, c]),
+      );
+
+      const decorate = (event: EventRecord): HomeEvent => {
+        const cap = capacity.get(event.id);
+        const availableTotal = cap ? Math.max(0, cap.total - cap.sold - cap.held) : 0;
+        return {
+          event,
+          phase: eventPhase({ event, availableTotal, now: at }),
+          fromPricePaisa: cap?.fromPricePaisa ?? null,
+          coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
+        };
+      };
+
+      return {
+        featured: picked.featured ? decorate(picked.featured) : null,
+        alsoUpcoming: picked.alsoUpcoming.map(decorate),
+        past: picked.past.map(decorate),
+      };
+    },
+
     /** @throws EventSlugTakenError (from the repository) on a duplicate slug. */
     createEvent(input: CreateEventInput): Promise<EventRecord> {
       const defaults = defaultRegistrationWindow(input.startsAt);
       return repo.insert({
         title: input.title,
         slug: input.slug ?? slugify(input.title),
-        description: input.description ?? null,
+        description: cleanDescription(input.description),
         venue: input.venue ?? null,
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
@@ -126,7 +171,7 @@ export function createEventsService(
       const patch: EventPatch = {
         title: input.title,
         slug: input.slug ?? slugify(input.title),
-        description: input.description ?? null,
+        description: cleanDescription(input.description),
         venue: input.venue ?? null,
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
@@ -219,6 +264,12 @@ export function createEventsService(
       return updated;
     },
   };
+
+  // Writes only ever store allowlisted HTML (ADR-010): editor output is
+  // sanitised, plain text is wrapped in paragraphs, an empty editor is NULL.
+  function cleanDescription(raw: string | undefined): string | null {
+    return descriptionToHtml(raw);
+  }
 
   // An orphaned object costs a few KB; a failed delete must never undo a
   // successful row update, so it is logged rather than thrown.

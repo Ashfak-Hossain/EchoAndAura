@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { events } from '@/db/schema';
 import { EventSlugTakenError } from '@/server/lib/errors';
@@ -29,6 +29,8 @@ export type EventPatch = Partial<
 
 export interface EventsRepository {
   list(): Promise<EventRecord[]>;
+  /** Events in any of `statuses`, soonest first (the public read model). */
+  listByStatus(statuses: EventStatus[]): Promise<EventRecord[]>;
   findById(id: string): Promise<EventRecord | null>;
   findBySlug(slug: string): Promise<EventRecord | null>;
   /** @throws EventSlugTakenError when the slug is already in use. */
@@ -56,6 +58,15 @@ function rethrowSlugConflict(err: unknown, slug: string | undefined): never {
 export const eventsRepository: EventsRepository = {
   list() {
     return db.select().from(events).orderBy(desc(events.startsAt));
+  },
+
+  listByStatus(statuses) {
+    if (statuses.length === 0) return Promise.resolve([]);
+    return db
+      .select()
+      .from(events)
+      .where(inArray(events.status, statuses))
+      .orderBy(asc(events.startsAt));
   },
 
   async findById(id) {

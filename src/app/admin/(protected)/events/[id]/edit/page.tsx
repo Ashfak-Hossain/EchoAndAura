@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { eventsService, ticketTypesService } from '@/server/container';
+import { descriptionToHtml } from '@/server/lib/description';
 import { EventNotFoundError } from '@/server/lib/errors';
 import { ButtonLink } from '@/components/button-link';
 import { PageHeader } from '@/components/page-header';
@@ -48,7 +49,8 @@ export default async function EditEventPage({ params, searchParams }: Props) {
   const defaultValues: EventFormValues = {
     title: event.title,
     slug: event.slug,
-    description: event.description ?? '',
+    // Legacy plain-text rows become paragraphs so the editor shows them as is.
+    description: descriptionToHtml(event.description) ?? '',
     venue: event.venue ?? '',
     startsAt: toDhakaInput(event.startsAt),
     endsAt: event.endsAt ? toDhakaInput(event.endsAt) : '',
@@ -103,17 +105,18 @@ export default async function EditEventPage({ params, searchParams }: Props) {
       />
 
       {tab === 'details' ? (
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="max-w-[640px]">
-            <EventForm
-              key={event.updatedAt.toISOString()}
-              action={updateEventAction.bind(null, event.id)}
-              defaultValues={defaultValues}
-              submitLabel="Save changes"
-              saved={saved === '1'}
-              publicUrl={`/events/${event.slug}`}
-            />
-          </div>
+        // The form fills its column (no inner max-width — that left a dead
+        // band between form and panel on wide screens); the grid itself is
+        // capped so inputs never stretch past a comfortable line length.
+        <div className="grid max-w-275 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <EventForm
+            key={event.updatedAt.toISOString()}
+            action={updateEventAction.bind(null, event.id)}
+            defaultValues={defaultValues}
+            submitLabel="Save changes"
+            saved={saved === '1'}
+            publicUrl={`/events/${event.slug}`}
+          />
           <DatesInPlainWords event={event} />
         </div>
       ) : null}

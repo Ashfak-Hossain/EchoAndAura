@@ -62,7 +62,8 @@ export const eventFormSchema = z
           })
           .optional(),
       ),
-    description: optionalText(10_000),
+    // HTML from the rich-text editor (ADR-010) is ~3–5× the visible text.
+    description: optionalText(50_000),
     venue: optionalText(300),
     startsAt: dhakaDateTime,
     endsAt: optionalDhakaDateTime,

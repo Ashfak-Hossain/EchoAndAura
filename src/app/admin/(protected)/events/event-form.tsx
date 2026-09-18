@@ -4,8 +4,8 @@ import { useActionState } from 'react';
 import { Field, FormAlert, FormSuccess } from '@/components/form-field';
 import { Button } from '@/components/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import type { EventFormState } from './actions';
 
 export interface EventFormValues {
@@ -74,11 +74,15 @@ export function EventForm({ action, defaultValues = empty, submitLabel, saved, p
             <Input id="slug" name="slug" defaultValue={values.slug} className="font-mono" />
           </Field>
 
-          <Field label="Description" htmlFor="description">
-            <Textarea
+          <Field
+            label={<span id="description-label">Description</span>}
+            htmlFor="description"
+            hint="Shown on the public event page. Headings, lists and links are kept; anything else is stripped."
+          >
+            <RichTextEditor
               id="description"
               name="description"
-              rows={5}
+              labelledBy="description-label"
               defaultValue={values.description}
             />
           </Field>
