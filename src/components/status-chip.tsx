@@ -39,14 +39,17 @@ interface ChipProps {
   children: ReactNode;
   dot?: boolean;
   strike?: boolean;
+  /** `sm` = the 26px public variant (A2 ticket rows). */
+  size?: 'default' | 'sm';
   className?: string;
 }
 
-export function Chip({ tone, children, dot, strike, className }: ChipProps) {
+export function Chip({ tone, children, dot, strike, size = 'default', className }: ChipProps) {
   return (
     <span
       className={cn(
-        'inline-flex h-7 shrink-0 items-center gap-[7px] rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap',
+        'inline-flex shrink-0 items-center gap-[7px] rounded-full border font-semibold whitespace-nowrap',
+        size === 'sm' ? 'h-[26px] px-2.5 text-xs' : 'h-7 px-3 text-[13px]',
         TONE[tone],
         strike && 'line-through decoration-[#5c574c]/60',
         className,

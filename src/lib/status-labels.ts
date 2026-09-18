@@ -53,30 +53,15 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, StatusLabel> = {
   cancelled: { label: 'Cancelled', tone: 'neutral', strike: true },
 };
 
-/**
- * Why a ticket type is not selling right now (B6 "row states"): out of
- * stock, sales not started, or the window is over. `null` = on sale.
- */
-export type TicketTypeSaleState = 'sold_out' | 'opens_later' | 'window_ended';
+import {
+  type TicketTypeSaleState,
+  ticketTypeSaleState,
+} from '@/server/lib/ticket-type-sale-state';
+
+export { type TicketTypeSaleState, ticketTypeSaleState };
 
 export const TICKET_TYPE_SALE_STATE_LABELS: Record<TicketTypeSaleState, StatusLabel> = {
   sold_out: { label: 'Sold out', tone: 'neutral' },
   opens_later: { label: 'Opens later', tone: 'info' },
   window_ended: { label: 'Window ended', tone: 'neutral' },
 };
-
-export function ticketTypeSaleState(
-  t: {
-    quantityTotal: number;
-    quantitySold: number;
-    quantityReserved: number;
-    salesStartsAt: Date | null;
-    salesEndsAt: Date | null;
-  },
-  now: Date,
-): TicketTypeSaleState | null {
-  if (t.quantityTotal - t.quantitySold - t.quantityReserved <= 0) return 'sold_out';
-  if (t.salesStartsAt && t.salesStartsAt.getTime() > now.getTime()) return 'opens_later';
-  if (t.salesEndsAt && t.salesEndsAt.getTime() <= now.getTime()) return 'window_ended';
-  return null;
-}

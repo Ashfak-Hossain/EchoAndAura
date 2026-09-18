@@ -55,6 +55,9 @@ function fakeRepo(seed: EventRecord[] = []) {
     async findById(id) {
       return rows.get(id) ?? null;
     },
+    async findBySlug(slug) {
+      return [...rows.values()].find((r) => r.slug === slug) ?? null;
+    },
     async insert(values) {
       if (slugTaken(values.slug)) throw new EventSlugTakenError(values.slug);
       const row = materialise(values);
@@ -460,5 +463,31 @@ describe('eventsService cover image', () => {
     expect(cleared.imageKey).toBeNull();
     expect(svc.coverImageUrl(cleared)).toBeNull();
     expect(warnings).toHaveLength(1);
+  });
+});
+
+describe('eventsService.getPublicEvent', () => {
+  async function setup() {
+    const { repo, rows } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes({ 'id-1': 2 }), fakeStorage().storage, clock);
+    const event = await svc.createEvent({ title: 'Public', startsAt });
+    return { svc, repo, rows, event };
+  }
+
+  it('hides drafts and unknown slugs behind the same not-found', async () => {
+    const { svc, event } = await setup();
+    await expect(svc.getPublicEvent(event.slug)).rejects.toBeInstanceOf(EventNotFoundError);
+    await expect(svc.getPublicEvent('nope')).rejects.toBeInstanceOf(EventNotFoundError);
+  });
+
+  it('resolves published and archived events with their ticket types', async () => {
+    const { svc, repo, event } = await setup();
+    await repo.transitionStatus(event.id, 'draft', 'published');
+    const pub = await svc.getPublicEvent(event.slug);
+    expect(pub.event.id).toBe(event.id);
+    expect(pub.ticketTypes).toHaveLength(2);
+
+    await repo.transitionStatus(event.id, 'published', 'archived');
+    await expect(svc.getPublicEvent(event.slug)).resolves.toBeTruthy();
   });
 });

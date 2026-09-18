@@ -64,7 +64,12 @@ obtain each.
   `tests/integration/inventory.concurrency.test.ts`, which proves inventory
   reservation never oversells under concurrency; it must never be skipped or
   weakened.
-- **E2E** (`pnpm test:e2e`) — Playwright against the dev server.
+- **E2E** (`pnpm test:e2e`) — Playwright against a **production build** on
+  port 3100 (`pnpm build && pnpm start -p 3100`, started by Playwright
+  itself). Not the dev server: `next dev` degrades under parallel
+  server-action load after HMR churn, which made the suite flaky. Needs
+  Docker (Postgres + MinIO) and a seeded admin; `.env` is loaded by
+  `next start`. Your `pnpm dev` on :3000 can keep running alongside.
 
 Every service gets unit tests; money and state-machine functions must cover the
 failure path, not just the happy path.

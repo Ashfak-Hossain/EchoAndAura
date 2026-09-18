@@ -19,7 +19,10 @@ import type {
   EventRecord,
   EventsRepository,
 } from '@/server/repositories/events.repository';
-import type { TicketTypesRepository } from '@/server/repositories/ticket-types.repository';
+import type {
+  TicketTypeRecord,
+  TicketTypesRepository,
+} from '@/server/repositories/ticket-types.repository';
 import type { ObjectStorage, UploadTarget } from '@/server/storage/object-storage';
 
 /**
@@ -82,6 +85,20 @@ export function createEventsService(
     },
 
     getEvent,
+
+    /**
+     * The public read model (A2). Only published and archived events have a
+     * page: archived ones keep their URL so links shared on Facebook stay
+     * alive. Drafts are invisible — the same not-found as an unknown slug.
+     * @throws EventNotFoundError
+     */
+    async getPublicEvent(
+      slug: string,
+    ): Promise<{ event: EventRecord; ticketTypes: TicketTypeRecord[] }> {
+      const event = await repo.findBySlug(slug);
+      if (!event || event.status === 'draft') throw new EventNotFoundError(slug);
+      return { event, ticketTypes: await ticketTypes.listByEvent(event.id) };
+    },
 
     /** @throws EventSlugTakenError (from the repository) on a duplicate slug. */
     createEvent(input: CreateEventInput): Promise<EventRecord> {

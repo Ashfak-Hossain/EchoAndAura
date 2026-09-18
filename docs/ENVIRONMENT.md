@@ -29,6 +29,8 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally |
 | `BKASH_RECEIVE_NUMBER`                                                                      | Yes        | Phase 3      | Organizer's bKash number shown to buyers                                                                                               |
 | `APP_ENV`                                                                                   | No         | Phase 1      | `local` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`                              |
+| `SITE_URL`                                                                                  | Yes (prod) | Phase 2      | Absolute public origin for canonical + Open Graph URLs (`https://echoandaura.com`); falls back to `BETTER_AUTH_URL` locally            |
+| `FACEBOOK_PAGE_URL`                                                                         | No         | Phase 2      | Organizer's Facebook page — "Remind me on Facebook" / footer link; hidden when unset                                                   |
 | `APP_TIMEZONE`                                                                              | Yes        | —            | App timezone (`Asia/Dhaka`)                                                                                                            |
 
 ## How to obtain / prepare each
@@ -124,6 +126,14 @@ verifies the stored object before recording its key
 - `BKASH_RECEIVE_NUMBER`: the organizer's bKash number, shown to buyers on the
   payment page. There is **no bKash API** (see [ADR-001](DECISIONS.md)) — this is
   the only bKash configuration.
+
+### Public site — Phase 2
+
+- `SITE_URL`: the real public origin in production. Facebook only accepts
+  absolute `og:url` / `og:image`, so this must be right before the first
+  share. Locally it falls back to `BETTER_AUTH_URL`.
+- `FACEBOOK_PAGE_URL`: optional; the event page offers "Remind me on
+  Facebook" / "Tell me about the next show" only when it is set.
 
 ### App
 

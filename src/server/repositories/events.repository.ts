@@ -30,6 +30,7 @@ export type EventPatch = Partial<
 export interface EventsRepository {
   list(): Promise<EventRecord[]>;
   findById(id: string): Promise<EventRecord | null>;
+  findBySlug(slug: string): Promise<EventRecord | null>;
   /** @throws EventSlugTakenError when the slug is already in use. */
   insert(values: NewEvent): Promise<EventRecord>;
   /** Resolves null when no row has this id. @throws EventSlugTakenError */
@@ -59,6 +60,11 @@ export const eventsRepository: EventsRepository = {
 
   async findById(id) {
     const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
+    return row ?? null;
+  },
+
+  async findBySlug(slug) {
+    const [row] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
     return row ?? null;
   },
 

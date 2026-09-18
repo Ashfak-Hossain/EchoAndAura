@@ -15,7 +15,15 @@ function pgError(code: string, constraint_name: string): postgres.PostgresError 
   return Object.assign(new postgres.PostgresError('violation'), {
     code,
     constraint_name,
+    severity: 'ERROR',
   });
+}
+
+/** What the production bundle actually throws: minified class name, same fields. */
+function minifiedPgError(code: string, constraint_name: string): Error {
+  const err = new Error('violation');
+  err.name = 'ds';
+  return Object.assign(err, { code, constraint_name, severity: 'ERROR' });
 }
 
 // Drizzle wraps the driver error and exposes it as `cause`.
@@ -28,6 +36,17 @@ describe('pg-errors', () => {
     const inner = pgError('23505', 'events_slug_unique');
     expect(findPostgresError(inner)).toBe(inner);
     expect(findPostgresError(wrapped(inner))).toBe(inner);
+  });
+
+  it('recognises a minified PostgresError by its SQLSTATE shape (production bundle)', () => {
+    const err = minifiedPgError('23505', 'events_slug_unique');
+    expect(findPostgresError(wrapped(err))).toBe(err);
+    expect(isUniqueViolation(wrapped(err), 'events_slug_unique')).toBe(true);
+  });
+
+  it('does not mistake other errors with a code for Postgres errors', () => {
+    const node = Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' });
+    expect(findPostgresError(node)).toBeNull();
   });
 
   it('returns null for non-database errors', () => {

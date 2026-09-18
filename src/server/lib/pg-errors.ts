@@ -26,12 +26,21 @@ export function findPostgresError(err: unknown): postgres.PostgresError | null {
 }
 
 /**
- * Shape check rather than `instanceof`: in dev, the pooled client is cached
- * on globalThis across HMR reloads while this module is re-evaluated, so the
- * error can come from a different copy of the `postgres` module.
+ * Shape check, not `instanceof` and not `err.name`:
+ *  - in dev, the pooled client is cached on globalThis across HMR reloads
+ *    while this module is re-evaluated, so `instanceof` sees a different
+ *    class copy;
+ *  - in production the server bundle is minified, so `constructor.name`
+ *    (which postgres-js assigns to `name`) becomes e.g. "ds".
+ * What survives both is the wire format: Postgres errors always carry a
+ * 5-character SQLSTATE `code` and a `severity`.
  */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+
 function isPostgresError(err: Error): err is postgres.PostgresError {
-  return err.name === 'PostgresError' && typeof (err as { code?: unknown }).code === 'string';
+  if (err instanceof postgres.PostgresError) return true;
+  const e = err as { code?: unknown; severity?: unknown };
+  return typeof e.code === 'string' && SQLSTATE.test(e.code) && typeof e.severity === 'string';
 }
 
 function violates(err: unknown, code: string, constraint: string): boolean {
