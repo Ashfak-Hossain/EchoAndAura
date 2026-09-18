@@ -22,3 +22,26 @@ export class EventNotFoundError extends DomainError {
     super(`Event ${eventId} not found`);
   }
 }
+
+export class TicketTypeNotFoundError extends DomainError {
+  constructor(public readonly ticketTypeId: string) {
+    super(`Ticket type ${ticketTypeId} not found`);
+  }
+}
+
+/**
+ * quantity_total may never drop below quantity_sold + quantity_reserved.
+ * Raised when the ticket_types availability CHECK rejects an update.
+ */
+export class TicketTypeCapacityTooLowError extends DomainError {
+  constructor(public readonly ticketTypeId: string) {
+    super(`Ticket type ${ticketTypeId} capacity cannot go below tickets already sold or held`);
+  }
+}
+
+/** A ticket type with sales, holds, or any order history cannot be deleted. */
+export class TicketTypeInUseError extends DomainError {
+  constructor(public readonly ticketTypeId: string) {
+    super(`Ticket type ${ticketTypeId} has orders and cannot be deleted`);
+  }
+}

@@ -1,8 +1,8 @@
 import { desc, eq } from 'drizzle-orm';
-import postgres from 'postgres';
 import { db } from '@/db/client';
 import { events } from '@/db/schema';
 import { EventSlugTakenError } from '@/server/lib/errors';
+import { isUniqueViolation } from '@/server/lib/pg-errors';
 
 /**
  * The only module that touches Drizzle for `events` (architecture rule:
@@ -35,31 +35,8 @@ export interface EventsRepository {
   update(id: string, patch: EventPatch): Promise<EventRecord | null>;
 }
 
-// Postgres SQLSTATE for unique_violation. Uniqueness is enforced by the DB,
-// never by a read-then-write check, so this is where a duplicate surfaces.
-const UNIQUE_VIOLATION = '23505';
-
-/**
- * Drizzle wraps driver failures in `DrizzleQueryError` and exposes the
- * original `PostgresError` as `cause`, so walk the cause chain rather than
- * checking only the top-level error.
- */
-function findPostgresError(err: unknown): postgres.PostgresError | null {
-  let current: unknown = err;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    if (current instanceof postgres.PostgresError) return current;
-    current = current.cause;
-  }
-  return null;
-}
-
-function isUniqueViolation(err: unknown, constraint: string): boolean {
-  const pgError = findPostgresError(err);
-  return (
-    pgError !== null && pgError.code === UNIQUE_VIOLATION && pgError.constraint_name === constraint
-  );
-}
-
+// Slug uniqueness is enforced by the DB, never by a read-then-write check,
+// so the unique violation is where a duplicate surfaces.
 function rethrowSlugConflict(err: unknown, slug: string | undefined): never {
   if (slug !== undefined && isUniqueViolation(err, 'events_slug_unique')) {
     throw new EventSlugTakenError(slug);
