@@ -25,7 +25,10 @@ describe('object storage (S3-compatible)', () => {
 
     const put = await fetch(target.url, {
       method: 'PUT',
-      headers: { 'Content-Type': 'image/png', 'Content-Length': String(body.byteLength) },
+      headers: {
+        'Content-Type': 'image/png',
+        'Content-Length': String(body.byteLength),
+      },
       body,
     });
     expect(put.status).toBe(200);
@@ -52,7 +55,10 @@ describe('object storage (S3-compatible)', () => {
 
     const put = await fetch(target.url, {
       method: 'PUT',
-      headers: { 'Content-Type': 'text/html', 'Content-Length': String(body.byteLength) },
+      headers: {
+        'Content-Type': 'text/html',
+        'Content-Length': String(body.byteLength),
+      },
       body,
     });
     expect(put.status).toBe(403);

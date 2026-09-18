@@ -95,7 +95,11 @@ describe('ticketTypesService.createTicketType', () => {
   it('surfaces EventNotFoundError for an unknown event (FK)', async () => {
     const svc = createTicketTypesService(fakeRepo().repo);
     await expect(
-      svc.createTicketType('nope', { name: 'X', pricePaisa: 0, quantityTotal: 1 }),
+      svc.createTicketType('nope', {
+        name: 'X',
+        pricePaisa: 0,
+        quantityTotal: 1,
+      }),
     ).rejects.toBeInstanceOf(EventNotFoundError);
   });
 });
@@ -104,17 +108,29 @@ describe('ticketTypesService.updateTicketType', () => {
   it('throws TicketTypeNotFoundError for an unknown id', async () => {
     const svc = createTicketTypesService(fakeRepo().repo);
     await expect(
-      svc.updateTicketType('missing', { name: 'X', pricePaisa: 0, quantityTotal: 1 }),
+      svc.updateTicketType('missing', {
+        name: 'X',
+        pricePaisa: 0,
+        quantityTotal: 1,
+      }),
     ).rejects.toBeInstanceOf(TicketTypeNotFoundError);
   });
 
   // Invariant 2 backstop: the floor comes from the DB, the service passes it on.
   it('propagates TicketTypeCapacityTooLowError when total undercuts sold + reserved', async () => {
-    const seeded = record({ quantityTotal: 100, quantitySold: 30, quantityReserved: 10 });
+    const seeded = record({
+      quantityTotal: 100,
+      quantitySold: 30,
+      quantityReserved: 10,
+    });
     const svc = createTicketTypesService(fakeRepo([seeded]).repo);
 
     await expect(
-      svc.updateTicketType(seeded.id, { name: 'General', pricePaisa: 120_000, quantityTotal: 39 }),
+      svc.updateTicketType(seeded.id, {
+        name: 'General',
+        pricePaisa: 120_000,
+        quantityTotal: 39,
+      }),
     ).rejects.toBeInstanceOf(TicketTypeCapacityTooLowError);
 
     const ok = await svc.updateTicketType(seeded.id, {

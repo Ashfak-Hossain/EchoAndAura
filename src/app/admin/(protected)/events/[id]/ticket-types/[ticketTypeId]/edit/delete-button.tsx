@@ -1,6 +1,8 @@
 'use client';
 
 import { useActionState } from 'react';
+import { FormAlert } from '@/components/form-field';
+import { Button } from '@/components/ui/button';
 import type { TicketTypeFormState } from '../../actions';
 
 interface Props {
@@ -9,28 +11,30 @@ interface Props {
   inUse: boolean;
 }
 
-// TEMPORARY DEMO MARKUP — the real UI (confirm dialog) is designed separately.
+// B6: destructive, explained. A confirm dialog joins in the sheet polish.
 export function DeleteTicketTypeButton({ action, inUse }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
-      <button
-        type="submit"
-        disabled={pending || inUse}
-        className="self-start rounded border border-red-600 px-3 py-2 text-sm text-red-600 disabled:opacity-50"
-      >
+    <form
+      action={formAction}
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-6 py-4"
+    >
+      <div className="flex flex-col gap-1 text-sm">
+        <span className="font-medium">Delete this ticket type</span>
+        <span className="text-muted-foreground">
+          {inUse
+            ? 'Cannot delete: tickets have been sold or are on hold. Close sales with an end date instead.'
+            : 'Only possible while nothing has been sold or held.'}
+        </span>
+      </div>
+      <Button type="submit" variant="destructive" disabled={pending || inUse}>
         {pending ? 'Deleting…' : 'Delete ticket type'}
-      </button>
-      {inUse ? (
-        <p className="text-xs text-neutral-600">
-          Cannot delete: tickets have been sold or are on hold.
-        </p>
-      ) : null}
+      </Button>
       {state.error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
+        <div className="basis-full">
+          <FormAlert>{state.error}</FormAlert>
+        </div>
       ) : null}
     </form>
   );

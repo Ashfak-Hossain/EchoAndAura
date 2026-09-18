@@ -12,7 +12,10 @@ import {
 // and `constraint_name` as own properties. (The type declaration only admits
 // a string constructor argument; the runtime assigns any object's fields.)
 function pgError(code: string, constraint_name: string): postgres.PostgresError {
-  return Object.assign(new postgres.PostgresError('violation'), { code, constraint_name });
+  return Object.assign(new postgres.PostgresError('violation'), {
+    code,
+    constraint_name,
+  });
 }
 
 // Drizzle wraps the driver error and exposes it as `cause`.
@@ -34,17 +37,23 @@ describe('pg-errors', () => {
   });
 
   it('matches only the named constraint for each violation class', () => {
-    expect(isUniqueViolation(wrapped(pgError('23505', 'events_slug_unique')), 'events_slug_unique')).toBe(
-      true,
-    );
+    expect(
+      isUniqueViolation(wrapped(pgError('23505', 'events_slug_unique')), 'events_slug_unique'),
+    ).toBe(true);
     expect(isUniqueViolation(wrapped(pgError('23505', 'other_unique')), 'events_slug_unique')).toBe(
       false,
     );
     expect(
-      isCheckViolation(pgError('23514', 'ticket_types_availability_nonneg'), 'ticket_types_availability_nonneg'),
+      isCheckViolation(
+        pgError('23514', 'ticket_types_availability_nonneg'),
+        'ticket_types_availability_nonneg',
+      ),
     ).toBe(true);
     expect(
-      isForeignKeyViolation(pgError('23503', 'orders_ticket_type_id_ticket_types_id_fk'), 'orders_ticket_type_id_ticket_types_id_fk'),
+      isForeignKeyViolation(
+        pgError('23503', 'orders_ticket_type_id_ticket_types_id_fk'),
+        'orders_ticket_type_id_ticket_types_id_fk',
+      ),
     ).toBe(true);
   });
 

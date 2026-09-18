@@ -24,3 +24,22 @@ export function toDhakaInput(date: Date): string {
 export function formatDhaka(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, HH:mm');
 }
+
+/** Display with weekday, e.g. "Thu 1 Oct 2026, 19:00" (B3/B4 headers). */
+export function formatDhakaLong(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM yyyy, HH:mm');
+}
+
+/** "8 min ago", "Yesterday", or a Dhaka date once it is older than a week (B4 "Updated"). */
+export function formatRelative(date: Date, now: Date = new Date()): string {
+  const diffMs = now.getTime() - date.getTime();
+  const min = Math.round(diffMs / 60_000);
+  if (min < 1) return 'Just now';
+  if (min < 60) return `${min} min ago`;
+  const hours = Math.round(min / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy');
+}

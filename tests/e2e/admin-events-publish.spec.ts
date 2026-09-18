@@ -24,17 +24,30 @@ async function createEvent(page: Page, title: string, startsAt = '2030-10-01T19:
 }
 
 async function addTicketType(page: Page, name: string, price: string, quantity: string) {
-  await page.getByRole('link', { name: /add ticket type/i }).click();
+  await openTab(page, 'Ticket types');
+  await page
+    .getByRole('link', { name: /add ticket type/i })
+    .first()
+    .click();
   await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByLabel(/^Price/).fill(price);
   await page.getByLabel('Quantity', { exact: true }).fill(quantity);
   await page.getByRole('button', { name: /add ticket type/i }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/\/edit\?tab=ticket-types$/);
 }
 
 async function uploadCover(page: Page) {
+  await openTab(page, 'Cover image');
   await page.getByTestId('cover-file').setInputFiles(COVER_FIXTURE);
   await expect(page.getByTestId('cover-image')).toBeVisible();
+}
+
+/** B5 editor tabs are URL state; click the tab before touching its section. */
+async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
+  await page
+    .getByRole('navigation', { name: /event sections/i })
+    .getByRole('link', { name })
+    .click();
 }
 
 const status = (page: Page) => page.getByTestId('event-status');
@@ -44,10 +57,9 @@ test.describe('admin event publishing', () => {
     await signIn(page);
   });
 
-  test('PHASE 1 EXIT: create an event with three ticket types and publish it', async ({
-    page,
-  }) => {
+  test('PHASE 1 EXIT: create an event with three ticket types and publish it', async ({ page }) => {
     await createEvent(page, `E2E Publish ${Date.now()}`);
+    await openTab(page, 'Publish');
     await expect(status(page)).toHaveText('draft');
 
     // Not ready: no ticket types, no cover → Publish disabled, checklist says why.
@@ -65,6 +77,7 @@ test.describe('admin event publishing', () => {
     await addTicketType(page, 'General', '1200', '400');
     await addTicketType(page, 'VIP', '3500', '50');
     await uploadCover(page);
+    await openTab(page, 'Publish');
 
     // Ready: every check passes, Publish enabled.
     for (const item of await checklist.getByRole('listitem').all()) {
@@ -79,6 +92,10 @@ test.describe('admin event publishing', () => {
     await page.getByRole('button', { name: /^unpublish$/i }).click();
     await expect(status(page)).toHaveText('draft');
     await page.getByRole('button', { name: /^archive$/i }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: /archive event/i })
+      .click();
     await expect(status(page)).toHaveText('archived');
     await expect(page.getByRole('button', { name: /^publish$/i })).toHaveCount(0);
     await page.getByRole('button', { name: /restore to draft/i }).click();
@@ -87,8 +104,9 @@ test.describe('admin event publishing', () => {
 
     // Listed with its status.
     await page.goto('/admin/events');
+    // StatusChip renders the human label ("Draft"), not the enum value.
     await expect(page.getByRole('row').filter({ hasText: 'E2E Publish' }).first()).toContainText(
-      'draft',
+      /draft/i,
     );
   });
 
@@ -96,6 +114,7 @@ test.describe('admin event publishing', () => {
     await createEvent(page, `E2E Past ${Date.now()}`, '2020-01-01T19:00');
     await addTicketType(page, 'General', '10', '10');
     await uploadCover(page);
+    await openTab(page, 'Publish');
 
     const publish = page.getByRole('button', { name: /^publish$/i });
     await expect(publish).toBeDisabled();

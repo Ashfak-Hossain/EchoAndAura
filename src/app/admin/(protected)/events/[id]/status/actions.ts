@@ -10,6 +10,7 @@ import {
   EventStatusConflictError,
   InvalidEventTransitionError,
 } from '@/server/lib/errors';
+import { editorPath } from '../editor-path';
 
 export interface StatusActionState {
   error?: string;
@@ -31,7 +32,7 @@ export async function changeEventStatusAction(
     return { error: toMessage(err) };
   }
 
-  revalidatePath(`/admin/events/${eventId}/edit`);
+  revalidatePath(editorPath(eventId, 'publish'));
   revalidatePath('/admin/events');
   return {};
 }

@@ -21,6 +21,11 @@ async function createEvent(page: Page, title: string) {
   await page.getByLabel(/^Starts at/).fill('2030-10-01T19:00');
   await page.getByRole('button', { name: /create event/i }).click();
   await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}\/edit$/);
+  // B5 editor tabs are URL state; the cover lives on its own tab.
+  await page
+    .getByRole('navigation', { name: /event sections/i })
+    .getByRole('link', { name: 'Cover image' })
+    .click();
 }
 
 test.describe('admin event cover image', () => {

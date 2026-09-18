@@ -30,7 +30,9 @@ describe('ticketTypeFormSchema', () => {
     expect(ticketTypeFormSchema.safeParse({ ...valid, priceTaka: '799.50' }).data?.pricePaisa).toBe(
       79_950,
     );
-    expect(ticketTypeFormSchema.safeParse({ ...valid, priceTaka: '0.01' }).data?.pricePaisa).toBe(1);
+    expect(ticketTypeFormSchema.safeParse({ ...valid, priceTaka: '0.01' }).data?.pricePaisa).toBe(
+      1,
+    );
     expect(ticketTypeFormSchema.safeParse({ ...valid, priceTaka: '0' }).data?.pricePaisa).toBe(0);
   });
 
@@ -56,9 +58,12 @@ describe('ticketTypeFormSchema', () => {
     for (const quantityTotal of ['0', '1.5', '-1', 'ten', '']) {
       expect(firstMessage({ ...valid, quantityTotal })).toMatch(/quantity|whole number/i);
     }
-    expect(firstMessage({ ...valid, quantityTotal: String(TICKET_TYPE_MAX_QUANTITY + 1) })).toMatch(
-      /at most/i,
-    );
+    expect(
+      firstMessage({
+        ...valid,
+        quantityTotal: String(TICKET_TYPE_MAX_QUANTITY + 1),
+      }),
+    ).toMatch(/at most/i);
   });
 
   it('rejects a blank name', () => {

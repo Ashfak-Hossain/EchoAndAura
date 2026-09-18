@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { AdminShell } from '@/components/admin/admin-shell';
+import { Button } from '@/components/ui/button';
 import { auth } from '@/lib/auth';
 import { signOutAction } from './actions';
 
@@ -14,26 +15,18 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect('/admin/login');
 
-  // TEMPORARY DEMO SHELL — the real admin layout is designed separately.
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <nav className="flex items-center gap-4 text-sm">
-          <span className="font-semibold">echoandaura admin</span>
-          <Link href="/admin" className="underline">
-            Dashboard
-          </Link>
-          <Link href="/admin/events" className="underline">
-            Events
-          </Link>
-        </nav>
+    <AdminShell
+      email={session.user.email}
+      signOut={
         <form action={signOutAction}>
-          <button type="submit" className="text-sm underline">
+          <Button type="submit" variant="ghost" size="sm" className="-ml-2">
             Sign out
-          </button>
+          </Button>
         </form>
-      </header>
-      <main className="p-4">{children}</main>
-    </div>
+      }
+    >
+      {children}
+    </AdminShell>
   );
 }

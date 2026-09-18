@@ -13,9 +13,7 @@ describe('validateCoverImage', () => {
   it('accepts JPEG, PNG and WebP within the size limit', () => {
     for (const contentType of ['image/jpeg', 'image/png', 'image/webp']) {
       expect(() => validateCoverImage({ contentType, size: 1 })).not.toThrow();
-      expect(() =>
-        validateCoverImage({ contentType, size: COVER_IMAGE_MAX_BYTES }),
-      ).not.toThrow();
+      expect(() => validateCoverImage({ contentType, size: COVER_IMAGE_MAX_BYTES })).not.toThrow();
     }
   });
 
@@ -30,7 +28,10 @@ describe('validateCoverImage', () => {
     expect(() => validateCoverImage({ contentType: 'image/png', size: 0 })).toThrow(/empty/);
     expect(() => validateCoverImage({ contentType: 'image/png', size: 1.5 })).toThrow(/empty/);
     expect(() =>
-      validateCoverImage({ contentType: 'image/png', size: COVER_IMAGE_MAX_BYTES + 1 }),
+      validateCoverImage({
+        contentType: 'image/png',
+        size: COVER_IMAGE_MAX_BYTES + 1,
+      }),
     ).toThrow(/5 MB/);
   });
 });

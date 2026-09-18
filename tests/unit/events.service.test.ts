@@ -111,7 +111,11 @@ function fakeStorage(objects: Record<string, StoredObjectInfo> = {}) {
   const deleted: string[] = [];
   const storage: ObjectStorage = {
     async createUploadUrl({ key }) {
-      return { url: `https://storage.test/put/${key}`, key, expiresInSeconds: 300 };
+      return {
+        url: `https://storage.test/put/${key}`,
+        key,
+        expiresInSeconds: 300,
+      };
     },
     async head(key) {
       return store.get(key) ?? null;
@@ -137,7 +141,10 @@ describe('eventsService.createEvent', () => {
     const { repo } = fakeRepo();
     const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
 
-    const event = await svc.createEvent({ title: 'Launch Night 2026', startsAt });
+    const event = await svc.createEvent({
+      title: 'Launch Night 2026',
+      startsAt,
+    });
 
     expect(event.slug).toBe('launch-night-2026');
     expect(event.status).toBe('draft');
@@ -146,7 +153,12 @@ describe('eventsService.createEvent', () => {
   });
 
   it('respects an explicit slug and explicit registration window', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     const opens = new Date('2026-09-01T00:00:00Z');
     const closes = new Date('2026-09-30T00:00:00Z');
 
@@ -164,10 +176,19 @@ describe('eventsService.createEvent', () => {
   });
 
   it('fills only the missing registration bound', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     const closes = new Date('2026-09-30T00:00:00Z');
 
-    const event = await svc.createEvent({ title: 'X', startsAt, registrationClosesAt: closes });
+    const event = await svc.createEvent({
+      title: 'X',
+      startsAt,
+      registrationClosesAt: closes,
+    });
 
     expect(event.registrationOpensAt?.toISOString()).toBe('2026-09-11T13:00:00.000Z');
     expect(event.registrationClosesAt).toEqual(closes);
@@ -176,7 +197,12 @@ describe('eventsService.createEvent', () => {
   // Failure path: uniqueness is the repository/DB's job; the service must let
   // the typed error through untouched so the action can name the field.
   it('surfaces EventSlugTakenError on a duplicate slug', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     await svc.createEvent({ title: 'Same Title', startsAt });
 
     await expect(svc.createEvent({ title: 'Same Title', startsAt })).rejects.toBeInstanceOf(
@@ -187,7 +213,12 @@ describe('eventsService.createEvent', () => {
 
 describe('eventsService.updateEvent / getEvent', () => {
   it('throws EventNotFoundError for an unknown id', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     await expect(svc.getEvent('missing')).rejects.toBeInstanceOf(EventNotFoundError);
     await expect(svc.updateEvent('missing', { title: 'X', startsAt })).rejects.toBeInstanceOf(
       EventNotFoundError,
@@ -205,7 +236,10 @@ describe('eventsService.updateEvent / getEvent', () => {
     });
 
     const newStart = new Date('2026-11-01T13:00:00Z');
-    const updated = await svc.updateEvent(created.id, { title: 'New Title', startsAt: newStart });
+    const updated = await svc.updateEvent(created.id, {
+      title: 'New Title',
+      startsAt: newStart,
+    });
 
     expect(updated.title).toBe('New Title');
     expect(updated.slug).toBe('new-title');
@@ -216,7 +250,12 @@ describe('eventsService.updateEvent / getEvent', () => {
   });
 
   it('surfaces EventSlugTakenError when renaming onto another event slug', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     await svc.createEvent({ title: 'First', startsAt });
     const second = await svc.createEvent({ title: 'Second', startsAt });
 
@@ -307,7 +346,12 @@ describe('eventsService.changeEventStatus', () => {
   });
 
   it('throws EventNotFoundError for an unknown id', async () => {
-    const svc = createEventsService(fakeRepo().repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const svc = createEventsService(
+      fakeRepo().repo,
+      fakeTicketTypes(),
+      fakeStorage().storage,
+      clock,
+    );
     await expect(svc.changeEventStatus('missing', 'published')).rejects.toBeInstanceOf(
       EventNotFoundError,
     );
@@ -353,7 +397,10 @@ describe('eventsService cover image', () => {
       svc.createCoverUpload(event.id, { contentType: 'image/gif', size: 10 }),
     ).rejects.toBeInstanceOf(CoverImageInvalidError);
     await expect(
-      svc.createCoverUpload(event.id, { contentType: 'image/png', size: 6 * 1024 * 1024 }),
+      svc.createCoverUpload(event.id, {
+        contentType: 'image/png',
+        size: 6 * 1024 * 1024,
+      }),
     ).rejects.toBeInstanceOf(CoverImageInvalidError);
   });
 

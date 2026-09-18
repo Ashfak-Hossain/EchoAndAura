@@ -48,8 +48,12 @@ export const events = pgTable('events', {
   endsAt: timestamp('ends_at', { withTimezone: true }),
   // Business rule: registration opens 20 days before, closes 5 days before the
   // event. Stored explicitly so a specific event can override the default.
-  registrationOpensAt: timestamp('registration_opens_at', { withTimezone: true }),
-  registrationClosesAt: timestamp('registration_closes_at', { withTimezone: true }),
+  registrationOpensAt: timestamp('registration_opens_at', {
+    withTimezone: true,
+  }),
+  registrationClosesAt: timestamp('registration_closes_at', {
+    withTimezone: true,
+  }),
   status: eventStatus('status').notNull().default('draft'),
   // Object-storage key of the cover image (e.g. events/<id>/cover-x.jpg), not
   // a URL: the public URL is derived at render time, so moving buckets or
@@ -293,8 +297,12 @@ export const accounts = pgTable(
     accessToken: text('access_token'),
     refreshToken: text('refresh_token'),
     idToken: text('id_token'),
-    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', {
+      withTimezone: true,
+    }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', {
+      withTimezone: true,
+    }),
     scope: text('scope'),
     // Hashed by better-auth for the email/password ("credential") provider.
     password: text('password'),

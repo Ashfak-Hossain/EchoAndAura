@@ -69,7 +69,10 @@ export function createS3ObjectStorage(env: StorageEnv): ObjectStorage {
     endpoint: env.endpoint,
     // R2 and MinIO both ignore the region but the SDK requires one.
     region: 'auto',
-    credentials: { accessKeyId: env.accessKeyId, secretAccessKey: env.secretAccessKey },
+    credentials: {
+      accessKeyId: env.accessKeyId,
+      secretAccessKey: env.secretAccessKey,
+    },
     // Path-style (host/bucket/key): required by MinIO, supported by R2.
     forcePathStyle: true,
   });

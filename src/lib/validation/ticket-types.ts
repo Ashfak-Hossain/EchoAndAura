@@ -44,7 +44,9 @@ export const ticketTypeFormSchema = z
     priceTaka: z
       .string({ error: 'Price is required' })
       .trim()
-      .regex(TAKA_PATTERN, { error: 'Enter a price in taka with at most 2 decimals, e.g. 799.50' })
+      .regex(TAKA_PATTERN, {
+        error: 'Enter a price in taka with at most 2 decimals, e.g. 799.50',
+      })
       .transform((v) => takaToPaisa(Number(v))),
     quantityTotal: z
       .string({ error: 'Quantity is required' })

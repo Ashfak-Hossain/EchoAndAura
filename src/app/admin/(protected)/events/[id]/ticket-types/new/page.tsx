@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';
+import { PageHeader } from '@/components/page-header';
+import { editorPath } from '../../editor-path';
 import { createTicketTypeAction } from '../actions';
 import { TicketTypeForm } from '../ticket-type-form';
 
@@ -10,7 +11,7 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
-// TEMPORARY DEMO MARKUP — the real admin UI is designed separately.
+// B6 add form (page; the design's sheet is a later polish).
 export default async function NewTicketTypePage({ params }: Props) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -23,18 +24,16 @@ export default async function NewTicketTypePage({ params }: Props) {
     throw err;
   }
 
+  const backHref = editorPath(event.id, 'ticket-types');
+
   return (
-    <section className="flex flex-col gap-4">
-      <p className="text-sm">
-        <Link href={`/admin/events/${event.id}/edit`} className="underline">
-          ← {event.title}
-        </Link>
-      </p>
-      <h1 className="text-xl font-semibold">New ticket type</h1>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="New ticket type" subtitle={event.title} />
       <TicketTypeForm
         action={createTicketTypeAction.bind(null, event.id)}
         submitLabel="Add ticket type"
+        cancelHref={backHref}
       />
-    </section>
+    </div>
   );
 }

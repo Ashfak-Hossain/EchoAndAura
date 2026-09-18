@@ -7,10 +7,7 @@
  */
 
 export type PublishProblemCode =
-  | 'no_ticket_types'
-  | 'no_cover_image'
-  | 'starts_in_past'
-  | 'registration_window_invalid';
+  'no_ticket_types' | 'no_cover_image' | 'starts_in_past' | 'registration_window_invalid';
 
 export interface PublishProblem {
   code: PublishProblemCode;
@@ -48,7 +45,11 @@ export const PUBLISH_CHECKS: readonly PublishProblemCode[] = [
   'registration_window_invalid',
 ];
 
-export function publishReadiness({ event, ticketTypeCount, now }: PublishReadinessInput): PublishProblem[] {
+export function publishReadiness({
+  event,
+  ticketTypeCount,
+  now,
+}: PublishReadinessInput): PublishProblem[] {
   const problems: PublishProblem[] = [];
 
   if (ticketTypeCount < 1) problems.push(problem('no_ticket_types'));

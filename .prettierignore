@@ -1,0 +1,7 @@
+# Generated — never hand-edited (CLAUDE.md), so never reformatted either.
+drizzle/
+src/components/ui/
+# Build output and personal notes (may contain third-party exports).
+.next/
+notes/
+pnpm-lock.yaml

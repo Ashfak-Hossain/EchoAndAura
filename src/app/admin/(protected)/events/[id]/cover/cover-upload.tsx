@@ -3,6 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { COVER_IMAGE_MAX_BYTES, COVER_IMAGE_TYPES } from '@/server/lib/cover-image';
+import { FormAlert } from '@/components/form-field';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { createCoverUploadAction, removeCoverImageAction, setCoverImageAction } from './actions';
 
 interface Props {
@@ -12,8 +16,7 @@ interface Props {
 
 type Phase = 'idle' | 'preparing' | 'uploading' | 'saving' | 'removing';
 
-// TEMPORARY DEMO MARKUP — the real UI (dropzone, preview, crop guide) is
-// designed separately. The three-step flow is the durable part:
+// B5 cover upload. The three-step flow is the durable part:
 //   1. ask the server for a presigned PUT   2. PUT the file straight to
 //   storage from the browser                 3. tell the server the key.
 export function CoverUpload({ eventId, hasImage }: Props) {
@@ -78,42 +81,63 @@ export function CoverUpload({ eventId, hasImage }: Props) {
     }
   }
 
-  const label = { idle: null, preparing: 'Preparing…', uploading: 'Uploading…', saving: 'Saving…', removing: 'Removing…' }[phase];
+  const label = {
+    idle: null,
+    preparing: 'Preparing…',
+    uploading: 'Uploading…',
+    saving: 'Saving…',
+    removing: 'Removing…',
+  }[phase];
 
+  // B5 dropzone: card + input[type=file]; idle / uploading / rejected states.
   return (
-    <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1 text-sm">
-        {hasImage ? 'Replace cover image' : 'Cover image'} (JPEG, PNG or WebP, up to 5 MB)
-        <input
-          ref={inputRef}
-          type="file"
-          data-testid="cover-file"
-          accept="image/jpeg,image/png,image/webp"
-          disabled={busy}
-          onChange={(e) => void onFileChosen(e.target.files?.[0])}
-          className="text-sm"
-        />
-      </label>
-      {label ? (
-        <p role="status" className="text-sm text-neutral-600">
-          {label}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-      {hasImage ? (
-        <button
-          type="button"
-          onClick={() => void onRemove()}
-          disabled={busy}
-          className="self-start rounded border border-red-600 px-3 py-2 text-sm text-red-600 disabled:opacity-50"
+    <Card className="gap-0 py-0">
+      <CardHeader className="px-6 pt-6">
+        <CardTitle>{hasImage ? 'Replace cover image' : 'Upload a cover image'}</CardTitle>
+        <CardDescription>JPG, PNG or WebP · up to 5 MB · 1200×630 or larger.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 px-6 pt-4 pb-6">
+        <label
+          className={cn(
+            'flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-border-strong px-6 py-10 text-center text-sm transition-colors hover:bg-secondary',
+            busy && 'pointer-events-none opacity-60',
+          )}
         >
-          Remove cover image
-        </button>
-      ) : null}
-    </div>
+          <span className="flex size-10 items-center justify-center rounded-full bg-accent text-lg text-accent-ink">
+            ↑
+          </span>
+          <span className="font-medium">
+            {hasImage ? 'Replace cover image' : 'Cover image'} — choose a file
+          </span>
+          <span className="text-muted-foreground">JPEG, PNG or WebP, up to 5 MB</span>
+          <input
+            ref={inputRef}
+            type="file"
+            data-testid="cover-file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={busy}
+            onChange={(e) => void onFileChosen(e.target.files?.[0])}
+            className="sr-only"
+          />
+        </label>
+        {label ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            {label}
+          </p>
+        ) : null}
+        {error ? <FormAlert>{error}</FormAlert> : null}
+        {hasImage ? (
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => void onRemove()}
+            disabled={busy}
+            className="self-start"
+          >
+            Remove cover image
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

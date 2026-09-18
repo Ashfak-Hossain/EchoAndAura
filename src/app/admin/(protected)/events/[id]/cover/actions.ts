@@ -8,10 +8,9 @@ import {
   EventNotFoundError,
 } from '@/server/lib/errors';
 import { coverImageKeySchema, coverUploadRequestSchema } from '@/lib/validation/cover-image';
+import { editorPath } from '../editor-path';
 
-export type CoverActionResult<T = undefined> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+export type CoverActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Step 1: validate the browser's claim, hand back a presigned PUT. */
 export async function createCoverUploadAction(
@@ -43,7 +42,7 @@ export async function setCoverImageAction(
     return { ok: false, error: toMessage(err) };
   }
 
-  revalidatePath(`/admin/events/${eventId}/edit`);
+  revalidatePath(editorPath(eventId, 'cover'));
   return { ok: true, data: undefined };
 }
 
@@ -54,7 +53,7 @@ export async function removeCoverImageAction(eventId: string): Promise<CoverActi
     return { ok: false, error: toMessage(err) };
   }
 
-  revalidatePath(`/admin/events/${eventId}/edit`);
+  revalidatePath(editorPath(eventId, 'cover'));
   return { ok: true, data: undefined };
 }
 

@@ -31,9 +31,7 @@ export function findPostgresError(err: unknown): postgres.PostgresError | null {
  * error can come from a different copy of the `postgres` module.
  */
 function isPostgresError(err: Error): err is postgres.PostgresError {
-  return (
-    err.name === 'PostgresError' && typeof (err as { code?: unknown }).code === 'string'
-  );
+  return err.name === 'PostgresError' && typeof (err as { code?: unknown }).code === 'string';
 }
 
 function violates(err: unknown, code: string, constraint: string): boolean {

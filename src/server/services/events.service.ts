@@ -69,7 +69,11 @@ export function createEventsService(
 
   async function readinessOf(event: EventRecord): Promise<PublishProblem[]> {
     const types = await ticketTypes.listByEvent(event.id);
-    return publishReadiness({ event, ticketTypeCount: types.length, now: now() });
+    return publishReadiness({
+      event,
+      ticketTypeCount: types.length,
+      now: now(),
+    });
   }
 
   return {

@@ -16,7 +16,10 @@ describe('loginSchema', () => {
   // Failure paths — every external input must be rejected, not coerced.
   it('rejects an invalid email', () => {
     expect(
-      loginSchema.safeParse({ email: 'not-an-email', password: 'correct-horse' }).success,
+      loginSchema.safeParse({
+        email: 'not-an-email',
+        password: 'correct-horse',
+      }).success,
     ).toBe(false);
   });
 

@@ -54,7 +54,9 @@ export const eventFormSchema = z
       .pipe(
         z
           .string()
-          .max(SLUG_MAX_LENGTH, { error: `Slug must be at most ${SLUG_MAX_LENGTH} characters` })
+          .max(SLUG_MAX_LENGTH, {
+            error: `Slug must be at most ${SLUG_MAX_LENGTH} characters`,
+          })
           .regex(SLUG_PATTERN, {
             error: 'Slug may contain only lowercase letters, numbers and single dashes',
           })
@@ -69,7 +71,11 @@ export const eventFormSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.endsAt && v.endsAt <= v.startsAt) {
-      ctx.addIssue({ code: 'custom', path: ['endsAt'], message: 'End must be after start' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endsAt'],
+        message: 'End must be after start',
+      });
     }
     if (v.registrationOpensAt && v.registrationClosesAt) {
       if (v.registrationOpensAt >= v.registrationClosesAt) {

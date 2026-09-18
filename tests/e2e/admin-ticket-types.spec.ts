@@ -12,21 +12,35 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/admin$/);
 }
 
-/** Creates a fresh event and returns its edit-page URL. */
+/** Creates a fresh event, opens its Ticket types tab, and returns that URL. */
 async function createEvent(page: Page, title: string): Promise<string> {
   await page.goto('/admin/events/new');
   await page.getByLabel('Title', { exact: true }).fill(title);
   await page.getByLabel(/^Starts at/).fill('2030-10-01T19:00');
   await page.getByRole('button', { name: /create event/i }).click();
   await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}\/edit$/);
+  await page
+    .getByRole('navigation', { name: /event sections/i })
+    .getByRole('link', { name: 'Ticket types' })
+    .click();
+  await expect(page).toHaveURL(/tab=ticket-types$/);
   return page.url();
 }
 
 async function addTicketType(
   page: Page,
-  values: { name: string; price: string; quantity: string; start?: string; end?: string },
+  values: {
+    name: string;
+    price: string;
+    quantity: string;
+    start?: string;
+    end?: string;
+  },
 ) {
-  await page.getByRole('link', { name: /add ticket type/i }).click();
+  await page
+    .getByRole('link', { name: /add ticket type/i })
+    .first()
+    .click();
   await page.getByLabel('Name', { exact: true }).fill(values.name);
   await page.getByLabel(/^Price/).fill(values.price);
   await page.getByLabel('Quantity', { exact: true }).fill(values.quantity);
@@ -42,7 +56,7 @@ test.describe('admin ticket types', () => {
 
   test('phase-exit rehearsal: three ticket types on one event', async ({ page }) => {
     const editUrl = await createEvent(page, `E2E Tickets ${Date.now()}`);
-    await expect(page.getByText(/no ticket types yet/i)).toBeVisible();
+    await expect(page.getByText(/add your first ticket type/i)).toBeVisible();
 
     await addTicketType(page, {
       name: 'Early Bird',
@@ -52,7 +66,11 @@ test.describe('admin ticket types', () => {
       end: '2030-09-15T23:59',
     });
     await expect(page).toHaveURL(editUrl);
-    await addTicketType(page, { name: 'General', price: '1200', quantity: '400' });
+    await addTicketType(page, {
+      name: 'General',
+      price: '1200',
+      quantity: '400',
+    });
     await addTicketType(page, { name: 'VIP', price: '3500', quantity: '50' });
 
     // All three listed, money formatted from paisa, available = total.
@@ -83,7 +101,11 @@ test.describe('admin ticket types', () => {
   test('rejects a malformed price and a backwards sales window inline', async ({ page }) => {
     await createEvent(page, `E2E Tickets validation ${Date.now()}`);
 
-    await addTicketType(page, { name: 'Bad price', price: '1.999', quantity: '10' });
+    await addTicketType(page, {
+      name: 'Bad price',
+      price: '1.999',
+      quantity: '10',
+    });
     await expect(page.getByRole('alert').filter({ hasText: /price in taka/i })).toBeVisible();
 
     await page.getByLabel(/^Price/).fill('10');

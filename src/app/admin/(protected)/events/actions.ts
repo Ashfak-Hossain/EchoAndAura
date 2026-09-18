@@ -39,7 +39,10 @@ export async function createEventAction(
   const values = submittedValues(formData);
   const parsed = eventFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input', values };
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      values,
+    };
   }
 
   let id: string;
@@ -61,7 +64,10 @@ export async function updateEventAction(
   const values = submittedValues(formData);
   const parsed = eventFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input', values };
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      values,
+    };
   }
 
   try {

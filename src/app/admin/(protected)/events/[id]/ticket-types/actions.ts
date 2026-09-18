@@ -10,6 +10,7 @@ import {
   TicketTypeNotFoundError,
 } from '@/server/lib/errors';
 import { ticketTypeFormSchema } from '@/lib/validation/ticket-types';
+import { editorPath } from '../editor-path';
 import type { TicketTypeFormValues } from './ticket-type-form';
 
 export interface TicketTypeFormState {
@@ -19,7 +20,7 @@ export interface TicketTypeFormState {
   values?: TicketTypeFormValues;
 }
 
-const eventEditPath = (eventId: string) => `/admin/events/${eventId}/edit`;
+const eventEditPath = (eventId: string) => editorPath(eventId, 'ticket-types');
 
 function submittedValues(formData: FormData): TicketTypeFormValues {
   const str = (key: keyof TicketTypeFormValues) => {
@@ -44,7 +45,10 @@ export async function createTicketTypeAction(
   const values = submittedValues(formData);
   const parsed = ticketTypeFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input', values };
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      values,
+    };
   }
 
   try {
@@ -66,7 +70,10 @@ export async function updateTicketTypeAction(
   const values = submittedValues(formData);
   const parsed = ticketTypeFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input', values };
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid input',
+      values,
+    };
   }
 
   try {

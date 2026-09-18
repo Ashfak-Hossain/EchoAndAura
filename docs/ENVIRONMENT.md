@@ -28,6 +28,7 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes        | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                              |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally |
 | `BKASH_RECEIVE_NUMBER`                                                                      | Yes        | Phase 3      | Organizer's bKash number shown to buyers                                                                                               |
+| `APP_ENV`                                                                                   | No         | Phase 1      | `local` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`                              |
 | `APP_TIMEZONE`                                                                              | Yes        | —            | App timezone (`Asia/Dhaka`)                                                                                                            |
 
 ## How to obtain / prepare each
@@ -125,6 +126,10 @@ verifies the stored object before recording its key
   the only bKash configuration.
 
 ### App
+
+- `APP_ENV`: optional. Drives the environment chip in the admin header
+  (loud in `production`, where destructive actions live). Unset → `local` in
+  dev, `production` when `NODE_ENV=production`.
 
 - `APP_TIMEZONE`: `Asia/Dhaka` — all event and registration times are computed in
   this zone.

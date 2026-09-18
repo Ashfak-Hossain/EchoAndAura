@@ -36,7 +36,10 @@ describe('publishReadiness', () => {
       'starts_in_past',
     );
     expect(
-      codes({ ...ready, event: { ...ready.event, startsAt: new Date(now.getTime() + 1) } }),
+      codes({
+        ...ready,
+        event: { ...ready.event, startsAt: new Date(now.getTime() + 1) },
+      }),
     ).not.toContain('starts_in_past');
   });
 
@@ -51,7 +54,10 @@ describe('publishReadiness', () => {
     ]);
     // Opens after (or at) close.
     expect(
-      codes({ ...ready, event: { ...e, registrationOpensAt: e.registrationClosesAt } }),
+      codes({
+        ...ready,
+        event: { ...e, registrationOpensAt: e.registrationClosesAt },
+      }),
     ).toEqual(['registration_window_invalid']);
     // Closes after the event starts.
     expect(
@@ -61,9 +67,7 @@ describe('publishReadiness', () => {
       }),
     ).toEqual(['registration_window_invalid']);
     // Closing exactly at start is allowed.
-    expect(
-      codes({ ...ready, event: { ...e, registrationClosesAt: e.startsAt } }),
-    ).toEqual([]);
+    expect(codes({ ...ready, event: { ...e, registrationClosesAt: e.startsAt } })).toEqual([]);
   });
 
   it('reports every problem at once, in checklist order, with messages', () => {
