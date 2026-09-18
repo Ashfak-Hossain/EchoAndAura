@@ -1,6 +1,6 @@
 /**
- * Money handling — the ONLY place taka⇄paisa conversion lives (CLAUDE.md
- * Invariant 1). Everywhere else money is integer paisa: `number` in code,
+ * Money handling — the ONLY place taka⇄paisa conversion lives.
+ * Everywhere else money is integer paisa: `number` in code,
  * BIGINT in the database. Never use floats for money.
  *
  * Why integers: in IEEE-754, 0.1 + 0.2 !== 0.3. Representing money as floating

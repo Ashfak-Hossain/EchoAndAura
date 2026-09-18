@@ -13,40 +13,42 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
 ## System diagram
 
 ```
-                         ┌──────────────────────┐
-   Buyer / Admin  ─────► │   Next.js 15 App      │
-   (browser)             │   (App Router)        │
-                         │                        │
-                         │  (public)/  events,    │
-                         │            register,   │
-                         │            ticket/[..] │
-                         │  (admin)/   verify,     │
-                         │            events CRUD  │
-                         │  api/       route         │
-                         │            handlers       │
+                         ┌──────────────────────────┐
+   Buyer / Admin  ─────► │   Next.js 15 App         │
+   (browser)             │   (App Router)           │
+                         │                          │
+                         │  (public)/ events,       │
+                         │            register,     │
+                         │            ticket/[..]   │
+                         │                          │
+                         │  (admin)/  verify,       │
+                         │            events CRUD   │
+                         │                          │
+                         │  api/      route         │
+                         │            handlers      │
                          └──────┬────────┬──────────┘
                                 │        │
                      src/server/│        │ enqueue job
                      (no next/* │        ▼
                       imports)  │   ┌───────────┐
-                                │   │  Redis 7   │
-                                │   │  BullMQ    │
+                                │   │  Redis 7  │
+                                │   │  BullMQ   │
                                 │   └─────┬─────┘
                                 │         │
                                 ▼         ▼
-                         ┌───────────┐ ┌──────────────┐
-                         │ Postgres  │ │ worker.ts     │
+                         ┌───────────┐ ┌────────────────┐
+                         │ Postgres  │ │ worker.ts      │
                          │    17     │ │ (tsx process)  │
-                         └───────────┘ │ - send email    │
-                                       │ - expire holds  │
+                         └───────────┘ │ - send email   │
+                                       │ - expire holds │
                                        └──────┬─────────┘
                                               │
                                     ┌─────────┴─────────┐
                                     ▼                   ▼
                                ┌─────────┐        ┌───────────┐
-                               │ Resend   │        │ R2 (S3)    │
-                               │ + React  │        │ event      │
-                               │ Email    │        │ images     │
+                               │ Resend  │        │ R2 (S3)   │
+                               │ + React │        │ event     │
+                               │ Email   │        │ images    │
                                └─────────┘        └───────────┘
 ```
 
@@ -84,6 +86,22 @@ A fuller narrative of the state machine summarized in `CLAUDE.md`:
 Every transition above writes a row to `order_events` (`CLAUDE.md`,
 Invariant 6) — that table, not application logs, is the audit trail.
 
+## Event status flow
+
+Events have their own, smaller state machine, validated in code the same
+way (`src/server/lib/event-status.ts`; see
+[DECISIONS.md — ADR-006](DECISIONS.md)):
+
+```
+draft ⇄ published
+draft → archived · published → archived · archived → draft
+```
+
+`draft → published` is gated by a readiness check (at least one ticket
+type, start in the future, valid registration window). The status change
+itself is a conditional `UPDATE … WHERE status = <expected>`, so two admin
+sessions can't race each other.
+
 ## Data model overview
 
 Entities and their relationships, not full DDL (that lives in `drizzle/`,
@@ -114,6 +132,16 @@ generated — never hand-edited):
 - **Route handlers and server actions are thin (~15 lines).** Zod parse →
   call service → map result. Business logic in a route is the specific
   failure mode the `code-reviewer` subagent checks for.
+- **Services are factories; `src/server/container.ts` is the composition
+  root.** A service module depends only on repository _interfaces_
+  (`createEventsService(repo)`), so importing it never opens a database
+  connection; unit tests pass in-memory fakes, and the container wires the
+  real repositories for the app and the worker. Services throw typed domain
+  errors (`src/server/lib/errors.ts`); the app layer maps them to messages.
+  The events vertical (`repositories/events.repository.ts` →
+  `services/events.service.ts` → `app/admin/(protected)/events/actions.ts`)
+  is the reference implementation — see
+  [DECISIONS.md — ADR-005](DECISIONS.md).
 - **`src/components/ui/` is shadcn-generated** and excluded from hand-editing
   by `.claude/settings.json` — regenerate via the CLI instead.
 
