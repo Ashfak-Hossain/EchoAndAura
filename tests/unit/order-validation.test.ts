@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { registrationFormSchema, registrationFormValues } from '@/lib/validation/orders';
+import {
+  paymentFormSchema,
+  registrationFormSchema,
+  registrationFormValues,
+} from '@/lib/validation/orders';
 
 const valid = {
   ticketTypeId: '7a1f2d3c-4b5e-4f60-8a9b-0c1d2e3f4a5b',
@@ -89,5 +93,32 @@ describe('registrationFormSchema', () => {
       attendeeNames: ['A B', 'C D'],
       terms: undefined,
     });
+  });
+});
+
+describe('paymentFormSchema', () => {
+  it('normalises the trxID to uppercase without spaces and the sender to E.164', () => {
+    const r = paymentFormSchema.parse({ trxId: ' 9ab12cd 34e ', senderPhone: '01712345678' });
+    expect(r).toEqual({ trxId: '9AB12CD34E', senderPhone: '+8801712345678' });
+  });
+
+  // Failure paths, with the design's wording (A4 · trxID errors).
+  it('names the length the buyer typed when it is not ten characters', () => {
+    const r = paymentFormSchema.safeParse({ trxId: '9AB12CD', senderPhone: '01712345678' });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toBe(
+      'A TrxID is exactly 10 letters and numbers — you have entered 7.',
+    );
+    const empty = paymentFormSchema.safeParse({ trxId: '', senderPhone: '01712345678' });
+    expect(empty.error?.issues[0]?.message).toBe(
+      'Enter the transaction ID from your bKash history.',
+    );
+    const punct = paymentFormSchema.safeParse({ trxId: '9AB12CD34-', senderPhone: '01712345678' });
+    expect(punct.success).toBe(false);
+  });
+
+  it('applies the same mobile rule as registration', () => {
+    const r = paymentFormSchema.safeParse({ trxId: '9AB12CD34E', senderPhone: '17123' });
+    expect(r.error?.issues[0]?.message).toBe('A bKash number is 10 digits after +880.');
   });
 });

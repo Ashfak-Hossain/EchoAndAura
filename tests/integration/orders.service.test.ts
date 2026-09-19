@@ -4,7 +4,12 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, queryClient } from '@/db/client';
 import * as schema from '@/db/schema';
-import { OrderReferenceCollisionError, SoldOutError } from '@/server/lib/errors';
+import {
+  OrderReferenceCollisionError,
+  SoldOutError,
+  TrxIdAlreadyUsedError,
+} from '@/server/lib/errors';
+import { isCheckViolation } from '@/server/lib/pg-errors';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
@@ -147,5 +152,115 @@ describe('ordersService.createOrder (Postgres)', () => {
     expect(orders).toHaveLength(1);
     const [row] = await db.select().from(schema.ticketTypes).where(eq(schema.ticketTypes.id, tt));
     expect(row?.quantityReserved).toBe(1);
+  });
+
+  // Invariant 3: enforced by the UNIQUE index, surfaced as a typed error,
+  // and the audit row rolls back with the refused write.
+  it('the same trxID cannot pay for two orders (real UNIQUE index)', async () => {
+    const tt = await newTicketType(10);
+    const a = await svc.createOrder(input(tt, 1));
+    const b = await svc.createOrder(input(tt, 1));
+    const payment = { trxId: 'TRX' + tt.slice(0, 7).toUpperCase(), senderMsisdn: '+8801712345678' };
+
+    const paidA = await svc.submitPayment(a.id, payment);
+    expect(paidA.status).toBe('pending_verification');
+    expect(paidA.bkashTrxId).toBe(payment.trxId);
+
+    await expect(svc.submitPayment(b.id, payment)).rejects.toBeInstanceOf(TrxIdAlreadyUsedError);
+    const [rowB] = await db.select().from(schema.orders).where(eq(schema.orders.id, b.id));
+    expect(rowB).toMatchObject({ status: 'pending_payment', bkashTrxId: null });
+    expect(await ordersRepository.listEvents(b.id)).toHaveLength(1); // only order.created
+  });
+
+  // PHASE 3 EXIT: an order holds inventory and expires correctly.
+  it('expires lapsed pending_payment holds, releases their stock, and leaves submitted orders alone', async () => {
+    const tt = await newTicketType(10);
+    const lapsed = await svc.createOrder(input(tt, 3));
+    const submitted = await svc.createOrder(input(tt, 2));
+    await svc.submitPayment(submitted.id, {
+      trxId: 'EXP' + tt.slice(0, 7).toUpperCase(),
+      senderMsisdn: '+8801712345678',
+    });
+    const counters = async () =>
+      (await db.select().from(schema.ticketTypes).where(eq(schema.ticketTypes.id, tt)))[0]!;
+    expect((await counters()).quantityReserved).toBe(5);
+
+    // Not yet.
+    expect(await svc.expireLapsedHolds(new Date(NOW.getTime() + 23 * 3_600_000))).toEqual({
+      expired: 0,
+      failed: 0,
+    });
+    expect((await counters()).quantityReserved).toBe(5);
+
+    // 25 h later: the unsubmitted hold goes, the submitted one waits for a person.
+    const later = new Date(NOW.getTime() + 25 * 3_600_000);
+    // Other tests' orders are in the same DB; count only ours.
+    const before = (
+      await db.select().from(schema.orders).where(eq(schema.orders.eventId, eventId))
+    ).filter(
+      (o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < later,
+    ).length;
+    const result = await svc.expireLapsedHolds(later);
+    expect(result.expired).toBeGreaterThanOrEqual(1);
+    expect(result.expired).toBeLessThanOrEqual(before);
+
+    const [rowLapsed] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, lapsed.id));
+    const [rowSubmitted] = await db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.id, submitted.id));
+    expect(rowLapsed?.status).toBe('expired');
+    expect(rowSubmitted?.status).toBe('pending_verification');
+    expect((await counters()).quantityReserved).toBe(2);
+    expect((await ordersRepository.listEvents(lapsed.id)).at(-1)).toMatchObject({
+      actor: 'system',
+      action: 'order.expired',
+      toStatus: 'expired',
+    });
+
+    // Idempotent for our rows: nothing more to release.
+    await svc.expireLapsedHolds(later);
+    expect((await counters()).quantityReserved).toBe(2);
+
+    // An expired order can no longer take a payment.
+    await expect(
+      svc.submitPayment(lapsed.id, { trxId: 'LATE000000', senderMsisdn: '+8801712345678' }),
+    ).rejects.toMatchObject({ name: 'OrderStatusConflictError' });
+  });
+
+  // The promise ADR-013 makes: two workers (or a re-run racing a run) can
+  // never release the same hold twice. Rests on Postgres row locking, so
+  // it is proven here, not in the unit suite.
+  it('two concurrent expiry runs release each lapsed hold exactly once', async () => {
+    const tt = await newTicketType(20);
+    const held = await Promise.all([1, 2, 3].map((q) => svc.createOrder(input(tt, q))));
+    const later = new Date(NOW.getTime() + 25 * 3_600_000);
+
+    await Promise.all([svc.expireLapsedHolds(later), svc.expireLapsedHolds(later)]);
+
+    const [row] = await db.select().from(schema.ticketTypes).where(eq(schema.ticketTypes.id, tt));
+    expect(row?.quantityReserved).toBe(0);
+    for (const o of held) {
+      const evs = await ordersRepository.listEvents(o.id);
+      expect(evs.filter((e) => e.action === 'order.expired')).toHaveLength(1);
+    }
+  });
+
+  // The CHECK behind Invariant 3: a raw write of an un-normalised trxID is refused.
+  it('Postgres refuses a trxID that is not upper-cased and trimmed', async () => {
+    const tt = await newTicketType(5);
+    const order = await svc.createOrder(input(tt, 1));
+    const raw = db
+      .update(schema.orders)
+      .set({ bkashTrxId: 'lower12345' })
+      .where(eq(schema.orders.id, order.id));
+    const err = await raw.then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(isCheckViolation(err, 'orders_bkash_trx_id_normalised')).toBe(true);
   });
 });

@@ -39,23 +39,24 @@ obtain each.
 
 ## Scripts
 
-| Script                     | Purpose                                                      |
-| -------------------------- | ------------------------------------------------------------ |
-| `pnpm dev`                 | Next.js dev server                                           |
-| `pnpm build` / `start`     | Production build / serve                                     |
-| `pnpm worker`              | BullMQ worker process                                        |
-| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                              |
-| `pnpm lint`                | ESLint                                                       |
-| `pnpm format`              | Prettier                                                     |
-| `pnpm test`                | Unit tests (Vitest)                                          |
-| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO         |
-| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs |
-| `pnpm test:e2e`            | Playwright end-to-end                                        |
-| `pnpm db:generate`         | Generate a Drizzle migration from the schema                 |
-| `pnpm db:migrate`          | Apply migrations                                             |
-| `pnpm db:studio`           | Drizzle Studio                                               |
-| `pnpm db:seed`             | Seed sample data                                             |
-| `pnpm verify`              | **The gate:** typecheck + lint + test + build                |
+| Script                     | Purpose                                                                    |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `pnpm dev`                 | Next.js dev server                                                         |
+| `pnpm build` / `start`     | Production build / serve                                                   |
+| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                            |
+| `pnpm lint`                | ESLint                                                                     |
+| `pnpm format`              | Prettier                                                                   |
+| `pnpm test`                | Unit tests (Vitest)                                                        |
+| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                       |
+| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs               |
+| `pnpm test:e2e`            | Playwright end-to-end                                                      |
+| `pnpm db:generate`         | Generate a Drizzle migration from the schema                               |
+| `pnpm db:migrate`          | Apply migrations                                                           |
+| `pnpm db:studio`           | Drizzle Studio                                                             |
+| `pnpm db:seed`             | Seed sample data                                                           |
+| `pnpm worker`              | BullMQ worker (expire-holds every minute; Phase 4 adds email). Needs Redis |
+| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                     |
+| `pnpm verify`              | **The gate:** typecheck + lint + test + build                              |
 
 ## Testing
 

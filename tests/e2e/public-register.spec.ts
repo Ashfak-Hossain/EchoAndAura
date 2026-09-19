@@ -156,4 +156,67 @@ test.describe('registration (A3 → A4)', () => {
     await expect(other.getByRole('radio', { name: /last one/i })).toBeDisabled();
     await other.close();
   });
+
+  test('the buyer submits a trxID, can correct it, and the same trxID cannot pay twice', async ({
+    page,
+  }) => {
+    await signIn(page);
+    const slug = await publishedEvent(page, `Payment ${Date.now()}`);
+    const trxId = `T${Date.now().toString(36).toUpperCase().slice(-9)}`.padEnd(10, 'X');
+
+    const register = async (name: string) => {
+      await page.goto(`/events/${slug}/register`);
+      await page.getByRole('radio', { name: /general/i }).check();
+      await page.getByLabel('Full name').fill(name);
+      await page.getByLabel('Email address').fill('buyer@example.com');
+      await page.getByLabel('Mobile number').fill('1712345678');
+      await page.getByLabel('Ticket 1 — attendee name').fill(name);
+      await page.getByLabel(/I agree to the terms/).check();
+      await page.getByRole('button', { name: /continue to payment/i }).click();
+      await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
+      return page.url();
+    };
+
+    const first = await register('Nusrat Jahan');
+
+    // Format is checked before anything is saved.
+    await page.getByLabel(/transaction id \(trxid\)/i).fill('9AB12CD');
+    await page.getByLabel('Number you sent from').fill('1712345678');
+    await page.getByRole('button', { name: /i have sent the money/i }).click();
+    await expect(
+      page.getByText(/exactly 10 letters and numbers — you have entered 7/),
+    ).toBeVisible();
+    await expect(page.getByText('Awaiting payment')).toBeVisible();
+
+    // A real one: "Checking payment", with what was submitted.
+    await page.getByLabel(/transaction id \(trxid\)/i).fill(trxId.toLowerCase());
+    await page.getByRole('button', { name: /i have sent the money/i }).click();
+    await expect(page.getByText('Checking payment')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /checking your payment/i })).toBeVisible();
+    const summary = page.getByTestId('payment-summary');
+    await expect(summary).toContainText(trxId); // upper-cased by the server
+    await expect(summary).toContainText('+880 1712345678');
+    await expect(summary).toContainText('৳1,200.00');
+    await expect(page.getByLabel(/transaction id \(trxid\)/i)).toHaveCount(0);
+
+    // Edit keeps the status and replaces the id.
+    await page.getByRole('button', { name: /edit transaction id/i }).click();
+    const edited = `${trxId.slice(0, 9)}9`;
+    await page.getByLabel(/transaction id \(trxid\)/i).fill(edited);
+    await page.getByRole('button', { name: /save transaction id/i }).click();
+    await expect(page.getByTestId('payment-summary')).toContainText(edited);
+    await expect(page.getByText('Checking payment')).toBeVisible();
+
+    // A second order cannot reuse it — the database says no, the page says why.
+    const second = await register('Tanvir Alam');
+    expect(second).not.toBe(first);
+    await page.getByLabel(/transaction id \(trxid\)/i).fill(edited);
+    await page.getByLabel('Number you sent from').fill('1712345678');
+    await page.getByRole('button', { name: /i have sent the money/i }).click();
+    await expect(page.getByRole('alert').first()).toContainText(
+      /transaction id has already been used/i,
+    );
+    await expect(page.getByText('Awaiting payment')).toBeVisible();
+    await expect(page.getByLabel(/transaction id \(trxid\)/i)).toHaveValue(edited);
+  });
 });

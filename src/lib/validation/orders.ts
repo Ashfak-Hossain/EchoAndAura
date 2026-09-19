@@ -14,6 +14,17 @@ const BD_MOBILE_PATTERN = /^1[3-9]\d{8}$/;
 const NAME_MIN = 2;
 const NAME_MAX = 120;
 
+/**
+ * A Bangladeshi mobile, entered as the ten digits after a fixed +880 prefix
+ * and stored E.164. People type "01712…" or paste "+880 1712…"; the prefix
+ * is fixed on the form, so those are stripped before the ten-digit check.
+ */
+const bdMobile = z
+  .string({ error: 'A bKash number is 10 digits after +880.' })
+  .transform((v) => v.replace(/[\s-]/g, '').replace(/^(\+?880|0)/, ''))
+  .pipe(z.string().regex(BD_MOBILE_PATTERN, { error: 'A bKash number is 10 digits after +880.' }))
+  .transform((digits) => `${BD_MOBILE_PREFIX}${digits}`);
+
 const personName = (label: string) =>
   z
     .string({ error: `Enter ${label}.` })
@@ -36,15 +47,7 @@ export const registrationFormSchema = z
       .toLowerCase()
       .pipe(z.email({ error: 'Enter a complete email address.' })),
     // Entered as the ten digits after a fixed +880 prefix; stored E.164.
-    buyerPhone: z
-      .string({ error: 'A bKash number is 10 digits after +880.' })
-      // People type "01712…" or paste "+880 1712…"; the prefix is fixed on
-      // the form, so strip any of those before checking the ten digits.
-      .transform((v) => v.replace(/[\s-]/g, '').replace(/^(\+?880|0)/, ''))
-      .pipe(
-        z.string().regex(BD_MOBILE_PATTERN, { error: 'A bKash number is 10 digits after +880.' }),
-      )
-      .transform((digits) => `${BD_MOBILE_PREFIX}${digits}`),
+    buyerPhone: bdMobile,
     attendeeNames: z.array(personName('a name for every ticket')),
     terms: z.literal('on', { error: 'Accept the terms to continue.' }),
   })
@@ -77,4 +80,39 @@ export function registrationFormValues(formData: FormData): Record<string, unkno
       .filter((v): v is string => typeof v === 'string'),
     terms: str('terms'),
   };
+}
+
+/** bKash TrxIDs are ten letters and digits, e.g. 9AB12CD34E. Stored uppercase, trimmed (Invariant 3). */
+export const TRX_ID_LENGTH = 10;
+const TRX_ID_PATTERN = /^[A-Z0-9]{10}$/;
+
+/** A4: the buyer reports a bKash payment. */
+export const paymentFormSchema = z.object({
+  trxId: z
+    .string({ error: 'Enter the transaction ID from your bKash history.' })
+    .trim()
+    .toUpperCase()
+    .transform((v) => v.replace(/\s+/g, ''))
+    .superRefine((v, ctx) => {
+      if (!TRX_ID_PATTERN.test(v)) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            v.length === 0
+              ? 'Enter the transaction ID from your bKash history.'
+              : `A TrxID is exactly ${TRX_ID_LENGTH} letters and numbers — you have entered ${v.length}.`,
+        });
+      }
+    }),
+  senderPhone: bdMobile,
+});
+
+export type PaymentFormInput = z.infer<typeof paymentFormSchema>;
+
+export function paymentFormValues(formData: FormData): Record<string, unknown> {
+  const str = (key: string) => {
+    const v = formData.get(key);
+    return typeof v === 'string' ? v : undefined;
+  };
+  return { trxId: str('trxId'), senderPhone: str('senderPhone') };
 }

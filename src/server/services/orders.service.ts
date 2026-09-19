@@ -4,6 +4,7 @@ import {
   AttendeeNamesMismatchError,
   OrderNotFoundError,
   OrderReferenceCollisionError,
+  OrderStatusConflictError,
   RegistrationClosedError,
   SoldOutError,
   TicketTypeNotFoundError,
@@ -11,11 +12,17 @@ import {
   EventNotFoundError,
 } from '@/server/lib/errors';
 import { eventPhase } from '@/server/lib/event-phase';
+import { logger } from '@/server/lib/logger';
 import { generateOrderReference } from '@/server/lib/order-reference';
+import { assertOrderTransition } from '@/server/lib/order-status';
 import { computeOrderTotals } from '@/server/lib/pricing';
 import { ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
-import type { OrderRecord, OrdersRepository } from '@/server/repositories/orders.repository';
+import type {
+  OrderEventRecord,
+  OrderRecord,
+  OrdersRepository,
+} from '@/server/repositories/orders.repository';
 import type {
   TicketTypeRecord,
   TicketTypesRepository,
@@ -27,6 +34,12 @@ export const HOLD_HOURS = 24;
 
 /** How many fresh references to try before giving up on a collision. */
 const REFERENCE_ATTEMPTS = 3;
+
+/** Lapsed holds handled per expiry run; the job repeats every minute. */
+const EXPIRY_BATCH = 200;
+
+/** Statuses from which a buyer may submit or correct a transaction ID. */
+const SUBMITTABLE = ['pending_payment', 'pending_verification'] as const;
 
 export interface OrdersServiceDeps {
   orders: OrdersRepository;
@@ -59,6 +72,15 @@ export interface OrderView {
   order: OrderRecord;
   event: EventRecord;
   ticketType: TicketTypeRecord;
+  /** Append-only audit trail, oldest first (Invariant 6). */
+  events: OrderEventRecord[];
+}
+
+export interface SubmitPaymentInput {
+  /** Normalised at the boundary: uppercase, trimmed, 10 alphanumerics. */
+  trxId: string;
+  /** E.164 (+8801…), the number the money was sent from. */
+  senderMsisdn: string;
 }
 
 /**
@@ -181,14 +203,123 @@ export function createOrdersService({
     async getOrder(id: string): Promise<OrderView> {
       const order = await orders.findById(id);
       if (!order) throw new OrderNotFoundError(id);
-      const [event, ticketType] = await Promise.all([
+      const [event, ticketType, auditEvents] = await Promise.all([
         events.findById(order.eventId),
         ticketTypes.findById(order.ticketTypeId),
+        orders.listEvents(order.id),
       ]);
       // FKs guarantee these; a miss is corruption, not a 404.
       if (!event) throw new Error(`order ${id}: event ${order.eventId} missing`);
       if (!ticketType) throw new Error(`order ${id}: ticket type ${order.ticketTypeId} missing`);
-      return { order, event, ticketType };
+      return { order, event, ticketType, events: auditEvents };
+    },
+
+    /**
+     * The buyer reports a bKash payment. First submission moves the order to
+     * `pending_verification`; a later one only corrects the trxID/number
+     * (design A4 "Edit transaction ID"). Uniqueness of the trxID is the
+     * database's (Invariant 3): the UNIQUE index surfaces as
+     * TrxIdAlreadyUsedError, and the transaction — including the audit
+     * row — rolls back with it.
+     * @throws OrderNotFoundError, OrderStatusConflictError, TrxIdAlreadyUsedError
+     */
+    async submitPayment(orderId: string, input: SubmitPaymentInput): Promise<OrderRecord> {
+      // Stored normalised (Invariant 3) whoever the caller is — the UNIQUE
+      // index compares bytes, so "9ab…" and "9AB…" must never both exist.
+      const trxId = input.trxId.trim().toUpperCase();
+
+      return runInTransaction(async (tx) => {
+        // Read under the row lock so the audit row's from-status and the
+        // "previous trxID" are what was actually replaced, even when two
+        // tabs submit at once (Invariant 6 must never lie).
+        const order = await orders.findByIdForUpdate(orderId, tx);
+        if (!order) throw new OrderNotFoundError(orderId);
+        if (!SUBMITTABLE.includes(order.status as (typeof SUBMITTABLE)[number])) {
+          throw new OrderStatusConflictError(orderId, order.status);
+        }
+        const fromStatus = order.status;
+        const first = fromStatus === 'pending_payment';
+        if (first) assertOrderTransition(fromStatus, 'pending_verification');
+
+        const updated = await orders.transition(
+          orderId,
+          {
+            from: SUBMITTABLE,
+            to: 'pending_verification',
+            patch: { bkashTrxId: trxId, bkashSenderMsisdn: input.senderMsisdn },
+          },
+          tx,
+        );
+        // Locked and re-checked above, so this cannot miss; kept as the
+        // backstop the conditional write is for.
+        if (!updated) throw new OrderStatusConflictError(orderId, fromStatus);
+
+        await orders.insertEvent(
+          {
+            orderId,
+            actor: 'buyer',
+            action: first ? 'payment.submitted' : 'payment.updated',
+            fromStatus,
+            toStatus: 'pending_verification',
+            note: first
+              ? `trxID ${trxId} from ${input.senderMsisdn}`
+              : `trxID ${order.bkashTrxId ?? '—'} → ${trxId} from ${input.senderMsisdn}`,
+          },
+          tx,
+        );
+        return updated;
+      });
+    },
+
+    /**
+     * The 24-hour expiry (ADR-002, ADR-012): only `pending_payment` orders
+     * lapse — once a trxID exists, a person decides. Per order, one
+     * transaction: flip the status conditionally, and only if that matched,
+     * release the hold and write the audit row. A second run, or a second
+     * worker, can never release the same hold twice.
+     */
+    async expireLapsedHolds(at: Date = now()): Promise<{ expired: number; failed: number }> {
+      const lapsed = await orders.listLapsedHolds(at, EXPIRY_BATCH);
+      let expired = 0;
+      let failed = 0;
+      for (const hold of lapsed) {
+        // One order's failure (e.g. a corrupted counter) must never block
+        // the rest: it is logged and skipped, and the run reports it.
+        try {
+          const done = await runInTransaction(async (tx) => {
+            const updated = await orders.transition(
+              hold.id,
+              { from: ['pending_payment'], to: 'expired' },
+              tx,
+            );
+            if (!updated) return false; // submitted (or expired) in the meantime
+            await inventory.release(hold.ticketTypeId, hold.quantity, tx);
+            await orders.insertEvent(
+              {
+                orderId: hold.id,
+                actor: 'system',
+                action: 'order.expired',
+                fromStatus: 'pending_payment',
+                toStatus: 'expired',
+                note: `24h hold lapsed; ${hold.quantity} released`,
+              },
+              tx,
+            );
+            return true;
+          });
+          if (done) {
+            expired++;
+            logger.info(
+              { orderId: hold.id, quantity: hold.quantity },
+              'order expired, hold released',
+            );
+          }
+        } catch (err: unknown) {
+          failed++;
+          logger.error({ orderId: hold.id, err }, 'expire-holds: order skipped');
+        }
+      }
+      return { expired, failed };
     },
   };
 }

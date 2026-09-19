@@ -5,12 +5,16 @@ import { cache } from 'react';
 import { z } from 'zod';
 import { ordersService } from '@/server/container';
 import { OrderNotFoundError } from '@/server/lib/errors';
+import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
 import { bkashReceiveNumber, organizerContactEmail } from '@/lib/env.public';
 import { formatDhakaLong } from '@/lib/time';
+import { submitPaymentAction } from './actions';
+import { CheckingPayment } from './checking-payment';
 import { CopyField } from './copy-field';
 import { Countdown } from './countdown';
+import { PaymentForm } from './payment-form';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -40,20 +44,41 @@ const load = cache(async (id: string) => {
   }
 });
 
-// A4. This slice renders the `pending_payment` state ("Awaiting payment");
-// trxID submission and the other states arrive with the next slice.
+type Frame = 'awaiting' | 'checking' | 'expired' | 'other';
+
+/** Which A4 frame to draw. A hold past its time is shown as expired before the job runs. */
+function frameOf({ order }: OrderView, now: Date): Frame {
+  if (order.status === 'pending_payment') {
+    const lapsed = order.holdExpiresAt !== null && order.holdExpiresAt.getTime() <= now.getTime();
+    return lapsed ? 'expired' : 'awaiting';
+  }
+  if (order.status === 'pending_verification') return 'checking';
+  if (order.status === 'expired') return 'expired';
+  return 'other';
+}
+
+// A4: one page, one frame per status (design canvas 2). Every frame keeps
+// the same header so the reference and status are always where the buyer
+// left them.
 export default async function OrderPage({ params }: Props) {
   const { id } = await params;
-  const { order, event, ticketType } = await load(id);
+  const view = await load(id);
+  const { order, event, ticketType, events } = view;
+  const frame = frameOf(view, new Date());
   const receiveNumber = bkashReceiveNumber();
   const contactEmail = organizerContactEmail();
-  // A hold past its time is shown as expired even before the expiry job
-  // has run, so nobody pays for tickets about to go back on sale.
-  const holdLapsed =
-    order.status === 'pending_payment' &&
-    order.holdExpiresAt !== null &&
-    order.holdExpiresAt.getTime() <= new Date().getTime();
-  const awaiting = order.status === 'pending_payment' && !holdLapsed;
+  const contact = contactEmail ? (
+    <>
+      {' '}
+      at{' '}
+      <a href={`mailto:${contactEmail}`} className="underline">
+        {contactEmail}
+      </a>
+    </>
+  ) : null;
+  const lastSubmission = [...events]
+    .reverse()
+    .find((e) => e.action === 'payment.submitted' || e.action === 'payment.updated');
 
   return (
     <div className="mx-auto flex w-full max-w-160 flex-1 flex-col gap-6 px-4 py-6 lg:py-10">
@@ -68,7 +93,7 @@ export default async function OrderPage({ params }: Props) {
           >
             {order.reference}
           </h1>
-          <StatusChip kind="order" status={order.status} />
+          <StatusChip kind="order" status={frame === 'expired' ? 'expired' : order.status} />
         </div>
         <p className="text-[15px] text-[#4a4640]">
           <Link href={`/events/${event.slug}`} className="font-medium hover:underline">
@@ -79,26 +104,25 @@ export default async function OrderPage({ params }: Props) {
         </p>
       </header>
 
-      {/* Amount + hold */}
-      <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:p-5">
-        <div className="flex items-baseline justify-between gap-4">
-          <span className="text-[15px] text-muted-foreground">Amount due</span>
-          <Money paisa={order.totalPaisa} className="text-[26px] font-semibold" />
-        </div>
-        <p className="text-sm text-muted-foreground tabular">
-          {order.quantity} × {ticketType.name} at <Money paisa={order.unitPricePaisa} />
-        </p>
-        {awaiting && order.holdExpiresAt ? (
-          <p className="border-t border-border pt-3 text-sm leading-relaxed">
-            Your tickets are held for you. Hold expires in{' '}
-            <Countdown until={order.holdExpiresAt.toISOString()} /> —{' '}
-            <span className="tabular">{formatDhakaLong(order.holdExpiresAt)} (Dhaka)</span>.
-          </p>
-        ) : null}
-      </section>
-
-      {awaiting ? (
+      {frame === 'awaiting' ? (
         <>
+          <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:p-5">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-[15px] text-muted-foreground">Amount due</span>
+              <Money paisa={order.totalPaisa} className="text-[26px] font-semibold" />
+            </div>
+            <p className="text-sm text-muted-foreground tabular">
+              {order.quantity} × {ticketType.name} at <Money paisa={order.unitPricePaisa} />
+            </p>
+            {order.holdExpiresAt ? (
+              <p className="border-t border-border pt-3 text-sm leading-relaxed">
+                Your tickets are held for you. Hold expires in{' '}
+                <Countdown until={order.holdExpiresAt.toISOString()} /> —{' '}
+                <span className="tabular">{formatDhakaLong(order.holdExpiresAt)} (Dhaka)</span>.
+              </p>
+            ) : null}
+          </section>
+
           <section aria-labelledby="pay-heading" className="flex flex-col gap-4">
             <h2 id="pay-heading" className="font-heading text-xl font-semibold">
               How to pay with bKash
@@ -127,13 +151,21 @@ export default async function OrderPage({ params }: Props) {
                   <CopyField label="order reference" value={order.reference} />
                 </div>
               </Step>
-              <Step n={4}>
-                Come back here and paste the transaction ID below.
-                <p className="mt-2 rounded-lg bg-secondary px-3.5 py-2.5 text-sm text-muted-foreground">
-                  Transaction ID submission opens here shortly — keep this page&apos;s link.
-                </p>
-              </Step>
+              <Step n={4}>Come back here and paste the transaction ID below.</Step>
             </ol>
+          </section>
+
+          <section
+            aria-labelledby="trx-heading"
+            className="flex flex-col gap-4 rounded-xl border border-border-strong bg-card p-4 lg:p-5"
+          >
+            <h2 id="trx-heading" className="font-heading text-lg font-semibold">
+              Paste your transaction ID
+            </h2>
+            <PaymentForm
+              action={submitPaymentAction.bind(null, order.id)}
+              submitLabel="I have sent the money"
+            />
           </section>
 
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
@@ -141,48 +173,90 @@ export default async function OrderPage({ params }: Props) {
             <p className="text-sm leading-relaxed text-[#4a4640]">
               A person checks your transaction against the bKash statement — {VERIFICATION_SLA_TEXT}
               . When it matches, your tickets arrive by email at{' '}
-              <span className="font-medium text-foreground">{order.buyerEmail}</span> straight
-              away. Nothing else is needed from you.
+              <span className="font-medium text-foreground">{order.buyerEmail}</span> straight away.
+              Nothing else is needed from you.
             </p>
             {contactEmail ? (
               <p className="text-sm text-muted-foreground">
-                Stuck? Message the organizer at{' '}
-                <a href={`mailto:${contactEmail}`} className="underline">
-                  {contactEmail}
-                </a>
-                .
+                Stuck? Message the organizer{contact}.
               </p>
             ) : null}
           </section>
         </>
-      ) : holdLapsed ? (
-        <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-          <h2 className="text-[15px] font-semibold">This hold has expired</h2>
-          <p className="text-sm leading-relaxed text-[#4a4640]">
-            We held {order.quantity} × {ticketType.name} until{' '}
-            <span className="tabular">
-              {order.holdExpiresAt ? formatDhakaLong(order.holdExpiresAt) : ''} (Dhaka)
-            </span>
-            . No transaction ID arrived, so the seats go back on sale and nothing was charged.
-            Already sent the money? Do not send it again — message the organizer
-            {contactEmail ? (
-              <>
-                {' '}
-                at{' '}
-                <a href={`mailto:${contactEmail}`} className="underline">
-                  {contactEmail}
-                </a>
-              </>
-            ) : null}{' '}
-            with your TrxID.
-          </p>
-          <Link href={`/events/${event.slug}`} className="text-sm font-medium underline">
+      ) : null}
+
+      {frame === 'checking' ? (
+        <CheckingPayment
+          firstName={order.buyerName.split(/\s+/)[0] ?? order.buyerName}
+          slaText={VERIFICATION_SLA_TEXT}
+          totalPaisa={order.totalPaisa}
+          trxId={order.bkashTrxId ?? ''}
+          senderMsisdn={order.bkashSenderMsisdn ?? ''}
+          submittedAt={
+            lastSubmission ? `${formatDhakaLong(lastSubmission.createdAt)} (Dhaka)` : null
+          }
+          holdExpiresAt={order.holdExpiresAt ? order.holdExpiresAt.toISOString() : null}
+          contactEmail={contactEmail}
+          action={submitPaymentAction.bind(null, order.id)}
+        />
+      ) : null}
+
+      {frame === 'expired' ? (
+        <>
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 lg:p-5">
+            <h2 className="font-heading text-xl font-semibold">This hold has expired</h2>
+            <p className="text-sm leading-relaxed text-[#4a4640]">
+              We held {order.quantity} × {ticketType.name} until{' '}
+              <span className="tabular">
+                {order.holdExpiresAt ? formatDhakaLong(order.holdExpiresAt) : ''} (Dhaka)
+              </span>
+              . No transaction ID arrived, so the seats go back on sale and nothing was charged.
+            </p>
+            <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Held</dt>
+              <dd className="tabular">
+                {order.quantity} × {ticketType.name}
+              </dd>
+              <dt className="text-muted-foreground">Amount</dt>
+              <dd className="tabular">
+                <Money paisa={order.totalPaisa} /> · unpaid
+              </dd>
+            </dl>
+          </section>
+          <section className="flex flex-col gap-2 rounded-xl border border-[#e8c48a] bg-warning-tint p-4 text-[#7a4600]">
+            <p className="text-[15px] font-semibold">
+              Already sent the money? Do not send it again.
+            </p>
+            <p className="text-sm leading-relaxed">
+              Message the organizer{contact} with your order reference and TrxID and they will sort
+              it out by hand.
+            </p>
+          </section>
+          <Link
+            href={`/events/${event.slug}`}
+            className="inline-flex h-13 w-full items-center justify-center rounded-lg border border-foreground bg-foreground px-7 text-[17px] font-semibold text-background hover:bg-[#33302a]"
+          >
             Register again
           </Link>
+        </>
+      ) : null}
+
+      {frame === 'other' ? (
+        <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
+          <p className="text-[15px] text-[#4a4640]">
+            {order.status === 'rejected'
+              ? 'We could not match your payment. The organizer has the details and will be in touch.'
+              : order.status === 'paid' || order.status === 'issued'
+                ? 'Payment confirmed. Your tickets are on their way to your email.'
+                : 'This order was cancelled.'}
+          </p>
+          {contactEmail ? (
+            <p className="text-sm text-muted-foreground">
+              Questions? Message the organizer{contact}.
+            </p>
+          ) : null}
         </section>
-      ) : (
-        <p className="text-[15px] text-[#4a4640]">This order is {order.status.replace('_', ' ')}.</p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -192,7 +266,7 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
     <li className="flex gap-3.5">
       <span
         aria-hidden="true"
-        className="tabular flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[13px] font-semibold text-background"
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[13px] font-semibold text-background tabular"
       >
         {n}
       </span>

@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD CONSTRAINT "orders_bkash_trx_id_normalised" CHECK ("orders"."bkash_trx_id" IS NULL OR "orders"."bkash_trx_id" = upper(btrim("orders"."bkash_trx_id")));

@@ -3,11 +3,14 @@ import type { DbExecutor } from '@/db/executor';
 import {
   AttendeeNamesMismatchError,
   EventNotFoundError,
+  InventoryStateError,
   OrderNotFoundError,
   OrderReferenceCollisionError,
+  OrderStatusConflictError,
   RegistrationClosedError,
   SoldOutError,
   TicketTypeNotFoundError,
+  TrxIdAlreadyUsedError,
 } from '@/server/lib/errors';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
 import type { InventoryRepository } from '@/server/repositories/inventory.repository';
@@ -112,7 +115,12 @@ function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRecord[] }
       t.quantityReserved += qty;
       return true;
     }),
-    release: () => Promise.reject(new Error('unused')),
+    release: vi.fn(async (id, qty, tx) => {
+      expect(tx).toBe(TX);
+      const t = state.types.get(id);
+      if (!t || t.quantityReserved < qty) throw new InventoryStateError(id, 'release');
+      t.quantityReserved -= qty;
+    }),
     convertToSold: () => Promise.reject(new Error('unused')),
   };
 
@@ -150,9 +158,41 @@ function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRecord[] }
       state.events.push(row);
       return row;
     }),
-    findById: async (id) => state.orders.find((o) => o.id === id) ?? null,
-    findByReference: async (ref) => state.orders.find((o) => o.reference === ref) ?? null,
+    // Copies, like rows from a database: a later write never mutates what a caller already holds.
+    findById: async (id) => {
+      const row = state.orders.find((o) => o.id === id);
+      return row ? { ...row } : null;
+    },
+    findByIdForUpdate: async (id, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.orders.find((o) => o.id === id);
+      return row ? { ...row } : null;
+    },
+    findByReference: async (ref) => {
+      const row = state.orders.find((o) => o.reference === ref);
+      return row ? { ...row } : null;
+    },
     listEvents: async (orderId) => state.events.filter((e) => e.orderId === orderId),
+    // Conditional like the real UPDATE … WHERE status = ANY(from); the
+    // UNIQUE trxID index is imitated with a scan.
+    transition: vi.fn(async (id, { from, to, patch = {} }, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.orders.find((o) => o.id === id);
+      if (!row || !from.includes(row.status)) return null;
+      if (
+        patch.bkashTrxId &&
+        state.orders.some((o) => o.id !== id && o.bkashTrxId === patch.bkashTrxId)
+      ) {
+        throw new TrxIdAlreadyUsedError(patch.bkashTrxId);
+      }
+      Object.assign(row, patch, { status: to, updatedAt: NOW });
+      return { ...row };
+    }),
+    listLapsedHolds: async (at, limit) =>
+      state.orders
+        .filter((o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < at)
+        .slice(0, limit)
+        .map((o) => ({ id: o.id, ticketTypeId: o.ticketTypeId, quantity: o.quantity })),
   };
 
   const runInTransaction = async <T>(fn: (tx: DbExecutor) => Promise<T>): Promise<T> => {
@@ -375,5 +415,164 @@ describe('ordersService.getOrder', () => {
     expect(view.event.slug).toBe('live-dhaka');
     expect(view.ticketType.name).toBe('General');
     await expect(svc.getOrder('nope')).rejects.toBeInstanceOf(OrderNotFoundError);
+  });
+});
+
+describe('ordersService.submitPayment', () => {
+  const payment = { trxId: '9AB12CD34E', senderMsisdn: '+8801712345678' };
+
+  it('first submission moves pending_payment → pending_verification with an audit row', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+
+    const updated = await svc.submitPayment(order.id, payment);
+
+    expect(updated).toMatchObject({
+      status: 'pending_verification',
+      bkashTrxId: '9AB12CD34E',
+      bkashSenderMsisdn: '+8801712345678',
+    });
+    const audit = db.state.events.filter((e) => e.orderId === order.id);
+    expect(audit).toHaveLength(2);
+    expect(audit[1]).toMatchObject({
+      actor: 'buyer',
+      action: 'payment.submitted',
+      fromStatus: 'pending_payment',
+      toStatus: 'pending_verification',
+    });
+  });
+
+  it('normalises the trxID itself, whoever the caller is (Invariant 3)', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+    const updated = await svc.submitPayment(order.id, { ...payment, trxId: '  9ab12cd34e ' });
+    expect(updated.bkashTrxId).toBe('9AB12CD34E');
+  });
+
+  it('a later submission corrects the trxID without changing status', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+    await svc.submitPayment(order.id, payment);
+
+    const updated = await svc.submitPayment(order.id, { ...payment, trxId: 'ZZ99ZZ99ZZ' });
+    expect(updated).toMatchObject({ status: 'pending_verification', bkashTrxId: 'ZZ99ZZ99ZZ' });
+    const last = db.state.events.at(-1);
+    expect(last).toMatchObject({ action: 'payment.updated', fromStatus: 'pending_verification' });
+  });
+
+  // Invariant 3: the same trxID can never pay for two orders. The error
+  // comes from the repository (the UNIQUE index in production) and the
+  // audit row must roll back with it.
+  it('a trxID already on another order is refused and nothing is written', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType({ quantityTotal: 50 })] });
+    const svc = build(db);
+    const a = await svc.createOrder(input);
+    const b = await svc.createOrder({ ...input, buyerEmail: 'other@example.com' });
+    await svc.submitPayment(a.id, payment);
+
+    const before = db.state.events.length;
+    await expect(svc.submitPayment(b.id, payment)).rejects.toBeInstanceOf(TrxIdAlreadyUsedError);
+    expect(db.state.events).toHaveLength(before);
+    expect(db.state.orders.find((o) => o.id === b.id)?.status).toBe('pending_payment');
+  });
+
+  it('refuses when the order is not awaiting or checking payment, writing nothing', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+    const row = db.state.orders.find((o) => o.id === order.id)!;
+    row.status = 'expired';
+    const events = db.state.events.length;
+    const err = await svc.submitPayment(order.id, payment).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(OrderStatusConflictError);
+    expect((err as OrderStatusConflictError).status).toBe('expired'); // the real state, for the banner
+    expect(db.state.events).toHaveLength(events);
+    expect(db.state.orders.find((o) => o.id === order.id)?.bkashTrxId).toBeNull();
+    await expect(svc.submitPayment('nope', payment)).rejects.toBeInstanceOf(OrderNotFoundError);
+  });
+});
+
+describe('ordersService.expireLapsedHolds', () => {
+  const later = new Date(NOW.getTime() + 25 * 3_600_000); // hold is 24h
+
+  it('expires only lapsed pending_payment orders, releasing stock and auditing each', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType({ quantityTotal: 50 })] });
+    const svc = build(db);
+    const lapsed = await svc.createOrder(input); // 3 tickets
+    const submitted = await svc.createOrder({ ...input, quantity: 1, attendeeNames: ['A B'] });
+    await svc.submitPayment(submitted.id, { trxId: '9AB12CD34E', senderMsisdn: '+8801712345678' });
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(4);
+
+    const result = await svc.expireLapsedHolds(later);
+
+    expect(result).toEqual({ expired: 1, failed: 0 });
+    expect(db.state.orders.find((o) => o.id === lapsed.id)?.status).toBe('expired');
+    expect(db.state.orders.find((o) => o.id === submitted.id)?.status).toBe('pending_verification');
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(1);
+    expect(db.state.events.at(-1)).toMatchObject({
+      orderId: lapsed.id,
+      actor: 'system',
+      action: 'order.expired',
+      fromStatus: 'pending_payment',
+      toStatus: 'expired',
+    });
+
+    // Idempotent: a second run finds nothing and releases nothing.
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 0, failed: 0 });
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(1);
+  });
+
+  // One corrupted order must never freeze every hold behind it.
+  it('skips an order whose release fails, expires the rest, and reports the failure', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType({ quantityTotal: 50 })] });
+    const svc = build(db);
+    const bad = await svc.createOrder(input);
+    const good = await svc.createOrder({ ...input, quantity: 2, attendeeNames: ['A B', 'C D'] });
+    const release = db.inventoryRepo.release as ReturnType<typeof vi.fn>;
+    release.mockImplementationOnce(async (id: string) => {
+      throw new InventoryStateError(id, 'release');
+    });
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 1, failed: 1 });
+    expect(db.state.orders.find((o) => o.id === bad.id)?.status).toBe('pending_payment');
+    expect(db.state.orders.find((o) => o.id === good.id)?.status).toBe('expired');
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(3); // bad's hold untouched
+  });
+
+  it('does nothing before the hold lapses', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    await svc.createOrder(input);
+    const started = db.txCalls.started;
+    expect(await svc.expireLapsedHolds(new Date(NOW.getTime() + 3_600_000))).toEqual({
+      expired: 0,
+      failed: 0,
+    });
+    expect(db.txCalls.started).toBe(started);
+  });
+
+  // The race the conditional UPDATE exists for: a buyer submits between the
+  // job's SELECT and its UPDATE. The flip fails, so the hold is NOT released.
+  it('skips a hold that was submitted between the scan and the flip, without releasing it', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+    const original = db.orders.listLapsedHolds;
+    db.orders.listLapsedHolds = async (at, limit) => {
+      const rows = await original(at, limit);
+      // Buyer wins the race right after the scan.
+      await svc.submitPayment(order.id, { trxId: '9AB12CD34E', senderMsisdn: '+8801712345678' });
+      return rows;
+    };
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 0, failed: 0 });
+    expect(db.inventoryRepo.release).not.toHaveBeenCalled();
+    expect(db.state.orders.find((o) => o.id === order.id)?.status).toBe('pending_verification');
   });
 });

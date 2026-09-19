@@ -66,14 +66,16 @@ A fuller narrative of the state machine summarized in `CLAUDE.md`:
    page. The order is created `pending_payment`, and the atomic inventory
    UPDATE (`CLAUDE.md`, Invariant 2) reserves stock. If it returns zero rows,
    the buyer sees sold-out — no read-then-write race.
-2. **Payment instructions** — order moves to `pending_verification`. The
-   buyer sees the organizer's bKash number and is prompted for a trxID and
+2. **Payment instructions** — the order stays `pending_payment`. The buyer
+   sees the organizer's bKash number and is prompted for a trxID and
    sending number. The 24h hold clock starts at order creation, not at trxID
    submission (see [DECISIONS.md — ADR-002](DECISIONS.md)).
 3. **Submission** — buyer pastes trxID (normalised uppercase/trimmed) and
-   sending number. The UNIQUE index on `orders.bkash_trx_id`
-   (`CLAUDE.md`, Invariant 3) rejects reuse at the database level regardless
-   of any application-level check.
+   sending number; the order moves to `pending_verification`. The UNIQUE
+   index on `orders.bkash_trx_id` (`CLAUDE.md`, Invariant 3) rejects reuse
+   at the database level regardless of any application-level check. Only
+   `pending_payment` orders expire; a submitted trxID is resolved by a
+   person, never by the clock (ADR-012, ADR-013).
 4. **Verification** — admin opens the queue, cross-checks the trxID and
    amount against the bKash statement, and approves or rejects.
 5. **Fulfilment** — `fulfilment.service.ts` (`CLAUDE.md`, Invariant 4) is the

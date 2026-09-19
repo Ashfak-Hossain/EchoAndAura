@@ -195,6 +195,13 @@ export const orders = pgTable(
     index('orders_status_idx').on(t.status),
     index('orders_hold_expires_at_idx').on(t.holdExpiresAt),
     check('orders_quantity_range', sql`${t.quantity} >= 1 AND ${t.quantity} <= 10`),
+    // Invariant 3 backstop: the UNIQUE index compares bytes, so a trxID that
+    // is not upper-cased and trimmed could slip past it. The database
+    // refuses such a row no matter which code path wrote it.
+    check(
+      'orders_bkash_trx_id_normalised',
+      sql`${t.bkashTrxId} IS NULL OR ${t.bkashTrxId} = upper(btrim(${t.bkashTrxId}))`,
+    ),
     check(
       'orders_totals_nonneg',
       sql`${t.subtotalPaisa} >= 0 AND ${t.discountPaisa} >= 0 AND ${t.totalPaisa} >= 0`,

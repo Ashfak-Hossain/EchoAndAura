@@ -172,3 +172,27 @@ export class AttendeeNamesMismatchError extends DomainError {
     super(`Expected ${quantity} attendee names, got ${names}`);
   }
 }
+
+/**
+ * The bKash transaction ID is already on another order. Enforced by the
+ * UNIQUE index on orders.bkash_trx_id (Invariant 3) — never by a lookup.
+ */
+export class TrxIdAlreadyUsedError extends DomainError {
+  constructor(public readonly trxId: string) {
+    super(`Transaction ID ${trxId} has already been used`);
+  }
+}
+
+/**
+ * The conditional status UPDATE matched no row: the order's status changed
+ * since it was read (expired by the job, submitted from another tab, or
+ * acted on by an admin). The caller reloads and shows the real state.
+ */
+export class OrderStatusConflictError extends DomainError {
+  constructor(
+    public readonly orderId: string,
+    public readonly status: string,
+  ) {
+    super(`Order ${orderId} is ${status}; this action no longer applies`);
+  }
+}

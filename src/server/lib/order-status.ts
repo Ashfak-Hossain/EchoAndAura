@@ -10,8 +10,10 @@ import { InvalidOrderTransitionError } from '@/server/lib/errors';
  *                           issued → cancelled
  *
  * The enum bounds the values; this table bounds the moves. Every status
- * write goes through a service that calls `assertOrderTransition` first
- * and writes an `order_events` row (Invariant 6). Terminal states have no
+ * *change* goes through a service that calls `assertOrderTransition` first
+ * and writes an `order_events` row (Invariant 6). A write that keeps the
+ * status (re-submitting a trxID while `pending_verification`, ADR-013) is
+ * not a transition and still writes its audit row. Terminal states have no
  * exits: a rejected, expired or cancelled order is never revived — the
  * buyer registers again and money is sorted out by hand (ADR-001).
  *
