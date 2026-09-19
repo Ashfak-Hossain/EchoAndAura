@@ -3,15 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ADMIN_NAV, isNavItemActive } from './nav-items';
+import { ADMIN_NAV, type NavCounts, isNavItemActive } from './nav-items';
 
 interface Props {
   /** B2: 44px rows in the sidebar, 48px in the mobile sheet. */
   size?: 'default' | 'touch';
   onNavigate?: () => void;
+  counts?: NavCounts;
 }
 
-export function AdminNav({ size = 'default', onNavigate }: Props) {
+export function AdminNav({ size = 'default', onNavigate, counts }: Props) {
   const pathname = usePathname();
   const row = cn(
     'flex items-center justify-between rounded-lg px-3',
@@ -49,6 +50,14 @@ export function AdminNav({ size = 'default', onNavigate }: Props) {
             )}
           >
             {item.label}
+            {item.badge && counts && counts[item.badge] > 0 ? (
+              <span
+                className="flex h-6 min-w-6 items-center justify-center rounded-full bg-marigold px-2 font-mono text-xs font-medium text-foreground tabular"
+                aria-label={`${counts[item.badge]} waiting`}
+              >
+                {counts[item.badge]}
+              </span>
+            ) : null}
           </Link>
         );
       })}

@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { z } from 'zod';
 import { ordersService } from '@/server/container';
 import { OrderNotFoundError } from '@/server/lib/errors';
+import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-reasons';
 import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
@@ -44,7 +45,7 @@ const load = cache(async (id: string) => {
   }
 });
 
-type Frame = 'awaiting' | 'checking' | 'expired' | 'other';
+type Frame = 'awaiting' | 'checking' | 'expired' | 'rejected' | 'paid' | 'issued' | 'other';
 
 /** Which A4 frame to draw. A hold past its time is shown as expired before the job runs. */
 function frameOf({ order }: OrderView, now: Date): Frame {
@@ -54,6 +55,9 @@ function frameOf({ order }: OrderView, now: Date): Frame {
   }
   if (order.status === 'pending_verification') return 'checking';
   if (order.status === 'expired') return 'expired';
+  if (order.status === 'rejected') return 'rejected';
+  if (order.status === 'paid') return 'paid';
+  if (order.status === 'issued') return 'issued';
   return 'other';
 }
 
@@ -63,7 +67,7 @@ function frameOf({ order }: OrderView, now: Date): Frame {
 export default async function OrderPage({ params }: Props) {
   const { id } = await params;
   const view = await load(id);
-  const { order, event, ticketType, events } = view;
+  const { order, event, ticketType, events, tickets } = view;
   const frame = frameOf(view, new Date());
   const receiveNumber = bkashReceiveNumber();
   const contactEmail = organizerContactEmail();
@@ -76,9 +80,12 @@ export default async function OrderPage({ params }: Props) {
       </a>
     </>
   ) : null;
-  const lastSubmission = [...events]
-    .reverse()
-    .find((e) => e.action === 'payment.submitted' || e.action === 'payment.updated');
+  const newestFirst = [...events].reverse();
+  const lastSubmission = newestFirst.find(
+    (e) => e.action === 'payment.submitted' || e.action === 'payment.updated',
+  );
+  const lastApproval = newestFirst.find((e) => e.action === 'payment.approved');
+  const lastRejection = newestFirst.find((e) => e.action === 'payment.rejected');
 
   return (
     <div className="mx-auto flex w-full max-w-160 flex-1 flex-col gap-6 px-4 py-6 lg:py-10">
@@ -241,15 +248,108 @@ export default async function OrderPage({ params }: Props) {
         </>
       ) : null}
 
+      {frame === 'issued' ? (
+        <>
+          <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
+            <h2 className="font-heading text-xl font-semibold">You&apos;re in.</h2>
+            <p className="text-sm leading-relaxed">
+              Payment confirmed
+              {lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''}.{' '}
+              {tickets.length === 1 ? 'Your ticket is' : `${tickets.length} tickets are`} in your
+              inbox at <strong>{order.buyerEmail}</strong>.
+            </p>
+          </section>
+          <ul className="flex flex-col gap-2.5" data-testid="ticket-list">
+            {tickets.map((t, i) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] text-muted-foreground">
+                    Ticket {i + 1} · {ticketType.name}
+                  </div>
+                  <div className="font-mono text-[15px] font-medium">{t.code}</div>
+                  <div className="text-[15px]">{t.attendeeName}</div>
+                </div>
+                <StatusChip kind="ticket" status={t.status} />
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-muted-foreground tabular">
+            Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
+          </p>
+        </>
+      ) : null}
+
+      {frame === 'paid' ? (
+        // Never expected to persist (ADR-014): approve moves straight to
+        // issued. If it does, say the truth — no ticket rows exist yet.
+        <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
+          <h2 className="font-heading text-xl font-semibold">Payment confirmed</h2>
+          <p className="text-sm leading-relaxed">
+            Your tickets are being prepared and will be emailed to{' '}
+            <strong>{order.buyerEmail}</strong>. This page updates itself.
+          </p>
+        </section>
+      ) : null}
+
+      {frame === 'rejected' ? (
+        <>
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 lg:p-5">
+            <h2 className="font-heading text-xl font-semibold">
+              We couldn&apos;t match your payment
+            </h2>
+            <p className="text-sm leading-relaxed text-[#4a4640]">
+              Checked
+              {lastRejection ? ` on ${formatDhakaLong(lastRejection.createdAt)} (Dhaka)` : ''}. Your
+              tickets were not issued and the seats have gone back on sale.
+            </p>
+            <div className="mt-1 rounded-lg border border-[#efc4c0] bg-destructive-tint px-3.5 py-3 text-[#8e1e17]">
+              <p className="text-xs font-medium tracking-widest uppercase">
+                Reason given by the organizer
+              </p>
+              <p className="mt-1 text-[15px] font-semibold" data-testid="rejection-reason">
+                {isRejectionReason(order.rejectionReason)
+                  ? REJECTION_REASONS[order.rejectionReason]
+                  : (order.rejectionReason ?? 'No reason recorded')}
+              </p>
+              {order.rejectionNote ? (
+                <p className="mt-1 text-sm" data-testid="rejection-note">
+                  {order.rejectionNote}
+                </p>
+              ) : null}
+            </div>
+          </section>
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
+            <h2 className="text-[15px] font-semibold">What to do now</h2>
+            <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-[#4a4640]">
+              <li>
+                Check the TrxID in your bKash history — it is ten letters and numbers, easy to
+                mistype.
+              </li>
+              <li>
+                If the money did leave your account, send a screenshot of the bKash receipt to the
+                organizer{contact}.
+              </li>
+              <li>If it never left, register again and pay with the new reference.</li>
+            </ol>
+          </section>
+          {order.rejectionReason !== 'buyer_cancelled' &&
+          order.rejectionReason !== 'duplicate_order' ? (
+            <Link
+              href={`/events/${event.slug}`}
+              className="inline-flex h-13 w-full items-center justify-center rounded-lg border border-foreground bg-card px-7 text-[17px] font-semibold hover:bg-secondary"
+            >
+              Register again
+            </Link>
+          ) : null}
+        </>
+      ) : null}
+
       {frame === 'other' ? (
         <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-          <p className="text-[15px] text-[#4a4640]">
-            {order.status === 'rejected'
-              ? 'We could not match your payment. The organizer has the details and will be in touch.'
-              : order.status === 'paid' || order.status === 'issued'
-                ? 'Payment confirmed. Your tickets are on their way to your email.'
-                : 'This order was cancelled.'}
-          </p>
+          <p className="text-[15px] text-[#4a4640]">This order was cancelled.</p>
           {contactEmail ? (
             <p className="text-sm text-muted-foreground">
               Questions? Message the organizer{contact}.

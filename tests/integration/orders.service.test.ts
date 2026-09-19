@@ -14,6 +14,7 @@ import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
+import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { type CreateOrderInput, createOrdersService } from '@/server/services/orders.service';
 
@@ -30,6 +31,7 @@ describe('ordersService.createOrder (Postgres)', () => {
   let slug: string;
   const svc = createOrdersService({
     orders: ordersRepository,
+    tickets: ticketsRepository,
     events: eventsRepository,
     ticketTypes: ticketTypesRepository,
     inventory: createInventoryService(inventoryRepository),
@@ -118,6 +120,7 @@ describe('ordersService.createOrder (Postgres)', () => {
     const tt = await newTicketType(5);
     const fixed = createOrdersService({
       orders: ordersRepository,
+      tickets: ticketsRepository,
       events: eventsRepository,
       ticketTypes: ticketTypesRepository,
       inventory: createInventoryService(inventoryRepository),

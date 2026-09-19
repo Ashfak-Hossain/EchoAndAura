@@ -196,3 +196,34 @@ export class OrderStatusConflictError extends DomainError {
     super(`Order ${orderId} is ${status}; this action no longer applies`);
   }
 }
+
+/** A freshly generated ticket code already exists — the caller retries. */
+export class TicketCodeCollisionError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Ticket code ${code} is already taken`);
+  }
+}
+
+/** The rejection reason is not one of the fixed list (rejection-reasons.ts). */
+export class InvalidRejectionReasonError extends DomainError {
+  constructor(public readonly reason: string) {
+    super(`Unknown rejection reason "${reason}"`);
+  }
+}
+
+/**
+ * The trxID on the order is not the one the admin verified: the buyer
+ * edited it after the page was opened. What was checked against the
+ * statement is not what would be approved — the admin must look again.
+ */
+export class TrxIdChangedError extends DomainError {
+  constructor(
+    public readonly orderId: string,
+    public readonly verified: string,
+    public readonly current: string | null,
+  ) {
+    super(
+      `Order ${orderId}: verified trxID ${verified} but the order now carries ${current ?? '—'}`,
+    );
+  }
+}

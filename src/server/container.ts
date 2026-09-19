@@ -12,7 +12,10 @@ import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
+import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
+import { logger } from '@/server/lib/logger';
+import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
@@ -41,8 +44,22 @@ export const ticketTypesService = createTicketTypesService(ticketTypesRepository
 export const inventoryService = createInventoryService(inventoryRepository);
 export const ordersService = createOrdersService({
   orders: ordersRepository,
+  tickets: ticketsRepository,
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
   runInTransaction: (fn) => db.transaction(fn),
+});
+
+// The only place fulfilment is constructed (Invariant 4). The after-commit
+// hook becomes the ticket-email producer in the email slice; until then it
+// only records that tickets went out.
+export const fulfilmentService = createFulfilmentService({
+  orders: ordersRepository,
+  tickets: ticketsRepository,
+  inventory: inventoryService,
+  runInTransaction: (fn) => db.transaction(fn),
+  onTicketsIssued: async (orderId) => {
+    logger.info({ orderId }, 'tickets issued (email delivery not wired yet)');
+  },
 });

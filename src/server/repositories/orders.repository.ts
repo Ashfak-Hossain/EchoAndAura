@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
-import { orderEvents, orders } from '@/db/schema';
+import { events, orderEvents, orders, ticketTypes } from '@/db/schema';
 import { OrderReferenceCollisionError, TrxIdAlreadyUsedError } from '@/server/lib/errors';
 import type { OrderStatus } from '@/server/lib/order-status';
 import { isUniqueViolation } from '@/server/lib/pg-errors';
@@ -20,8 +20,18 @@ export type NewOrderEvent = typeof orderEvents.$inferInsert;
 
 /** Columns a status transition may set alongside the new status. */
 export type OrderTransitionPatch = Partial<
-  Pick<NewOrder, 'bkashTrxId' | 'bkashSenderMsisdn' | 'holdExpiresAt'>
+  Pick<
+    NewOrder,
+    'bkashTrxId' | 'bkashSenderMsisdn' | 'holdExpiresAt' | 'rejectionReason' | 'rejectionNote'
+  >
 >;
+
+/** One row of the verification queue (B7): the order plus what the admin compares. */
+export interface QueueRow {
+  order: OrderRecord;
+  eventTitle: string;
+  ticketTypeName: string;
+}
 
 export interface OrderTransition {
   /** The statuses the row must currently be in for the write to apply. */
@@ -56,6 +66,14 @@ export interface OrdersRepository {
   transition(id: string, change: OrderTransition, tx?: DbExecutor): Promise<OrderRecord | null>;
   /** `pending_payment` orders whose hold passed before `now`, oldest first. */
   listLapsedHolds(now: Date, limit: number): Promise<LapsedHold[]>;
+  /**
+   * B7: every `pending_verification` order, oldest submission first. The
+   * trxID submission is the last write, so `updated_at` is the queue clock.
+   * Unbounded on purpose — a single organizer's queue is tens of rows; the
+   * Orders list (B9) will paginate and must not reuse this.
+   */
+  listVerificationQueue(): Promise<QueueRow[]>;
+  countByStatus(status: OrderStatus): Promise<number>;
 }
 
 // Constraint names as generated in drizzle/0000_*.sql.
@@ -128,5 +146,21 @@ export const ordersRepository: OrdersRepository = {
       .where(and(eq(orders.status, 'pending_payment'), lt(orders.holdExpiresAt, now)))
       .orderBy(asc(orders.holdExpiresAt))
       .limit(limit);
+  },
+
+  async listVerificationQueue() {
+    const rows = await db
+      .select({ order: orders, eventTitle: events.title, ticketTypeName: ticketTypes.name })
+      .from(orders)
+      .innerJoin(events, eq(orders.eventId, events.id))
+      .innerJoin(ticketTypes, eq(orders.ticketTypeId, ticketTypes.id))
+      .where(eq(orders.status, 'pending_verification'))
+      .orderBy(asc(orders.updatedAt));
+    return rows;
+  },
+
+  async countByStatus(status) {
+    const [row] = await db.select({ n: count() }).from(orders).where(eq(orders.status, status));
+    return row?.n ?? 0;
   },
 };

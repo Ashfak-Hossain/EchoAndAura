@@ -10,15 +10,17 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { AdminNav } from './admin-nav';
+import type { NavCounts } from './nav-items';
 
 interface Props {
   email: string;
+  counts?: NavCounts;
   signOut: React.ReactNode;
 }
 
 // B2 mobile: under 1024px the sidebar becomes a 280px charcoal sheet from the
 // left; 48px rows on touch.
-export function MobileNav({ email, signOut }: Props) {
+export function MobileNav({ email, counts, signOut }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export function MobileNav({ email, signOut }: Props) {
       <SheetContent
         side="left"
         showCloseButton={false}
-        className="w-[280px] max-w-[85vw] gap-0 border-0 bg-sidebar px-3.5 py-[18px] text-sidebar-foreground"
+        className="w-70 max-w-[85vw] gap-0 border-0 bg-sidebar px-3.5 py-4.5 text-sidebar-foreground"
       >
         <SheetHeader className="px-2 pt-0 pb-4">
           <SheetTitle className="font-heading text-[17px] font-semibold tracking-tight text-sidebar-accent-foreground">
@@ -40,7 +42,7 @@ export function MobileNav({ email, signOut }: Props) {
           </SheetTitle>
           <SheetDescription className="sr-only">Admin navigation</SheetDescription>
         </SheetHeader>
-        <AdminNav size="touch" onNavigate={() => setOpen(false)} />
+        <AdminNav size="touch" counts={counts} onNavigate={() => setOpen(false)} />
         <div className="mt-auto flex flex-col gap-1.5 border-t border-sidebar-border px-2 pt-3 text-sm">
           <span className="truncate text-sidebar-accent-foreground">{email}</span>
           {signOut}
