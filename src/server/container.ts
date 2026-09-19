@@ -8,8 +8,10 @@
  * handlers) and the worker import the ready-made instances from here.
  */
 import { eventsRepository } from '@/server/repositories/events.repository';
+import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { createEventsService } from '@/server/services/events.service';
+import { createInventoryService } from '@/server/services/inventory.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
   type ObjectStorage,
@@ -33,3 +35,4 @@ export const storage: ObjectStorage = {
 
 export const eventsService = createEventsService(eventsRepository, ticketTypesRepository, storage);
 export const ticketTypesService = createTicketTypesService(ticketTypesRepository);
+export const inventoryService = createInventoryService(inventoryRepository);

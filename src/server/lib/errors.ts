@@ -86,3 +86,39 @@ export class TicketTypeInUseError extends DomainError {
     super(`Ticket type ${ticketTypeId} has orders and cannot be deleted`);
   }
 }
+
+/** Order quantity must be an integer from 1 to MAX_TICKETS_PER_ORDER. */
+export class InvalidQuantityError extends DomainError {
+  constructor(public readonly quantity: number) {
+    super(`Invalid ticket quantity: ${quantity}`);
+  }
+}
+
+/**
+ * An inventory counter would have gone inconsistent — releasing or selling
+ * more than is held. The conditional UPDATE matched no row (or the CHECK
+ * constraint refused it). This is a bug or a double-processed order, never
+ * a buyer-facing condition.
+ */
+export class InventoryStateError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly operation: 'release' | 'convertToSold',
+  ) {
+    super(`Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is held`);
+  }
+}
+
+/**
+ * The hold could not be placed: fewer tickets are available than asked for.
+ * Thrown *inside* the order-creation transaction so the order insert rolls
+ * back with it; the boundary maps it to the sold-out outcome for the buyer.
+ */
+export class SoldOutError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly requested: number,
+  ) {
+    super(`Ticket type ${ticketTypeId} has fewer than ${requested} tickets available`);
+  }
+}
