@@ -31,6 +31,8 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 | `APP_ENV`                                                                                   | No         | Phase 1      | `local` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`                              |
 | `SITE_URL`                                                                                  | Yes (prod) | Phase 2      | Absolute public origin for canonical + Open Graph URLs (`https://echoandaura.com`); falls back to `BETTER_AUTH_URL` locally            |
 | `FACEBOOK_PAGE_URL`                                                                         | No         | Phase 2      | Organizer's Facebook page — "Remind me on Facebook" / footer link; hidden when unset                                                   |
+| `BKASH_RECEIVE_NUMBER`                                                                      | No         | Phase 3      | Personal bKash number buyers send money to (order page); "to be announced" when unset. Moves to Settings in Phase 6                    |
+| `ORGANIZER_CONTACT_EMAIL`                                                                   | No         | Phase 3      | Organizer email shown on order pages ("Stuck? Message the organizer…"); hidden when unset                                              |
 | `APP_TIMEZONE`                                                                              | Yes        | —            | App timezone (`Asia/Dhaka`)                                                                                                            |
 
 ## How to obtain / prepare each

@@ -122,3 +122,53 @@ export class SoldOutError extends DomainError {
     super(`Ticket type ${ticketTypeId} has fewer than ${requested} tickets available`);
   }
 }
+
+/** The order state machine forbids this move (see order-status.ts). */
+export class InvalidOrderTransitionError extends DomainError {
+  constructor(
+    public readonly from: string,
+    public readonly to: string,
+  ) {
+    super(`Cannot change order status from "${from}" to "${to}"`);
+  }
+}
+
+/** Registration for this event is not open right now; `phase` says why. */
+export class RegistrationClosedError extends DomainError {
+  constructor(public readonly phase: string) {
+    super(`Registration is not open (${phase})`);
+  }
+}
+
+/** The ticket type is not selling right now; `state` says why. */
+export class TicketTypeNotOnSaleError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly state: string,
+  ) {
+    super(`Ticket type ${ticketTypeId} is not on sale (${state})`);
+  }
+}
+
+export class OrderNotFoundError extends DomainError {
+  constructor(public readonly orderId: string) {
+    super(`Order ${orderId} not found`);
+  }
+}
+
+/** A freshly generated order reference already exists — the caller retries. */
+export class OrderReferenceCollisionError extends DomainError {
+  constructor(public readonly reference: string) {
+    super(`Order reference ${reference} is already taken`);
+  }
+}
+
+/** One attendee name per ticket, always — whoever calls the service. */
+export class AttendeeNamesMismatchError extends DomainError {
+  constructor(
+    public readonly quantity: number,
+    public readonly names: number,
+  ) {
+    super(`Expected ${quantity} attendee names, got ${names}`);
+  }
+}

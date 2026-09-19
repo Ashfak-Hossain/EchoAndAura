@@ -171,6 +171,10 @@ export const orders = pgTable(
     buyerName: text('buyer_name').notNull(),
     buyerEmail: text('buyer_email').notNull(),
     buyerPhone: text('buyer_phone').notNull(),
+    // One name per ticket, captured at registration (A3 "Who is coming?").
+    // Tickets do not exist until fulfilment, so the names wait here and are
+    // copied onto the ticket rows when the order is issued.
+    attendeeNames: text('attendee_names').array().notNull().default([]),
     // Manual bKash: the same trxID can never be used twice (Invariant 3).
     // UNIQUE at the DB level; NULL until the buyer submits it (Postgres treats
     // NULLs as distinct, so many pending orders can coexist). Stored
