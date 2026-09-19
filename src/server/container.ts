@@ -18,6 +18,7 @@ import { logger } from '@/server/lib/logger';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
   type ObjectStorage,
@@ -62,4 +63,12 @@ export const fulfilmentService = createFulfilmentService({
   onTicketsIssued: async (orderId) => {
     logger.info({ orderId }, 'tickets issued (email delivery not wired yet)');
   },
+});
+
+export const ticketsService = createTicketsService({
+  tickets: ticketsRepository,
+  orders: ordersRepository,
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
+  runInTransaction: (fn) => db.transaction(fn),
 });

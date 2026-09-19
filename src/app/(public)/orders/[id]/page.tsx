@@ -272,7 +272,12 @@ export default async function OrderPage({ params }: Props) {
                   <div className="font-mono text-[15px] font-medium">{t.code}</div>
                   <div className="text-[15px]">{t.attendeeName}</div>
                 </div>
-                <StatusChip kind="ticket" status={t.status} />
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <StatusChip kind="ticket" status={t.status} />
+                  <Link href={`/tickets/${t.code}`} className="text-sm font-semibold underline">
+                    Open ticket
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

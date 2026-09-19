@@ -228,6 +228,7 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         (r, i) =>
           ({
             id: `tk-${state.tickets.length + i + 1}`,
+            position: i + 1,
             status: 'issued',
             createdAt: NOW,
             updatedAt: NOW,
@@ -237,8 +238,20 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       state.tickets.push(...created);
       return created.map((t) => ({ ...t }));
     }),
-    listByOrder: async (orderId) => state.tickets.filter((t) => t.orderId === orderId),
-    findByCode: async (code) => state.tickets.find((t) => t.code === code) ?? null,
+    listByOrder: async (orderId) =>
+      state.tickets.filter((t) => t.orderId === orderId).sort((a, b) => a.position - b.position),
+    findByCode: async (code) => {
+      const row = state.tickets.find((t) => t.code === code);
+      return row ? { ...row } : null;
+    },
+    updateAttendeeName: vi.fn(async (id, expectedName, attendeeName, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || row.status !== 'issued' || row.attendeeName !== expectedName) return null;
+      row.attendeeName = attendeeName;
+      row.updatedAt = NOW;
+      return { ...row };
+    }),
   };
 
   const runInTransaction = async <T>(fn: (tx: DbExecutor) => Promise<T>): Promise<T> => {

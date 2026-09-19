@@ -255,13 +255,22 @@ export const tickets = pgTable(
       .references(() => events.id),
     // Public code for the web ticket page (no QR scanning at the gate).
     code: text('code').notNull().unique(),
+    // 1-based place within the order ("ticket 2 of 3"), fixed at issue so
+    // pages, PDFs and emails never disagree about which ticket is which.
+    position: integer('position').notNull().default(1),
     // Attendee name is editable until registration closes.
     attendeeName: text('attendee_name').notNull(),
     status: ticketStatus('status').notNull().default('issued'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('tickets_order_id_idx').on(t.orderId), index('tickets_event_id_idx').on(t.eventId)],
+  (t) => [
+    index('tickets_order_id_idx').on(t.orderId),
+    index('tickets_event_id_idx').on(t.eventId),
+    // "Ticket 2 of 3" is a database fact, not a loop index.
+    uniqueIndex('tickets_order_position_uq').on(t.orderId, t.position),
+    check('tickets_position_positive', sql`${t.position} >= 1`),
+  ],
 );
 
 // ---------------------------------------------------------------------------

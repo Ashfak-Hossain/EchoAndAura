@@ -51,7 +51,8 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
   const metaLine = [
     `Created ${formatDhakaLong(order.createdAt)} (Dhaka)`,
     submitted ? `submitted ${formatRelative(submitted.createdAt, now)}` : null,
-    order.holdExpiresAt && (order.status === 'pending_payment' || order.status === 'pending_verification')
+    order.holdExpiresAt &&
+    (order.status === 'pending_payment' || order.status === 'pending_verification')
       ? `hold ends ${formatDhakaShort(order.holdExpiresAt)}`
       : null,
   ]
@@ -143,9 +144,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
           <Row label="Sender" mono>
             {order.bkashSenderMsisdn ?? '—'}
           </Row>
-          <Row label="Submitted">
-            {submitted ? formatDhakaShort(submitted.createdAt) : '—'}
-          </Row>
+          <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
           <Row label="Hold expires">
             {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
           </Row>
@@ -190,7 +189,16 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
               <TableBody>
                 {tickets.map((t) => (
                   <TableRow key={t.id} data-testid="ticket-row">
-                    <TableCell className="font-mono">{t.code}</TableCell>
+                    <TableCell className="font-mono">
+                      <Link
+                        href={`/tickets/${t.code}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:underline"
+                      >
+                        {t.code}
+                      </Link>
+                    </TableCell>
                     <TableCell>{t.attendeeName}</TableCell>
                     <TableCell>
                       <StatusChip kind="ticket" status={t.status} />
@@ -216,7 +224,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <li key={e.id} className="flex flex-col gap-0.5 px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{e.action}</span>
-                <span className="tabular text-[13px] text-muted-foreground">
+                <span className="text-[13px] text-muted-foreground tabular">
                   {e.actor} · {formatDhakaLong(e.createdAt)} (Dhaka)
                 </span>
               </div>
@@ -271,7 +279,9 @@ function Row({
   return (
     <div className="flex items-baseline justify-between gap-4 text-sm">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className={`tabular text-right ${mono ? 'font-mono' : ''} ${strong ? 'font-semibold' : ''}`}>
+      <dd
+        className={`text-right tabular ${mono ? 'font-mono' : ''} ${strong ? 'font-semibold' : ''}`}
+      >
         {children}
       </dd>
     </div>

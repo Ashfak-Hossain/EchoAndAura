@@ -137,11 +137,12 @@ export function createFulfilmentService({
               throw new AttendeeNamesMismatchError(order.quantity, order.attendeeNames.length);
             }
             const rows = await tickets.insertMany(
-              order.attendeeNames.map((attendeeName) => ({
+              order.attendeeNames.map((attendeeName, i) => ({
                 orderId,
                 ticketTypeId: order.ticketTypeId,
                 eventId: order.eventId,
                 code: ticketCode(),
+                position: i + 1,
                 attendeeName,
                 status: 'issued' as const,
               })),

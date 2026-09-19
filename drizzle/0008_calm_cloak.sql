@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "tickets_order_position_uq" ON "tickets" USING btree ("order_id","position");--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_position_positive" CHECK ("tickets"."position" >= 1);

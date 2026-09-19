@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAME_MAX, NAME_MIN } from '@/server/lib/attendee-name';
 import { MAX_TICKETS_PER_ORDER, MIN_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 
 /**
@@ -11,9 +12,6 @@ export const BD_MOBILE_PREFIX = '+880';
 /** Ten digits after +880, starting 13–19 (every BD mobile operator). */
 const BD_MOBILE_PATTERN = /^1[3-9]\d{8}$/;
 
-const NAME_MIN = 2;
-const NAME_MAX = 120;
-
 /**
  * A Bangladeshi mobile, entered as the ten digits after a fixed +880 prefix
  * and stored E.164. People type "01712…" or paste "+880 1712…"; the prefix
@@ -25,7 +23,7 @@ const bdMobile = z
   .pipe(z.string().regex(BD_MOBILE_PATTERN, { error: 'A bKash number is 10 digits after +880.' }))
   .transform((digits) => `${BD_MOBILE_PREFIX}${digits}`);
 
-const personName = (label: string) =>
+export const personName = (label: string) =>
   z
     .string({ error: `Enter ${label}.` })
     .trim()

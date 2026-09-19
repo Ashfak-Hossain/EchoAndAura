@@ -119,11 +119,44 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
     await expect(page.getByRole('button', { name: /^approve/i })).toHaveCount(0);
     await expect(page.getByText('tickets.issued')).toBeVisible();
     await expect(page.getByText('payment.approved')).toBeVisible();
+    const orderAdminUrl = page.url().replace(/\?.*$/, '');
 
     // The buyer's page: "You're in." with the same ticket codes.
     await page.goto(a.url);
     await expect(page.getByRole('heading', { name: /you're in/i })).toBeVisible();
     await expect(page.getByTestId('ticket-list').getByRole('listitem')).toHaveCount(2);
+
+    // A5: open ticket 1, rename it, download the PDF and the calendar file.
+    await page
+      .getByRole('link', { name: /open ticket/i })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/tickets\/TKT-[A-Z2-9]{8}$/);
+    const ticketUrl = page.url();
+    await expect(page.getByTestId('attendee-name')).toHaveText('Nusrat Jahan 1');
+    await expect(page.getByText('ticket 1 of 2')).toBeVisible();
+    await page.getByRole('button', { name: /edit name/i }).click();
+    await page.getByLabel('Name on this ticket').fill('  Farhana   Rahman ');
+    await page.getByRole('button', { name: /save name/i }).click();
+    await expect(page.getByRole('status')).toContainText('Name updated to Farhana Rahman');
+    await expect(page.getByTestId('attendee-name')).toHaveText('Farhana Rahman');
+    await page.reload();
+    await expect(page.getByTestId('attendee-name')).toHaveText('Farhana Rahman');
+
+    const pdf = await page.request.get(`${ticketUrl}/pdf`);
+    expect(pdf.status()).toBe(200);
+    expect(pdf.headers()['content-type']).toBe('application/pdf');
+    expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+    const ics = await page.request.get(`${ticketUrl}/calendar.ics`);
+    expect(ics.status()).toBe(200);
+    expect(ics.headers()['content-type']).toContain('text/calendar');
+    expect(await ics.text()).toContain('BEGIN:VEVENT');
+    expect((await page.request.get('/tickets/TKT-NOPE0000')).status()).toBe(404);
+
+    // The rename is in the order's audit trail for Raj.
+    await page.goto(orderAdminUrl);
+    await expect(page.getByText('ticket.renamed')).toBeVisible();
+    await expect(page.getByText(/Nusrat Jahan 1 → Farhana Rahman/)).toBeVisible();
 
     // Inventory: 2 sold (no longer held), 1 still held by B → 17 left.
     await page.goto(`/events/${slug}`);

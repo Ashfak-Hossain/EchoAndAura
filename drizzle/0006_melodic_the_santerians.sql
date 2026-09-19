@@ -1,0 +1,1 @@
+ALTER TABLE "tickets" ADD COLUMN "position" integer DEFAULT 1 NOT NULL;

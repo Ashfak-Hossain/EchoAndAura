@@ -227,3 +227,37 @@ export class TrxIdChangedError extends DomainError {
     );
   }
 }
+
+export class TicketNotFoundError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Ticket ${code} not found`);
+  }
+}
+
+/** A cancelled ticket cannot be renamed — it will not be admitted anyway. */
+export class TicketCancelledError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Ticket ${code} is cancelled`);
+  }
+}
+
+/** Names lock when registration closes: the door list is printed from then on. */
+export class RenameLockedError extends DomainError {
+  constructor(public readonly lockedAt: Date | null) {
+    super(`Attendee names are locked${lockedAt ? ` since ${lockedAt.toISOString()}` : ''}`);
+  }
+}
+
+/** The attendee name fails the shared rule in attendee-name.ts. */
+export class InvalidAttendeeNameError extends DomainError {
+  constructor(public readonly reason: string) {
+    super(reason);
+  }
+}
+
+/** The ticket changed (renamed or cancelled) between the page load and the save. */
+export class TicketRenameConflictError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Ticket ${code} changed before the rename could be saved`);
+  }
+}
