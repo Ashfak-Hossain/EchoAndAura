@@ -105,10 +105,10 @@ export default async function EditEventPage({ params, searchParams }: Props) {
       />
 
       {tab === 'details' ? (
-        // The form fills its column (no inner max-width — that left a dead
-        // band between form and panel on wide screens); the grid itself is
-        // capped so inputs never stretch past a comfortable line length.
-        <div className="grid max-w-275 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        // The form takes the full content width beside the 320px panel — no
+        // caps: an inner max-width left a dead band, an outer one left the
+        // right edge empty. The shell's own 1440 limit is the only bound.
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           <EventForm
             key={event.updatedAt.toISOString()}
             action={updateEventAction.bind(null, event.id)}

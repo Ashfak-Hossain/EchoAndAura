@@ -14,9 +14,7 @@ export default function NewEventPage() {
         title="New event"
         subtitle="Save the details first — cover image, ticket types and publishing come next."
       />
-      <div className="max-w-190">
-        <EventForm action={createEventAction} submitLabel="Create event" />
-      </div>
+      <EventForm action={createEventAction} submitLabel="Create event" />
     </div>
   );
 }
