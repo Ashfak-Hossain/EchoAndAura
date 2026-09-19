@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     # Postgres + Redis are provisioned for the integration suite. The default
-    # gate (`pnpm verify`) does not use them yet; the integration step below is
-    # commented out until Phase 3 lands the reservation logic and the
-    # concurrency test goes green.
+    # gate (`pnpm verify`) does not use them; the Postgres-only integration
+    # subset (inventory — including the concurrency test) runs after it. The
+    # storage integration test needs MinIO, which has no `services:` entry
+    # (its image needs a command), so it stays local-only for now.
     services:
       postgres:
         image: postgres:17
@@ -52,7 +53,6 @@ jobs:
 
       - run: pnpm verify
 
-      # Enable in Phase 3, when reserveTicketInventory is implemented and the
-      # concurrency test passes:
-      # - run: pnpm db:migrate
-      # - run: pnpm test:integration
+      # THE most important test in the repo (CLAUDE.md § Testing) runs here.
+      - run: pnpm db:migrate
+      - run: pnpm test:integration:db

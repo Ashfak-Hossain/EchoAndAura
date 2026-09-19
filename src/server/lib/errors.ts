@@ -86,3 +86,113 @@ export class TicketTypeInUseError extends DomainError {
     super(`Ticket type ${ticketTypeId} has orders and cannot be deleted`);
   }
 }
+
+/** Order quantity must be an integer from 1 to MAX_TICKETS_PER_ORDER. */
+export class InvalidQuantityError extends DomainError {
+  constructor(public readonly quantity: number) {
+    super(`Invalid ticket quantity: ${quantity}`);
+  }
+}
+
+/**
+ * An inventory counter would have gone inconsistent — releasing or selling
+ * more than is held. The conditional UPDATE matched no row (or the CHECK
+ * constraint refused it). This is a bug or a double-processed order, never
+ * a buyer-facing condition.
+ */
+export class InventoryStateError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly operation: 'release' | 'convertToSold',
+  ) {
+    super(`Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is held`);
+  }
+}
+
+/**
+ * The hold could not be placed: fewer tickets are available than asked for.
+ * Thrown *inside* the order-creation transaction so the order insert rolls
+ * back with it; the boundary maps it to the sold-out outcome for the buyer.
+ */
+export class SoldOutError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly requested: number,
+  ) {
+    super(`Ticket type ${ticketTypeId} has fewer than ${requested} tickets available`);
+  }
+}
+
+/** The order state machine forbids this move (see order-status.ts). */
+export class InvalidOrderTransitionError extends DomainError {
+  constructor(
+    public readonly from: string,
+    public readonly to: string,
+  ) {
+    super(`Cannot change order status from "${from}" to "${to}"`);
+  }
+}
+
+/** Registration for this event is not open right now; `phase` says why. */
+export class RegistrationClosedError extends DomainError {
+  constructor(public readonly phase: string) {
+    super(`Registration is not open (${phase})`);
+  }
+}
+
+/** The ticket type is not selling right now; `state` says why. */
+export class TicketTypeNotOnSaleError extends DomainError {
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly state: string,
+  ) {
+    super(`Ticket type ${ticketTypeId} is not on sale (${state})`);
+  }
+}
+
+export class OrderNotFoundError extends DomainError {
+  constructor(public readonly orderId: string) {
+    super(`Order ${orderId} not found`);
+  }
+}
+
+/** A freshly generated order reference already exists — the caller retries. */
+export class OrderReferenceCollisionError extends DomainError {
+  constructor(public readonly reference: string) {
+    super(`Order reference ${reference} is already taken`);
+  }
+}
+
+/** One attendee name per ticket, always — whoever calls the service. */
+export class AttendeeNamesMismatchError extends DomainError {
+  constructor(
+    public readonly quantity: number,
+    public readonly names: number,
+  ) {
+    super(`Expected ${quantity} attendee names, got ${names}`);
+  }
+}
+
+/**
+ * The bKash transaction ID is already on another order. Enforced by the
+ * UNIQUE index on orders.bkash_trx_id (Invariant 3) — never by a lookup.
+ */
+export class TrxIdAlreadyUsedError extends DomainError {
+  constructor(public readonly trxId: string) {
+    super(`Transaction ID ${trxId} has already been used`);
+  }
+}
+
+/**
+ * The conditional status UPDATE matched no row: the order's status changed
+ * since it was read (expired by the job, submitted from another tab, or
+ * acted on by an admin). The caller reloads and shows the real state.
+ */
+export class OrderStatusConflictError extends DomainError {
+  constructor(
+    public readonly orderId: string,
+    public readonly status: string,
+  ) {
+    super(`Order ${orderId} is ${status}; this action no longer applies`);
+  }
+}

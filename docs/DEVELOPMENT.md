@@ -39,31 +39,40 @@ obtain each.
 
 ## Scripts
 
-| Script                  | Purpose                                       |
-| ----------------------- | --------------------------------------------- |
-| `pnpm dev`              | Next.js dev server                            |
-| `pnpm build` / `start`  | Production build / serve                      |
-| `pnpm worker`           | BullMQ worker process                         |
-| `pnpm typecheck`        | `next typegen` + `tsc --noEmit`               |
-| `pnpm lint`             | ESLint                                        |
-| `pnpm format`           | Prettier                                      |
-| `pnpm test`             | Unit tests (Vitest)                           |
-| `pnpm test:integration` | Integration tests — requires Docker Postgres  |
-| `pnpm test:e2e`         | Playwright end-to-end                         |
-| `pnpm db:generate`      | Generate a Drizzle migration from the schema  |
-| `pnpm db:migrate`       | Apply migrations                              |
-| `pnpm db:studio`        | Drizzle Studio                                |
-| `pnpm db:seed`          | Seed sample data                              |
-| `pnpm verify`           | **The gate:** typecheck + lint + test + build |
+| Script                     | Purpose                                                                    |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `pnpm dev`                 | Next.js dev server                                                         |
+| `pnpm build` / `start`     | Production build / serve                                                   |
+| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                            |
+| `pnpm lint`                | ESLint                                                                     |
+| `pnpm format`              | Prettier                                                                   |
+| `pnpm test`                | Unit tests (Vitest)                                                        |
+| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                       |
+| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs               |
+| `pnpm test:e2e`            | Playwright end-to-end                                                      |
+| `pnpm db:generate`         | Generate a Drizzle migration from the schema                               |
+| `pnpm db:migrate`          | Apply migrations                                                           |
+| `pnpm db:studio`           | Drizzle Studio                                                             |
+| `pnpm db:seed`             | Seed sample data                                                           |
+| `pnpm worker`              | BullMQ worker (expire-holds every minute; Phase 4 adds email). Needs Redis |
+| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                     |
+| `pnpm verify`              | **The gate:** typecheck + lint + test + build                              |
 
 ## Testing
 
 - **Unit** (`pnpm test`) — pure logic, no external services. Part of `pnpm verify`.
-- **Integration** (`pnpm test:integration`) — runs against a real Postgres
-  (`docker compose up -d`). Includes
+- **Integration** (`pnpm test:integration`) — runs against the real
+  `docker compose` stack. Loads `.env`; the vitest integration project
+  points `DATABASE_URL` at `TEST_DATABASE_URL`, so the code under test and
+  the test's own seeding hit the same database (`echoandaura_test`) and the
+  dev database is never touched. Includes
   `tests/integration/inventory.concurrency.test.ts`, which proves inventory
   reservation never oversells under concurrency; it must never be skipped or
-  weakened.
+  weakened. CI runs the Postgres-only subset (`test:integration:db`); the
+  storage test needs MinIO and is local-only until CI gets one.
+  `docker-compose.yml` only creates the dev database — create the test one
+  once with `docker compose exec postgres createdb -U <user> echoandaura_test`
+  (each DB-touching test file migrates it itself).
 - **E2E** (`pnpm test:e2e`) — Playwright against a **production build** on
   port 3100 (`pnpm build && pnpm start -p 3100`, started by Playwright
   itself). Not the dev server: `next dev` degrades under parallel

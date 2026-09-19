@@ -26,9 +26,9 @@ Playwright · Docker · Timezone `Asia/Dhaka`
 There is **no bKash API integration**. Payment is manual:
 
 1. Buyer selects tickets and submits the registration form
-2. Order is created as `pending_verification`; **inventory is held for 24 hours**
+2. Order is created as `pending_payment`; **inventory is held for 24 hours**
 3. Buyer sends money via bKash, then pastes the transaction ID and the sending
-   mobile number into the order page
+   mobile number into the order page → order becomes `pending_verification`
 4. Admin opens the verification queue, checks the trxID and amount against the
    bKash statement, and clicks Approve or Reject
 5. On Approve: order → `paid`, inventory converts from held to sold, and the

@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "attendee_names" text[] DEFAULT '{}' NOT NULL;

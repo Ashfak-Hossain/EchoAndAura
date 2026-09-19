@@ -171,6 +171,10 @@ export const orders = pgTable(
     buyerName: text('buyer_name').notNull(),
     buyerEmail: text('buyer_email').notNull(),
     buyerPhone: text('buyer_phone').notNull(),
+    // One name per ticket, captured at registration (A3 "Who is coming?").
+    // Tickets do not exist until fulfilment, so the names wait here and are
+    // copied onto the ticket rows when the order is issued.
+    attendeeNames: text('attendee_names').array().notNull().default([]),
     // Manual bKash: the same trxID can never be used twice (Invariant 3).
     // UNIQUE at the DB level; NULL until the buyer submits it (Postgres treats
     // NULLs as distinct, so many pending orders can coexist). Stored
@@ -191,6 +195,13 @@ export const orders = pgTable(
     index('orders_status_idx').on(t.status),
     index('orders_hold_expires_at_idx').on(t.holdExpiresAt),
     check('orders_quantity_range', sql`${t.quantity} >= 1 AND ${t.quantity} <= 10`),
+    // Invariant 3 backstop: the UNIQUE index compares bytes, so a trxID that
+    // is not upper-cased and trimmed could slip past it. The database
+    // refuses such a row no matter which code path wrote it.
+    check(
+      'orders_bkash_trx_id_normalised',
+      sql`${t.bkashTrxId} IS NULL OR ${t.bkashTrxId} = upper(btrim(${t.bkashTrxId}))`,
+    ),
     check(
       'orders_totals_nonneg',
       sql`${t.subtotalPaisa} >= 0 AND ${t.discountPaisa} >= 0 AND ${t.totalPaisa} >= 0`,

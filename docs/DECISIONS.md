@@ -337,3 +337,186 @@ the allowlist.
 `img` in the allowlist with a key-prefix check like cover images), or if
 descriptions ever need to be rendered somewhere HTML is unwelcome (emails,
 PDF) — then add a Markdown/plain-text derivation, not a second source.
+
+---
+
+## ADR-011 — Inventory primitives: three conditional UPDATEs with an injectable executor
+
+**Date:** 2026-09-19 · **Status:** Accepted
+
+**Context:** Invariant 2 says inventory is held with one conditional atomic
+UPDATE, never read-then-write. Order creation (Phase 3) must hold inventory
+and insert the order in the same transaction; fulfilment (Phase 4) must
+convert held → sold and mark the order paid together; rejection and expiry
+must release. The concurrency test has imported
+`reserveTicketInventory(id, qty)` from the service module since Phase 0.
+
+**Decision:**
+
+- `src/server/repositories/inventory.repository.ts` is the **only** writer
+  of `quantity_reserved` / `quantity_sold`. Three methods, each a single
+  `UPDATE … WHERE <condition on current values> RETURNING id`: `reserve`
+  (available ≥ qty), `release` (held ≥ qty), `convertToSold` (held ≥ qty).
+  The database evaluates the condition under the row lock, so no two callers
+  can both pass a check only one of them satisfies.
+- **Sold-out is a value, corruption is an exception.** `reserve` resolves
+  `false` when stock is short — an expected outcome the page must explain.
+  `release`/`convertToSold` matching no row means something is already
+  wrong (double release, double approve) and throws `InventoryStateError`;
+  the `ticket_types_*` CHECK constraints backstop both, and a `23514` is
+  mapped to the same error.
+- **Every method takes an optional executor** (`DbExecutor` =
+  pool | Drizzle transaction, `src/db/executor.ts`). Repositories never open
+  transactions; the service that owns the business operation does, and
+  passes `tx` down. The integration test proves a reserve inside a
+  transaction rolls back with it.
+- `createInventoryService(repo)` validates the quantity rule (integer 1–10,
+  `src/server/lib/order-rules.ts`, shared with the Zod boundary) and nothing
+  else. Sales windows, event status and prices are order-creation concerns.
+- The historic `reserveTicketInventory` export is kept so the concurrency
+  test never needs editing. It binds to the real repository with a **lazy
+  dynamic import**, because the repository imports `db/client`, which needs
+  `DATABASE_URL` at import time — a static import would drag that into every
+  unit test loading the service.
+- The vitest **integration project sets `DATABASE_URL = TEST_DATABASE_URL`**.
+  The test seeds rows through its own client on `TEST_DATABASE_URL` while
+  the code under test uses the shared `db` on `DATABASE_URL`; before this
+  they were two different databases and the row under test was invisible to
+  the service. This also guarantees the integration suite never writes to
+  the dev database.
+
+**Consequences:** CI now runs `pnpm db:migrate && pnpm test:integration:db`
+(the Postgres-only subset) after `pnpm verify`; the storage integration test
+stays local-only until MinIO is added to CI. `ticket-types.repository.ts`
+continues to never touch the two counters.
+
+**Revisit when:** a waitlist needs "reserve when released" semantics
+(a NOTIFY on release, or a queue), or when per-order holds need to be
+individually addressable (a `holds` table) rather than a counter.
+
+---
+
+## ADR-012 — Order creation: one transaction, prices from the row, uuid URLs, attendee names on the order
+
+**Date:** 2026-09-19 · **Status:** Accepted
+
+**Context:** The A3 form is where money starts. It must never oversell
+(Invariant 2), never trust a client price (5), always leave an audit row
+(6), never do network work inside a transaction (7), and must keep a
+buyer's input on every error. The order page shows the buyer's email and
+phone.
+
+**Decision:**
+
+- **`ordersService.createOrder` reads first, then runs exactly three
+  statements in one transaction**: `inventory.hold` → insert `orders`
+  (`pending_payment`, `hold_expires_at = now + 24 h`) → insert
+  `order_events` (`buyer / order.created / null → pending_payment`). The
+  event window (`eventPhase`), ticket-type ownership and sales window
+  (`ticketTypeSaleState`) and the price are all read _before_ the
+  transaction, so the `ticket_types` row lock lasts microseconds. Sold-out
+  is thrown **inside** the callback (`SoldOutError`) so the rollback is
+  automatic and nothing is written. `runInTransaction` is injected — the
+  service never imports the client, and unit tests fake it with a snapshot
+  that restores on throw.
+- **Money comes from `ticket_types.price_paisa` via `computeOrderTotals`**
+  (`src/server/lib/pricing.ts`), the only place totals are computed. The Zod
+  schema strips unknown keys, so a `totalPaisa` in the body is simply gone.
+  Discount is 0 until promo codes (Phase 5); the cap-at-subtotal rule is
+  already in place.
+- **Orders start as `pending_payment`.** The state machine
+  (`order-status.ts`, from CLAUDE.md) and the A4 design ("Awaiting payment"
+  → "Checking payment") agree; CLAUDE.md's payment-model step 2 was
+  reworded to match.
+- **Expiry policy.** The expiry job selects
+  `status = 'pending_payment' AND hold_expires_at < now()` **only**. A
+  `pending_verification` order has a trxID, so real money may have left
+  the buyer's account; it is resolved by Approve/Reject, never by the
+  clock. `pending_verification → expired` stays legal in the table for an
+  admin acting by hand on a stale, never-verified claim.
+- **Order page URL is `/orders/<uuid>`, `noindex`, `force-dynamic`.** The
+  reference `EA-XXXXXX` (unambiguous alphabet, ~887 M values, UNIQUE + one
+  retry loop on collision) is for the bKash reference field and phone
+  calls, not for access.
+- **Attendee names are a `text[]` column on `orders`** (migration 0003).
+  Tickets are created at fulfilment; the names captured on A3 wait on the
+  order and are copied onto ticket rows then.
+- **Phone is stored E.164** (`+8801XXXXXXXXX`), entered as ten digits after
+  a fixed `+880`. The bKash statement shows the sender's number, so this is
+  what the admin will compare against.
+- `BKASH_RECEIVE_NUMBER` / `ORGANIZER_CONTACT_EMAIL` are env for now;
+  Settings (B14) takes them over in Phase 6.
+
+**Consequences:** The integration suite proves a 12-way race for the last
+ticket yields one order, and the e2e suite proves it through two browser
+contexts. Registration has no promo field yet (design shows one).
+
+**Revisit when:** promo codes land (discount input to `computeOrderTotals`,
+promo row read before the tx), or if orders ever need more than one ticket
+type (the schema's one-type-per-order rule is load-bearing here).
+
+---
+
+## ADR-013 — Payment submission and the expiry worker
+
+**Date:** 2026-09-19 · **Status:** Accepted
+
+**Context:** Phase 3's exit is "an order holds inventory and expires
+correctly". The buyer must be able to report a bKash payment, correct a
+mistyped trxID, and never pay for the same order twice with one
+transaction; lapsed holds must go back on sale without ever being released
+twice.
+
+**Decision:**
+
+- **One status-writing repository method.** `ordersRepository.transition(id,
+{ from[], to, patch })` is the conditional
+  `UPDATE … WHERE id = $id AND status = ANY($from) RETURNING *`. Null means
+  the row moved; callers throw `OrderStatusConflictError` and the page
+  re-renders in the real state. Fulfilment, reject and cancel (Phase 4/6)
+  reuse it — there is no other way to write `orders.status`.
+- **Submission is allowed from `pending_payment` and `pending_verification`.**
+  The first moves the status (`payment.submitted`); a later one only
+  replaces the trxID/number (`payment.updated`), matching the design's
+  "Edit transaction ID". The UNIQUE index on `bkash_trx_id` is the only
+  uniqueness check (Invariant 3); it surfaces as `TrxIdAlreadyUsedError`
+  and the audit row rolls back with the refused write. Uniqueness is a
+  banner on the page, not a field error (design A4).
+- **The expiry job is the sole authority on expiry.** It selects
+  `status = 'pending_payment' AND hold_expires_at < now()` and, per order in
+  one transaction: flip the status conditionally → _only then_ release the
+  hold → audit row (`system / order.expired`). A submission racing the job
+  is settled by whichever conditional UPDATE lands first; a second run or a
+  second worker can never double-release because the flip fails. The A4
+  page shows a lapsed hold as expired before the job runs, so nobody is
+  invited to pay for tickets about to go back on sale.
+- **The worker owns the schedule.** `src/worker.ts` upserts a BullMQ job
+  scheduler (`expire-holds`, every 60 s) on boot — idempotent across
+  restarts and replicas — and processes it with a one-line call into the
+  tested service. The Next app does not connect to Redis in Phase 3.
+  `pnpm jobs:expire-holds` runs the same service once for ops.
+- **pino** (`src/server/lib/logger.ts`) is the logger for services and the
+  worker; pretty locally, JSON in production. Order ids are logged, never
+  trxIDs or buyer contact details.
+
+- **Defence in depth on the trxID:** the service upper-cases and trims
+  whatever it is given, and migration `0004` adds
+  `CHECK (bkash_trx_id = upper(btrim(bkash_trx_id)))`, so no code path can
+  store a value the UNIQUE index would not compare correctly. The audit
+  row's from-status is read under `SELECT … FOR UPDATE` so two tabs
+  submitting at once cannot make it lie.
+- **A failing order never blocks expiry:** each lapsed hold runs in its own
+  transaction inside a try/catch; failures are logged, counted, and fail
+  the BullMQ job, while the rest of the batch still expires.
+
+**Consequences:** A `pending_verification` order never expires
+automatically; if the organizer never acts, it holds inventory until they
+Approve or Reject (B7/B8, Phase 4). The "Checking payment" page refreshes
+itself every 60 s (`router.refresh()`), paused while the edit form is open
+so a refresh never wipes typing. The worker needs `NODE_ENV=production` on
+the VPS: `pino-pretty` is a dev dependency and is only loaded outside
+production.
+
+**Revisit when:** a waitlist wants to be told about releases (emit an event
+from the expiry tx), or when the verification queue needs a "stale claims"
+view for orders sitting in `pending_verification` past their hold.
