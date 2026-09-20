@@ -48,6 +48,14 @@ export const ordersSearchSchema = z.object({
     .string()
     .optional()
     .transform((v) => parseSort(v, ORDERS_SORT_COLUMNS, ORDERS_DEFAULT_SORT)),
+  /** Rows per page: 25 (default), 50 or 100. Anything else is the default. */
+  size: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = Number.parseInt(v ?? '', 10);
+      return n === 50 || n === 100 ? n : 25;
+    }),
 });
 
 export type OrdersSearchInput = z.infer<typeof ordersSearchSchema>;

@@ -359,26 +359,23 @@ export function createOrdersService({
      */
     async searchOrders(input: OrdersSearchInput): Promise<OrdersSearchResult> {
       const filter = toSearchFilter(input);
+      const size = input.size ?? ORDERS_PAGE_SIZE;
       const first = await orders.search(
         filter,
-        { limit: ORDERS_PAGE_SIZE, offset: (input.page - 1) * ORDERS_PAGE_SIZE },
+        { limit: size, offset: (input.page - 1) * size },
         input.sort,
       );
-      const pages = Math.max(1, Math.ceil(first.total / ORDERS_PAGE_SIZE));
+      const pages = Math.max(1, Math.ceil(first.total / size));
       const page = Math.min(input.page, pages);
       const result =
         page === input.page
           ? first
-          : await orders.search(
-              filter,
-              { limit: ORDERS_PAGE_SIZE, offset: (page - 1) * ORDERS_PAGE_SIZE },
-              input.sort,
-            );
+          : await orders.search(filter, { limit: size, offset: (page - 1) * size }, input.sort);
       return {
         rows: result.rows.map((row) => ({ ...row, matchedField: matchedField(row, filter.term) })),
         total: result.total,
         page,
-        pageSize: ORDERS_PAGE_SIZE,
+        pageSize: size,
         pages,
       };
     },

@@ -15,6 +15,7 @@ export function searchQuery(input: OrdersSearchInput, page?: number): string {
   ) {
     p.set('sort', formatSort(input.sort));
   }
+  if (input.size && input.size !== 25) p.set('size', String(input.size));
   if (page && page > 1) p.set('page', String(page));
   const s = p.toString();
   return s ? `?${s}` : '';

@@ -48,7 +48,10 @@ export function StatusTotals({
   if (totals.count === 0) return null;
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1" data-testid="status-totals">
+    <div
+      className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]"
+      data-testid="status-totals"
+    >
       <Tile
         href={hrefFor(null)}
         active={active === null}
@@ -74,7 +77,7 @@ export function StatusTotals({
         );
       })}
       <div
-        className="ml-auto flex min-w-37.5 shrink-0 flex-col gap-1 rounded-xl border border-foreground bg-foreground px-4 py-3 text-background"
+        className="flex h-[92px] flex-col justify-between rounded-xl border border-foreground bg-foreground px-4 py-3 text-background"
         data-testid="revenue-tile"
       >
         <span className="text-[12px] font-medium text-[#c9c3b7]">Revenue</span>
@@ -114,20 +117,24 @@ function Tile({
       aria-current={active ? 'true' : undefined}
       data-testid={testId}
       className={cn(
-        'flex min-w-35 shrink-0 flex-col gap-1 rounded-xl border px-4 py-3 transition-colors hover:border-foreground',
+        'flex h-[92px] flex-col justify-between rounded-xl border px-4 py-3 transition-[border-color,box-shadow] hover:border-foreground',
         className,
-        active && 'ring-2 ring-foreground ring-offset-2 ring-offset-background',
+        // Active = a 2px charcoal edge drawn inside the same box, so the tile
+        // never grows or shifts its neighbours.
+        active && 'border-foreground shadow-[inset_0_0_0_1px_#1c1a17]',
       )}
     >
       <span className="text-[12px] font-medium text-[#5c574c]">{label}</span>
       <span className="font-heading text-[22px] leading-none font-semibold tabular">{count}</span>
-      {money !== undefined ? (
-        <span className="text-[12px] text-[#5c574c] tabular">
-          <Money paisa={money} /> {moneyNote}
-        </span>
-      ) : (
-        <span className="text-[12px] text-[#5c574c]">orders</span>
-      )}
+      <span className="text-[12px] text-[#5c574c] tabular">
+        {money !== undefined ? (
+          <>
+            <Money paisa={money} /> {moneyNote}
+          </>
+        ) : (
+          'all statuses'
+        )}
+      </span>
     </Link>
   );
 }
