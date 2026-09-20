@@ -9,6 +9,7 @@ import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-rea
 import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
+import { VERIFICATION_SLA } from '@/content/site';
 import { bkashReceiveNumber, organizerContactEmail } from '@/lib/env.public';
 import { formatDhakaLong } from '@/lib/time';
 import { submitPaymentAction } from './actions';
@@ -20,9 +21,6 @@ import { PaymentForm } from './payment-form';
 interface Props {
   params: Promise<{ id: string }>;
 }
-
-/** The verification SLA agreed with the organizer (PHASES.md risk register). */
-const VERIFICATION_SLA_TEXT = 'usually within 4 hours, always within a day';
 
 // The order page carries the buyer's email and phone: never indexed, never
 // cached, and only reachable by the uuid the buyer was redirected to.
@@ -178,8 +176,8 @@ export default async function OrderPage({ params }: Props) {
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
             <h2 className="text-[15px] font-semibold">What happens next</h2>
             <p className="text-sm leading-relaxed text-[#4a4640]">
-              A person checks your transaction against the bKash statement — {VERIFICATION_SLA_TEXT}
-              . When it matches, your tickets arrive by email at{' '}
+              A person checks your transaction against the bKash statement — {VERIFICATION_SLA}.
+              When it matches, your tickets arrive by email at{' '}
               <span className="font-medium text-foreground">{order.buyerEmail}</span> straight away.
               Nothing else is needed from you.
             </p>
@@ -195,7 +193,7 @@ export default async function OrderPage({ params }: Props) {
       {frame === 'checking' ? (
         <CheckingPayment
           firstName={order.buyerName.split(/\s+/)[0] ?? order.buyerName}
-          slaText={VERIFICATION_SLA_TEXT}
+          slaText={VERIFICATION_SLA}
           totalPaisa={order.totalPaisa}
           trxId={order.bkashTrxId ?? ''}
           senderMsisdn={order.bkashSenderMsisdn ?? ''}

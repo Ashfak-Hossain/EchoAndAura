@@ -1,6 +1,6 @@
 import { ButtonLink } from '@/components/button-link';
 
-// A8 404 (minimal; the full A8 lands with the static-pages slice).
+// A8 404. The 500/error frame with a reference code is a later slice.
 export default function PublicNotFound() {
   return (
     <main className="mx-auto flex w-full max-w-160 flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">

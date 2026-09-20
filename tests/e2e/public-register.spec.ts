@@ -69,6 +69,11 @@ test.describe('registration (A3 → A4)', () => {
     await expect(page.getByLabel('Number of tickets')).toHaveValue('2');
     await expect(page.getByTestId('summary-total')).toHaveText('৳2,400.00');
 
+    // "I agree to the terms" points at the real terms page (A7).
+    await expect(page.getByRole('link', { name: 'terms', exact: true })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
     await page.getByLabel('Full name').fill('Nusrat Jahan');
     await page.getByLabel('Email address').fill('Nusrat.Jahan@example.com');
     await page.getByLabel('Mobile number').fill('1712345678');

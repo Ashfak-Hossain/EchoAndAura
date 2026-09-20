@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Minus, Plus } from 'lucide-react';
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
@@ -309,8 +310,17 @@ export function RegistrationForm({ action, options, registrationClosesAt, prefil
             aria-invalid={Boolean(errors.terms)}
             className="mt-1 size-4 shrink-0 accent-foreground"
           />
-          I agree to the terms and understand that payments are checked by hand and there are no
-          refunds in the app.
+          <span>
+            I agree to the{' '}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="underline">
+              terms
+            </Link>{' '}
+            and understand that payments are checked by hand and there are{' '}
+            <Link href="/refund" target="_blank" rel="noreferrer" className="underline">
+              no refunds in the app
+            </Link>
+            .
+          </span>
         </label>
         {errors.terms ? <FieldError>{errors.terms}</FieldError> : null}
       </div>
