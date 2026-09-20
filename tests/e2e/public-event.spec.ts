@@ -17,7 +17,9 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  // Six workers share one Node process; a PDF render elsewhere can hold the
+  // event loop for seconds, so the sign-in action gets a realistic budget.
+  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
 }
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {

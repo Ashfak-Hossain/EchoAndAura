@@ -15,7 +15,7 @@ import {
 import { eventPhase } from '@/server/lib/event-phase';
 import { logger } from '@/server/lib/logger';
 import { generateOrderReference } from '@/server/lib/order-reference';
-import { assertOrderTransition } from '@/server/lib/order-status';
+import { assertOrderTransition, type OrderStatus } from '@/server/lib/order-status';
 import { computeOrderTotals } from '@/server/lib/pricing';
 import { ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
@@ -26,6 +26,7 @@ import type {
   QueueRow,
   OrdersSearchFilter,
   OrdersSearchPage,
+  StatusTotal,
 } from '@/server/repositories/orders.repository';
 import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
 import type {
@@ -129,6 +130,37 @@ export interface OrdersSearchResult {
   page: number;
   pageSize: number;
   pages: number;
+}
+
+/** Statuses whose money has actually arrived and been kept. */
+export const REVENUE_STATUSES: readonly OrderStatus[] = ['paid', 'issued'];
+
+export interface OrderTotals {
+  /** Every status with at least one order under the current filter (status ignored). */
+  byStatus: StatusTotal[];
+  /** All orders under the filter. */
+  count: number;
+  /**
+   * Revenue = sum over paid + issued only. Pending money is held, not
+   * earned; rejected/expired never arrived; cancelled was refunded outside
+   * the app. Never call this "refunds" — the app does not know them.
+   */
+  revenuePaisa: number;
+  revenueCount: number;
+}
+
+export function summariseTotals(byStatus: StatusTotal[]): OrderTotals {
+  let count = 0;
+  let revenuePaisa = 0;
+  let revenueCount = 0;
+  for (const t of byStatus) {
+    count += t.count;
+    if (REVENUE_STATUSES.includes(t.status)) {
+      revenuePaisa += t.totalPaisa;
+      revenueCount += t.count;
+    }
+  }
+  return { byStatus, count, revenuePaisa, revenueCount };
 }
 
 function toSearchFilter(input: OrdersSearchInput): OrdersSearchFilter {
@@ -327,19 +359,21 @@ export function createOrdersService({
      */
     async searchOrders(input: OrdersSearchInput): Promise<OrdersSearchResult> {
       const filter = toSearchFilter(input);
-      const first = await orders.search(filter, {
-        limit: ORDERS_PAGE_SIZE,
-        offset: (input.page - 1) * ORDERS_PAGE_SIZE,
-      });
+      const first = await orders.search(
+        filter,
+        { limit: ORDERS_PAGE_SIZE, offset: (input.page - 1) * ORDERS_PAGE_SIZE },
+        input.sort,
+      );
       const pages = Math.max(1, Math.ceil(first.total / ORDERS_PAGE_SIZE));
       const page = Math.min(input.page, pages);
       const result =
         page === input.page
           ? first
-          : await orders.search(filter, {
-              limit: ORDERS_PAGE_SIZE,
-              offset: (page - 1) * ORDERS_PAGE_SIZE,
-            });
+          : await orders.search(
+              filter,
+              { limit: ORDERS_PAGE_SIZE, offset: (page - 1) * ORDERS_PAGE_SIZE },
+              input.sort,
+            );
       return {
         rows: result.rows.map((row) => ({ ...row, matchedField: matchedField(row, filter.term) })),
         total: result.total,
@@ -351,7 +385,16 @@ export function createOrdersService({
 
     /** The same filter without pagination, for the CSV. Capped; the caller says so in the file. */
     async exportOrders(input: OrdersSearchInput): Promise<OrdersSearchPage> {
-      return orders.search(toSearchFilter(input), { limit: ORDERS_EXPORT_CAP, offset: 0 });
+      return orders.search(
+        toSearchFilter(input),
+        { limit: ORDERS_EXPORT_CAP, offset: 0 },
+        input.sort,
+      );
+    },
+
+    /** B9 status strip for the current event/date/term filter (status itself ignored). */
+    async orderTotals(input: OrdersSearchInput): Promise<OrderTotals> {
+      return summariseTotals(await orders.totalsByStatus(toSearchFilter(input)));
     },
 
     /**

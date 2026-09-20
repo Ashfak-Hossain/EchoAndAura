@@ -19,6 +19,7 @@ describe('ordersSearchSchema — lenient URL state', () => {
       from: null,
       to: null,
       page: 1,
+      sort: { column: 'created', desc: true },
     });
     expect(ordersSearchSchema.parse({ page: '0' }).page).toBe(1);
     expect(ordersSearchSchema.parse({ page: 'x' }).page).toBe(1);

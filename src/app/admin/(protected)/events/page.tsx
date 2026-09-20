@@ -3,18 +3,13 @@ import Link from 'next/link';
 import { eventsService, ticketTypesService } from '@/server/container';
 import { ButtonLink } from '@/components/button-link';
 import { EmptyState } from '@/components/empty-state';
+import { DataTable } from '@/components/admin/data-table';
 import { StatusChip } from '@/components/status-chip';
 import { TabNav } from '@/components/tab-nav';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import type { EventStatus } from '@/lib/status-labels';
+import { parseSort, type SortState } from '@/lib/table-sort';
 import { formatDhakaLong, formatRelative } from '@/lib/time';
+import { eventColumns, type EventRow } from './columns';
 
 export const metadata: Metadata = { title: 'Events' };
 
@@ -25,14 +20,19 @@ const FILTERS: { key: 'all' | EventStatus; label: string }[] = [
   { key: 'archived', label: 'Archived' },
 ];
 
+const EVENT_SORT_COLUMNS = ['starts', 'title', 'status', 'sold', 'updated'] as const;
+type EventSortColumn = (typeof EVENT_SORT_COLUMNS)[number];
+const DEFAULT_SORT: SortState<EventSortColumn> = { column: 'starts', desc: true };
+
 interface Props {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; sort?: string }>;
 }
 
 // B4: segmented status filter with counts, table, row → editor. Archived rows
 // stay readable — the money history has to survive.
 export default async function AdminEventsPage({ searchParams }: Props) {
-  const { status } = await searchParams;
+  const { status, sort: sortParam } = await searchParams;
+  const sort = parseSort(sortParam, EVENT_SORT_COLUMNS, DEFAULT_SORT);
   const active = FILTERS.some((f) => f.key === status)
     ? (status as (typeof FILTERS)[number]['key'])
     : 'all';
@@ -44,6 +44,39 @@ export default async function AdminEventsPage({ searchParams }: Props) {
 
   // Sold / total per event in one aggregate query (no order data yet).
   const capacity = await ticketTypesService.capacityForEvents(visible.map((e) => e.id));
+
+  // The list is unpaginated (one organizer, tens of events), so the sort
+  // happens here on the server — still URL-driven, never in the browser.
+  const dir = sort.desc ? -1 : 1;
+  const sorted = [...visible].sort((a, b) => {
+    const ca = capacity.get(a.id)?.sold ?? 0;
+    const cb = capacity.get(b.id)?.sold ?? 0;
+    const cmp =
+      sort.column === 'title'
+        ? a.title.localeCompare(b.title)
+        : sort.column === 'status'
+          ? a.status.localeCompare(b.status)
+          : sort.column === 'sold'
+            ? ca - cb
+            : sort.column === 'updated'
+              ? a.updatedAt.getTime() - b.updatedAt.getTime()
+              : a.startsAt.getTime() - b.startsAt.getTime();
+    return dir * cmp;
+  });
+  const rows: EventRow[] = sorted.map((event) => {
+    const t = capacity.get(event.id) ?? { sold: 0, total: 0 };
+    return {
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      startsLabel: formatDhakaLong(event.startsAt),
+      status: event.status,
+      sold: t.sold,
+      total: t.total,
+      updatedLabel: formatRelative(event.updatedAt),
+    };
+  });
+  const query = active === 'all' ? '' : `?status=${active}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,53 +110,39 @@ export default async function AdminEventsPage({ searchParams }: Props) {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Starts (Dhaka)</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Sold / total</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((event) => {
-                const t = capacity.get(event.id) ?? { sold: 0, total: 0 };
-                return (
-                  <TableRow key={event.id}>
-                    <TableCell>
-                      <Link
-                        href={`/admin/events/${event.id}/edit`}
-                        className="flex flex-col gap-0.5 font-medium hover:underline"
-                      >
-                        {event.title}
-                        <span className="font-mono text-xs font-normal text-muted-foreground">
-                          /{event.slug}
-                        </span>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap tabular">
-                      {formatDhakaLong(event.startsAt)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusChip status={event.status} />
-                    </TableCell>
-                    <TableCell className="text-right tabular">
-                      {t.sold} / {t.total}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">—</TableCell>
-                    <TableCell className="text-right whitespace-nowrap text-muted-foreground">
-                      {formatRelative(event.updatedAt)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <>
+          <DataTable
+            tableId="events"
+            columns={eventColumns}
+            data={rows}
+            sort={sort}
+            sortBase={{ pathname: '/admin/events', query }}
+            rowTestId="event-row"
+          />
+          {/* Phone: one card per event */}
+          <ul className="flex flex-col gap-3 lg:hidden">
+            {rows.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/admin/events/${r.id}/edit`}
+                  className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 hover:border-border-strong"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{r.title}</span>
+                    <StatusChip status={r.status} />
+                  </div>
+                  <div className="text-[13px] text-muted-foreground tabular">{r.startsLabel}</div>
+                  <div className="flex justify-between text-[13px] text-muted-foreground tabular">
+                    <span>
+                      {r.sold} / {r.total} sold
+                    </span>
+                    <span>{r.updatedLabel}</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

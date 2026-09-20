@@ -27,6 +27,9 @@ function fakeRepo(seed: TicketTypeRecord[] = []) {
     async listByEvent(eventId) {
       return [...rows.values()].filter((r) => r.eventId === eventId);
     },
+    async listByEvents(eventIds) {
+      return [...rows.values()].filter((r) => eventIds.includes(r.eventId));
+    },
     async findById(id) {
       return rows.get(id) ?? null;
     },

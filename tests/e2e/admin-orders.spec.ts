@@ -11,7 +11,9 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  // Six workers share one Node process; a PDF render elsewhere can hold the
+  // event loop for seconds, so the sign-in action gets a realistic budget.
+  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
 }
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
@@ -117,6 +119,41 @@ test.describe('orders list (B9)', () => {
     await page.getByLabel('Status').selectOption('issued');
     await page.getByRole('button', { name: 'Apply' }).click();
     await expect(rows.filter({ hasText: reference })).toHaveCount(0);
+
+    // Status tiles double as the filter: click narrows, the active tile clears.
+    await page.goto('/admin/orders');
+    await page.getByTestId('status-tile-pending_verification').click();
+    await expect(page).toHaveURL(/status=pending_verification/);
+    await expect(rows.filter({ hasText: reference })).toHaveCount(1);
+    await expect(page.getByTestId('status-tile-pending_verification')).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    await page.getByTestId('status-tile-pending_verification').click();
+    await expect(page).not.toHaveURL(/status=/);
+    await expect(page.getByTestId('revenue-tile')).toContainText('৳');
+
+    // Sorting is a link on the header; the arrow marks the active column.
+    await page.getByRole('link', { name: /^Total/ }).click();
+    await expect(page).toHaveURL(/sort=total%3Adesc/);
+    await expect(page.getByRole('columnheader', { name: /^Total/ })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+    await page.getByRole('link', { name: /^Total/ }).click();
+    await expect(page).toHaveURL(/sort=total%3Aasc/);
+
+    // Column visibility is remembered per browser.
+    await page.getByRole('button', { name: 'Columns' }).click();
+    await page.getByTestId('column-toggle-trxId').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('columnheader', { name: 'trxID' })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('columnheader', { name: 'trxID' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Columns' }).click();
+    await page.getByTestId('column-toggle-trxId').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('columnheader', { name: 'trxID' })).toHaveCount(1);
 
     // No results state.
     await page.getByLabel('Status').selectOption('');

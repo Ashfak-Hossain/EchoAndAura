@@ -41,6 +41,8 @@ export interface EventCapacity {
 
 export interface TicketTypesRepository {
   listByEvent(eventId: string): Promise<TicketTypeRecord[]>;
+  /** Every ticket type of every listed event in one query (dashboard cards). */
+  listByEvents(eventIds: string[]): Promise<TicketTypeRecord[]>;
   /**
    * Sold/held/total per event in ONE query — lists and the dashboard must
    * never do a query per event (N+1 with a growing events table).
@@ -74,6 +76,15 @@ export const ticketTypesRepository: TicketTypesRepository = {
       .select()
       .from(ticketTypes)
       .where(eq(ticketTypes.eventId, eventId))
+      .orderBy(asc(ticketTypes.createdAt));
+  },
+
+  listByEvents(eventIds) {
+    if (eventIds.length === 0) return Promise.resolve([]);
+    return db
+      .select()
+      .from(ticketTypes)
+      .where(inArray(ticketTypes.eventId, eventIds))
       .orderBy(asc(ticketTypes.createdAt));
   },
 

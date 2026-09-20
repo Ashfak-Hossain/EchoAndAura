@@ -1,4 +1,18 @@
-import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  or,
+  sql,
+  sum,
+  type SQL,
+} from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
 import { events, orderEvents, orders, ticketTypes } from '@/db/schema';
@@ -55,6 +69,19 @@ export interface OrdersSearchPage {
   total: number;
 }
 
+/** B9 sort: a whitelisted column name (validation/orders-search.ts) + direction. */
+export interface OrdersSort {
+  column: 'created' | 'total' | 'reference' | 'status' | 'buyer';
+  desc: boolean;
+}
+
+/** One row of the status strip: how many orders and how much money per status. */
+export interface StatusTotal {
+  status: OrderStatus;
+  count: number;
+  totalPaisa: number;
+}
+
 export interface OrderTransition {
   /** The statuses the row must currently be in for the write to apply. */
   from: readonly OrderStatus[];
@@ -105,7 +132,10 @@ export interface OrdersRepository {
   search(
     filter: OrdersSearchFilter,
     page: { limit: number; offset: number },
+    sort?: OrdersSort,
   ): Promise<OrdersSearchPage>;
+  /** B9 status strip: count and sum(total) per status for the same filter, ignoring `filter.status`. */
+  totalsByStatus(filter: OrdersSearchFilter): Promise<StatusTotal[]>;
 }
 
 // Constraint names as generated in drizzle/0000_*.sql.
@@ -206,7 +236,7 @@ export const ordersRepository: OrdersRepository = {
       .orderBy(desc(orders.createdAt));
   },
 
-  async search(filter, page) {
+  async search(filter, page, sort = { column: 'created', desc: true }) {
     const where = searchWhere(filter);
     const [rows, [counted]] = await Promise.all([
       db
@@ -215,14 +245,42 @@ export const ordersRepository: OrdersRepository = {
         .innerJoin(events, eq(orders.eventId, events.id))
         .innerJoin(ticketTypes, eq(orders.ticketTypeId, ticketTypes.id))
         .where(where)
-        .orderBy(desc(orders.createdAt), desc(orders.id))
+        // The id tiebreak keeps pages stable when many rows share a value.
+        .orderBy(...sortOrder(sort), desc(orders.id))
         .limit(page.limit)
         .offset(page.offset),
       db.select({ n: count() }).from(orders).where(where),
     ]);
     return { rows, total: counted?.n ?? 0 };
   },
+
+  async totalsByStatus(filter) {
+    const rows = await db
+      .select({ status: orders.status, n: count(), paisa: sum(orders.totalPaisa) })
+      .from(orders)
+      .where(searchWhere({ ...filter, status: null }))
+      .groupBy(orders.status);
+    // sum() comes back as a string (bigint-safe); totals fit a number for
+    // any plausible organizer (Number.MAX_SAFE_INTEGER paisa ≈ ৳90 trillion).
+    return rows.map((r) => ({ status: r.status, count: r.n, totalPaisa: Number(r.paisa ?? 0) }));
+  },
 };
+
+function sortOrder(sort: OrdersSort): SQL[] {
+  const dir = sort.desc ? desc : asc;
+  switch (sort.column) {
+    case 'created':
+      return [dir(orders.createdAt)];
+    case 'total':
+      return [dir(orders.totalPaisa)];
+    case 'reference':
+      return [dir(orders.reference)];
+    case 'status':
+      return [dir(orders.status)];
+    case 'buyer':
+      return [dir(orders.buyerName)];
+  }
+}
 
 /**
  * The search term is pre-normalised (validation/orders-search.ts) so the

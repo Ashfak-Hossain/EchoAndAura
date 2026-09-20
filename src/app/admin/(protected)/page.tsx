@@ -38,10 +38,12 @@ export default async function AdminDashboardPage() {
   // dashboard is for. Drafts are one line; archived events are history.
   const live = events.filter((e) => e.status === 'published');
   const drafts = events.filter((e) => e.status === 'draft').length;
-  const withTypes = await Promise.all(
-    live.map(async (event) => ({ event, types: await ticketTypesService.listForEvent(event.id) })),
-  );
-  const capacityMap = await ticketTypesService.capacityForEvents(live.map((e) => e.id));
+  // Two queries for all live events, never one per event.
+  const [typesByEvent, capacityMap] = await Promise.all([
+    ticketTypesService.listForEvents(live.map((e) => e.id)),
+    ticketTypesService.capacityForEvents(live.map((e) => e.id)),
+  ]);
+  const withTypes = live.map((event) => ({ event, types: typesByEvent.get(event.id) ?? [] }));
   const sold = [...capacityMap.values()].reduce((n, c) => n + c.sold, 0);
   const capacity = [...capacityMap.values()].reduce((n, c) => n + c.total, 0);
 

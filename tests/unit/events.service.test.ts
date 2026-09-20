@@ -104,6 +104,7 @@ function fakeTicketTypes(countByEvent: Record<string, number> = {}): TicketTypes
         (_, i) => ({ id: `tt-${i}`, eventId }) as TicketTypeRecord,
       );
     },
+    listByEvents: unused,
     findById: unused,
     capacityByEvent: unused,
     insert: unused,

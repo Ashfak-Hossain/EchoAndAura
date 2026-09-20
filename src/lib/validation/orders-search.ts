@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { orderStatus } from '@/db/schema';
 import { ORDER_REFERENCE_PATTERN } from '@/server/lib/order-reference';
+import { parseSort, type SortState } from '@/lib/table-sort';
 import { bdMobile } from './orders';
 
 /**
@@ -18,6 +19,11 @@ const isoDate = z
   .string()
   .optional()
   .transform((v) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null));
+
+/** Sortable columns of the orders list, mapped to SQL in the repository. */
+export const ORDERS_SORT_COLUMNS = ['created', 'total', 'reference', 'status', 'buyer'] as const;
+export type OrdersSortColumn = (typeof ORDERS_SORT_COLUMNS)[number];
+export const ORDERS_DEFAULT_SORT: SortState<OrdersSortColumn> = { column: 'created', desc: true };
 
 export const ordersSearchSchema = z.object({
   q: z
@@ -38,6 +44,10 @@ export const ordersSearchSchema = z.object({
       const n = Number.parseInt(v ?? '', 10);
       return Number.isFinite(n) && n >= 1 ? n : 1;
     }),
+  sort: z
+    .string()
+    .optional()
+    .transform((v) => parseSort(v, ORDERS_SORT_COLUMNS, ORDERS_DEFAULT_SORT)),
 });
 
 export type OrdersSearchInput = z.infer<typeof ordersSearchSchema>;

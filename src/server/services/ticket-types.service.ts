@@ -27,6 +27,13 @@ export function createTicketTypesService(repo: TicketTypesRepository) {
       return repo.listByEvent(eventId);
     },
 
+    /** Ticket types grouped by event — one query however many events (the dashboard's N+1 fix). */
+    async listForEvents(eventIds: string[]): Promise<Map<string, TicketTypeRecord[]>> {
+      const map = new Map<string, TicketTypeRecord[]>(eventIds.map((id) => [id, []]));
+      for (const t of await repo.listByEvents(eventIds)) map.get(t.eventId)?.push(t);
+      return map;
+    },
+
     /** Capacity per event as a map; events with no ticket types get zeros. */
     async capacityForEvents(eventIds: string[]): Promise<Map<string, EventCapacity>> {
       const rows = await repo.capacityByEvent(eventIds);

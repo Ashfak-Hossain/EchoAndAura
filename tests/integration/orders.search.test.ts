@@ -199,4 +199,31 @@ describe('ordersRepository.search (Postgres)', () => {
     expect(mine(p1.rows)).toEqual([b2]);
     expect(mine(p2.rows)).toEqual([b1]);
   });
+
+  it('sorts by a whitelisted column with the id tiebreak, in both directions', async () => {
+    const asc = await ordersRepository.search(
+      { eventId: eventA },
+      { limit: 10, offset: 0 },
+      { column: 'reference', desc: false },
+    );
+    const desc = await ordersRepository.search(
+      { eventId: eventA },
+      { limit: 10, offset: 0 },
+      { column: 'reference', desc: true },
+    );
+    expect(mine(asc.rows)).toEqual([a1, a2]);
+    expect(mine(desc.rows)).toEqual([a2, a1]);
+  });
+
+  it('totalsByStatus groups count and sum per status, ignoring the status filter', async () => {
+    const totals = await ordersRepository.totalsByStatus({ eventId: eventA, status: 'issued' });
+    const byStatus = new Map(totals.map((t) => [t.status, t]));
+    expect(byStatus.get('pending_verification')).toEqual({
+      status: 'pending_verification',
+      count: 1,
+      totalPaisa: 120_000,
+    });
+    expect(byStatus.get('issued')).toEqual({ status: 'issued', count: 1, totalPaisa: 120_000 });
+    expect(byStatus.size).toBe(2);
+  });
 });

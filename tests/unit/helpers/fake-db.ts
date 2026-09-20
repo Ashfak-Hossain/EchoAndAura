@@ -105,6 +105,8 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
 
   const ticketTypes: TicketTypesRepository = {
     listByEvent: async (eventId) => [...state.types.values()].filter((t) => t.eventId === eventId),
+    listByEvents: async (eventIds) =>
+      [...state.types.values()].filter((t) => eventIds.includes(t.eventId)),
     findById: async (id) => state.types.get(id) ?? null,
     capacityByEvent: () => Promise.reject(new Error('unused')),
     insert: () => Promise.reject(new Error('unused')),
@@ -223,7 +225,22 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         })),
     // Mirrors the repository's WHERE: ORed identifier equality + email
     // substring, ANDed with status / event / created range, newest first.
-    search: async (filter, page) => {
+    totalsByStatus: async (filter) => {
+      const { rows } = await orders.search(
+        { ...filter, status: null },
+        { limit: 100_000, offset: 0 },
+      );
+      const acc = new Map<string, { count: number; totalPaisa: number }>();
+      for (const { order } of rows) {
+        const t = acc.get(order.status) ?? { count: 0, totalPaisa: 0 };
+        acc.set(order.status, { count: t.count + 1, totalPaisa: t.totalPaisa + order.totalPaisa });
+      }
+      return [...acc.entries()].map(([status, t]) => ({
+        status: status as OrderRecord['status'],
+        ...t,
+      }));
+    },
+    search: async (filter, page, sort = { column: 'created', desc: true }) => {
       const t = filter.term;
       const hasTerm = Boolean(t && (t.reference || t.trxId || t.phone || t.email));
       const all = state.orders
@@ -242,7 +259,22 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
           if (filter.createdBefore && o.createdAt >= filter.createdBefore) return false;
           return true;
         })
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        .sort((a, b) => {
+          const key = (o: typeof a): number | string =>
+            sort.column === 'created'
+              ? o.createdAt.getTime()
+              : sort.column === 'total'
+                ? o.totalPaisa
+                : sort.column === 'reference'
+                  ? o.reference
+                  : sort.column === 'status'
+                    ? o.status
+                    : o.buyerName;
+          const ka = key(a);
+          const kb = key(b);
+          const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+          return sort.desc ? -cmp : cmp;
+        });
       return {
         total: all.length,
         rows: all.slice(page.offset, page.offset + page.limit).map((o) => ({

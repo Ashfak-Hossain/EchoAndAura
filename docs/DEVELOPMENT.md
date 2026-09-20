@@ -39,28 +39,28 @@ obtain each.
 
 ## Scripts
 
-| Script                     | Purpose                                                                                       |
-| -------------------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm dev`                 | Next.js dev server                                                                            |
-| `pnpm build` / `start`     | Production build / serve                                                                      |
-| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                                               |
-| `pnpm lint`                | ESLint                                                                                        |
-| `pnpm format`              | Prettier                                                                                      |
-| `pnpm test`                | Unit tests (Vitest)                                                                           |
-| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                                          |
-| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs                                  |
-| `pnpm test:e2e`            | Playwright end-to-end                                                                         |
-| `pnpm db:generate`         | Generate a Drizzle migration from the schema                                                  |
-| `pnpm db:migrate`          | Apply migrations                                                                              |
-| `pnpm db:studio`           | Drizzle Studio                                                                                |
-| `pnpm db:seed`             | Seed sample data                                                                              |
-| `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis         |
-| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                        |
-| `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first               |
-| `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                        |
-| `pnpm email:test <to>`     | Send one test message through the configured mailer (`MAILER=ses` to prove SES)               |
-| `pnpm infra:check`         | Read-only audit of AWS, DNS, SES and local services against `docs/infra/` (needs `aws login`) |
-| `pnpm verify`              | **The gate:** typecheck + lint + test + build                                                 |
+| Script                     | Purpose                                                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                 | Next.js dev server                                                                                                                                                        |
+| `pnpm build` / `start`     | Production build / serve                                                                                                                                                  |
+| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                                                                                                                           |
+| `pnpm lint`                | ESLint                                                                                                                                                                    |
+| `pnpm format`              | Prettier                                                                                                                                                                  |
+| `pnpm test`                | Unit tests (Vitest)                                                                                                                                                       |
+| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                                                                                                                      |
+| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs                                                                                                              |
+| `pnpm test:e2e`            | Playwright against a production build on :3100 and its own database (`<DATABASE_URL name>_e2e`, created/migrated/wiped/seeded each run; override with `E2E_DATABASE_URL`) |
+| `pnpm db:generate`         | Generate a Drizzle migration from the schema                                                                                                                              |
+| `pnpm db:migrate`          | Apply migrations                                                                                                                                                          |
+| `pnpm db:studio`           | Drizzle Studio                                                                                                                                                            |
+| `pnpm db:seed`             | Seed sample data                                                                                                                                                          |
+| `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis                                                                                     |
+| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                                                                                                    |
+| `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first                                                                                           |
+| `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                                                                                                    |
+| `pnpm email:test <to>`     | Send one test message through the configured mailer (`MAILER=ses` to prove SES)                                                                                           |
+| `pnpm infra:check`         | Read-only audit of AWS, DNS, SES and local services against `docs/infra/` (needs `aws login`)                                                                             |
+| `pnpm verify`              | **The gate:** typecheck + lint + test + build                                                                                                                             |
 
 ## Testing
 

@@ -25,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     event: params.get('event') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
+    sort: params.get('sort') ?? undefined,
   });
 
   const { rows, total } = await ordersService.exportOrders(input);
