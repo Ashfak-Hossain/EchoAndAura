@@ -221,6 +221,37 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
           eventTitle: seed.events.find((e) => e.id === o.eventId)?.title ?? '',
           ticketTypeName: state.types.get(o.ticketTypeId)?.name ?? '',
         })),
+    // Mirrors the repository's WHERE: ORed identifier equality + email
+    // substring, ANDed with status / event / created range, newest first.
+    search: async (filter, page) => {
+      const t = filter.term;
+      const hasTerm = Boolean(t && (t.reference || t.trxId || t.phone || t.email));
+      const all = state.orders
+        .filter((o) => {
+          if (hasTerm && t) {
+            const hit =
+              (t.reference && o.reference === t.reference) ||
+              (t.trxId && o.bkashTrxId === t.trxId) ||
+              (t.phone && o.buyerPhone === t.phone) ||
+              (t.email && o.buyerEmail.includes(t.email));
+            if (!hit) return false;
+          }
+          if (filter.status && o.status !== filter.status) return false;
+          if (filter.eventId && o.eventId !== filter.eventId) return false;
+          if (filter.createdFrom && o.createdAt < filter.createdFrom) return false;
+          if (filter.createdBefore && o.createdAt >= filter.createdBefore) return false;
+          return true;
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return {
+        total: all.length,
+        rows: all.slice(page.offset, page.offset + page.limit).map((o) => ({
+          order: { ...o },
+          eventTitle: seed.events.find((e) => e.id === o.eventId)?.title ?? '',
+          ticketTypeName: state.types.get(o.ticketTypeId)?.name ?? '',
+        })),
+      };
+    },
     listLapsedHolds: async (at, limit) =>
       state.orders
         .filter((o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < at)

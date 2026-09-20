@@ -18,7 +18,7 @@ const BD_MOBILE_PATTERN = /^1[3-9]\d{8}$/;
  * and stored E.164. People type "01712…" or paste "+880 1712…"; the prefix
  * is fixed on the form, so those are stripped before the ten-digit check.
  */
-const bdMobile = z
+export const bdMobile = z
   .string({ error: 'A bKash number is 10 digits after +880.' })
   .transform((v) => v.replace(/[\s-]/g, '').replace(/^(\+?880|0)/, ''))
   .pipe(z.string().regex(BD_MOBILE_PATTERN, { error: 'A bKash number is 10 digits after +880.' }))

@@ -66,7 +66,7 @@ export function Hero({ featured }: { featured: HomeEvent }) {
       />
       <div className="relative mx-auto flex w-full max-w-360 flex-col gap-5 px-4 pt-5 pb-8 lg:grid lg:grid-cols-12 lg:items-center lg:gap-x-6 lg:px-16 lg:py-16">
         {/* Cover first on mobile, right column on desktop */}
-        <div className="relative order-first aspect-[4/3] w-full overflow-hidden rounded-2xl bg-[#1a2a20] shadow-[0_24px_60px_rgb(0_0_0/0.45)] lg:order-last lg:col-span-5 lg:col-start-8">
+        <div className="relative order-first aspect-4/3 w-full overflow-hidden rounded-2xl bg-[#1a2a20] shadow-[0_24px_60px_rgb(0_0_0/0.45)] lg:order-last lg:col-span-5 lg:col-start-8">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -92,7 +92,7 @@ export function Hero({ featured }: { featured: HomeEvent }) {
           </div>
           <h1
             id="hero-title"
-            className="font-heading text-[38px] leading-[1.02] font-extrabold tracking-[-0.025em] text-pretty lg:text-[64px]"
+            className="font-heading text-[38px] leading-[1.02] font-extrabold tracking-tight text-pretty lg:text-[64px]"
           >
             {event.title}
           </h1>
@@ -108,7 +108,7 @@ export function Hero({ featured }: { featured: HomeEvent }) {
               </p>
             ) : null}
           </div>
-          <p className="hidden max-w-[520px] text-[16px] leading-relaxed text-[#c9c3b7] lg:block">
+          <p className="hidden max-w-130 text-[16px] leading-relaxed text-[#c9c3b7] lg:block">
             {HOME_TAGLINE}
           </p>
 
