@@ -109,7 +109,7 @@ export function SiteShell({
                 <BrandMark inverted />
                 echoandaura
               </span>
-              <p className="max-w-[360px] text-[15px] leading-relaxed">
+              <p className="max-w-90 text-[15px] leading-relaxed">
                 Small rooms, real sound. A handful of live shows a year in Dhaka and Chattogram, run
                 by one person who is also at the door.
               </p>

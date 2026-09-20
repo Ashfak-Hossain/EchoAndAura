@@ -4,10 +4,10 @@ import type { ArchiveEvent } from '@/server/services/events.service';
 import { DHAKA_TZ, formatDhakaLong } from '@/lib/time';
 
 /**
- * A6: two-up grid of past events, newest first, covers desaturated so the
- * archive never competes with what is on sale. Year headings appear once
- * the list spans more than one year. Cards link to the event page, which
- * stays live after archiving (ADR-009).
+ * A6 (redesign 2026-09-21): the same card as the home page's past strip —
+ * grey cover, title, date, venue — four across on desktop, two on phones,
+ * newest first. Year headings once the list spans more than one year.
+ * Cards link to the event page, which stays live after archiving (ADR-009).
  */
 export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
   const byYear = new Map<string, ArchiveEvent[]>();
@@ -19,39 +19,46 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
   const showYears = groups.length > 1;
 
   return (
-    <div className="flex flex-col gap-8" data-testid="archive">
+    <div className="flex flex-col gap-10 lg:gap-14" data-testid="archive">
       {groups.map(([year, items]) => (
-        <section key={year} aria-labelledby={showYears ? `year-${year}` : undefined}>
+        <section
+          key={year}
+          aria-labelledby={showYears ? `year-${year}` : undefined}
+          className="flex flex-col gap-4 lg:gap-6"
+        >
           {showYears ? (
-            <h2
-              id={`year-${year}`}
-              className="mb-3 font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase"
-            >
-              {year}
-            </h2>
+            <div className="flex items-baseline justify-between gap-4 border-b border-border pb-3">
+              <h2
+                id={`year-${year}`}
+                className="font-heading text-[24px] leading-tight font-semibold tracking-[-0.01em] lg:text-[30px]"
+              >
+                {year}
+              </h2>
+              <span className="text-sm text-muted-foreground tabular">
+                {items.length} {items.length === 1 ? 'show' : 'shows'}
+              </span>
+            </div>
           ) : null}
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
             {items.map(({ event, coverUrl }) => (
               <li key={event.id}>
                 <Link
                   href={`/events/${event.slug}`}
-                  className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none"
+                  className="flex flex-col gap-2.5 rounded-xl focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none"
                 >
-                  <div className="aspect-video w-full shrink-0 overflow-hidden bg-secondary">
+                  <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-[#2a2a2a]">
                     {coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={coverUrl} alt="" className="size-full object-cover grayscale" />
                     ) : null}
                   </div>
-                  <div className="flex flex-col gap-1 p-4">
-                    <h3 className="font-heading text-[17px] leading-tight font-semibold text-pretty">
-                      {event.title}
-                    </h3>
-                    <p className="text-sm leading-snug text-[#4a4640] tabular">
-                      {formatDhakaLong(event.startsAt)} (Dhaka)
-                      {event.venue ? <span className="block">{event.venue}</span> : null}
-                    </p>
-                  </div>
+                  <span className="font-heading text-[14px] leading-tight font-semibold text-pretty lg:text-[16px]">
+                    {event.title}
+                  </span>
+                  <span className="text-[12px] leading-snug text-muted-foreground tabular lg:text-[13px]">
+                    {formatDhakaLong(event.startsAt)}
+                    {event.venue ? <span className="block">{event.venue}</span> : null}
+                  </span>
                 </Link>
               </li>
             ))}
