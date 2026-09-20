@@ -4,10 +4,11 @@ import { facebookPageUrl } from '@/lib/env.public';
 
 /**
  * Public site chrome (canvas 2). Header: 72px on desktop, wordmark → home,
- * nav links only for routes that exist (Archive joins with its slice).
+ * nav links only for routes that exist.
  * Footer: the A7 pages, then the utility row.
  */
 const FOOTER_LINKS = [
+  { href: '/archive', label: 'Past events' },
   { href: '/about', label: 'About' },
   { href: '/faq', label: 'FAQ' },
   { href: '/terms', label: 'Terms' },

@@ -77,6 +77,8 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
   test('PHASE 4 CORE: approve issues tickets and converts the hold to sales; reject releases with a reason', async ({
     page,
   }) => {
+    // Two full orders, approve, reject, PDF, ICS: legitimately long.
+    test.slow();
     await signIn(page);
     const slug = await publishedEvent(page, `Verify ${Date.now()}`);
 

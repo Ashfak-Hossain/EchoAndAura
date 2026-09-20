@@ -187,7 +187,10 @@ export function createEmailDispatcher({
           note: `${kind} → ${order.buyerEmail} · ${messageId}`,
         });
       } catch (err: unknown) {
-        logger.error({ orderId, kind, messageId, err }, 'email sent but email.sent could not be recorded');
+        logger.error(
+          { orderId, kind, messageId, err },
+          'email sent but email.sent could not be recorded',
+        );
       }
       logger.info({ orderId, kind, messageId }, 'email sent');
       return { messageId };

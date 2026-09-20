@@ -610,4 +610,22 @@ describe('eventsService.getHomePage', () => {
     expect(home.alsoUpcoming).toEqual([]);
     expect(home.past).toHaveLength(1);
   });
+
+  it('getArchivePage: every past event newest first with its cover, no capacity query', async () => {
+    const { repo } = fakeRepo([
+      seed('soon', 'published', new Date('2026-10-01T13:00:00Z')),
+      seed('spring', 'archived', new Date('2026-03-01T13:00:00Z')),
+      seed('summer', 'published', new Date('2026-07-01T13:00:00Z')),
+      seed('draft-old', 'draft', new Date('2025-01-01T13:00:00Z')),
+    ]);
+    const tt = ticketTypesWithCapacity({});
+    const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
+
+    const archive = await svc.getArchivePage();
+
+    expect(archive.map((a) => a.event.id)).toEqual(['summer', 'spring']);
+    expect(archive[0]?.coverUrl).toBe('https://cdn.test/events/summer/cover-x.png');
+    expect(archive[1]?.coverUrl).toBeNull();
+    expect(tt.capacityByEvent).not.toHaveBeenCalled();
+  });
 });

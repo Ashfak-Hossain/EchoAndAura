@@ -35,9 +35,6 @@ const TEMPLATES = {
 export async function renderEmail(kind: EmailKind, v: EmailView): Promise<RenderedEmail> {
   const t = TEMPLATES[kind];
   const element = createElement(t.component, { v });
-  const [html, text] = await Promise.all([
-    render(element),
-    render(element, { plainText: true }),
-  ]);
+  const [html, text] = await Promise.all([render(element), render(element, { plainText: true })]);
   return { subject: t.subject(v), html, text };
 }

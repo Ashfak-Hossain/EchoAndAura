@@ -38,7 +38,8 @@ export function RejectedEmail({ v }: { v: EmailView }) {
       <Hr style={styles.hr} />
       <Text style={{ ...styles.p, fontWeight: 700 }}>What to do now</Text>
       <Text style={styles.p}>
-        1. Check the TrxID in your bKash history — it is ten letters and numbers and easy to mistype.
+        1. Check the TrxID in your bKash history — it is ten letters and numbers and easy to
+        mistype.
       </Text>
       <Text style={styles.p}>
         2. If the money did leave your account, reply with a screenshot of the bKash receipt and we
@@ -46,7 +47,10 @@ export function RejectedEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.p}>
         3. If it never left, register again
-        {v.availableNow > 0 ? ` — ${v.availableNow} ${v.ticketType.name} tickets are still available` : ''}.
+        {v.availableNow > 0
+          ? ` — ${v.availableNow} ${v.ticketType.name} tickets are still available`
+          : ''}
+        .
       </Text>
       <Text style={{ margin: '16px 0' }}>
         <Link href={registerUrl} style={styles.button}>
@@ -55,8 +59,8 @@ export function RejectedEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.small}>
         Talk to a person: reply to this email
-        {v.contactPhone ? ` or message Raj on ${v.contactPhone} (bKash, WhatsApp)` : ''} and you will
-        hear back within a day.
+        {v.contactPhone ? ` or message Raj on ${v.contactPhone} (bKash, WhatsApp)` : ''} and you
+        will hear back within a day.
       </Text>
     </EmailLayout>
   );

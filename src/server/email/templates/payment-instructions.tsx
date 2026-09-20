@@ -11,7 +11,9 @@ export function subject(v: EmailView): string {
 
 export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
   const amount = formatBDT(v.order.totalPaisa);
-  const deadline = v.order.holdExpiresAt ? `${formatDhakaLong(v.order.holdExpiresAt)} (Dhaka)` : null;
+  const deadline = v.order.holdExpiresAt
+    ? `${formatDhakaLong(v.order.holdExpiresAt)} (Dhaka)`
+    : null;
   const orderUrl = `${v.siteUrl}/orders/${v.order.id}`;
   return (
     <EmailLayout

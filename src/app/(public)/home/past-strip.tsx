@@ -7,14 +7,23 @@ import { SectionHeading } from './section-heading';
 /**
  * A1 "Past events": proof the shows are real, even on the dormant page.
  * Each row links to the event's page, which stays live after archiving
- * (ADR-009). Attendance counts arrive with the Phase 6 reports; the
- * "See all past events" link joins with the A6 archive slice.
+ * (ADR-009). Attendance counts arrive with the Phase 6 reports; "See all
+ * past events" goes to the A6 archive.
  */
 export function PastStrip({ events }: { events: HomeEvent[] }) {
   if (events.length === 0) return null;
   return (
     <section aria-labelledby="past-heading" className="flex flex-col gap-3.5">
-      <SectionHeading id="past-heading">Past events</SectionHeading>
+      <SectionHeading
+        id="past-heading"
+        aside={
+          <Link href="/archive" className="text-sm text-muted-foreground hover:underline">
+            See all past events →
+          </Link>
+        }
+      >
+        Past events
+      </SectionHeading>
       <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card lg:grid lg:grid-cols-3 lg:divide-x lg:divide-y-0">
         {events.map(({ event }) => (
           <li key={event.id}>

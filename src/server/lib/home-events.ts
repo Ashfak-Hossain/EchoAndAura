@@ -48,3 +48,18 @@ export function selectHomeEvents<T extends HomeEventInput>(
     past,
   };
 }
+
+/**
+ * A6 archive: every event that has started, newest first, no cap. Same
+ * membership rule as the home page's past strip (published or archived,
+ * never draft; an archived *future* event was pulled on purpose and is
+ * not "past"), so the strip's "See all" never shows fewer than the strip.
+ */
+export function selectArchiveEvents<T extends HomeEventInput>(
+  events: readonly T[],
+  now: Date,
+): T[] {
+  return events
+    .filter((e) => e.status !== 'draft' && e.startsAt.getTime() < now.getTime())
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+}
