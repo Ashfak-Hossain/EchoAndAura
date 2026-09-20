@@ -23,7 +23,7 @@ interface Props {
 export function AdminShell({ email, counts, signOutQuiet, signOutButton, children }: Props) {
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar px-3.5 py-4.5 text-sidebar-foreground lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar px-3.5 py-4.5 text-sidebar-foreground lg:flex print:hidden">
         <span className="px-2 pb-4.5 font-heading text-lg font-semibold tracking-tight text-sidebar-accent-foreground">
           echoandaura
         </span>
@@ -37,7 +37,7 @@ export function AdminShell({ email, counts, signOutQuiet, signOutButton, childre
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-card px-3 lg:h-16 lg:px-6">
+        <header className="flex h-14 items-center justify-between gap-3 border-b border-border bg-card px-3 lg:h-16 lg:px-6 print:hidden">
           <div className="flex items-center gap-3">
             <div className="lg:hidden">
               <MobileNav email={email} counts={counts} signOut={signOutQuiet} />
@@ -55,7 +55,7 @@ export function AdminShell({ email, counts, signOutQuiet, signOutButton, childre
             <div className="hidden lg:block">{signOutButton}</div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-360 flex-1 p-4 lg:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-360 flex-1 p-4 lg:p-6 print:p-0">{children}</main>
       </div>
     </div>
   );

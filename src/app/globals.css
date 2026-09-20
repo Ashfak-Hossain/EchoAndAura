@@ -218,3 +218,16 @@
     text-decoration: underline;
   }
 }
+
+/* Print (B11 check-in list): A4, black on white, the sheet only. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

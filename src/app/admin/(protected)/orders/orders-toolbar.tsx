@@ -1,8 +1,9 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { Search, X } from 'lucide-react';
+import { useState, useTransition } from 'react';
+import { X } from 'lucide-react';
+import { SearchBox } from '@/components/admin/search-box';
 import { Input } from '@/components/ui/input';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '@/lib/status-labels';
 
@@ -26,8 +27,9 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const [q, setQ] = useState(params.get('q') ?? '');
-  const lastPushed = useRef(params.get('q') ?? '');
+  // Clear remounts the search box so its draft and any pending debounce die
+  // with it — otherwise a timer firing mid-navigation re-applies the term.
+  const [generation, setGeneration] = useState(0);
 
   const navigate = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
@@ -39,19 +41,6 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
     const qs = next.toString();
     startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname));
   };
-
-  // Debounced search → URL. The ref stops a re-push of the value the URL already has.
-  useEffect(() => {
-    const trimmed = q.trim();
-    if (trimmed === lastPushed.current) return;
-    const t = setTimeout(() => {
-      lastPushed.current = trimmed;
-      navigate({ q: trimmed || null });
-    }, 300);
-    return () => clearTimeout(t);
-    // navigate is recreated each render; the debounce keys on `q` only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
 
   const filtered = Boolean(
     params.get('q') ||
@@ -67,31 +56,13 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
       role="search"
       aria-label="Search orders"
     >
-      <div className="relative w-[260px] max-w-full">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          type="search"
-          name="q"
-          aria-label="Search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              lastPushed.current = q.trim();
-              navigate({ q: q.trim() || null });
-            }
-          }}
-          placeholder="Reference, email, phone or trxID"
-          maxLength={80}
-          className="h-9 bg-card pl-8 text-[13px]"
-        />
-        {pending ? (
-          <span className="absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-border-strong border-t-foreground" />
-        ) : null}
-      </div>
+      <SearchBox
+        key={generation}
+        value={params.get('q') ?? ''}
+        onSearch={(term) => navigate({ q: term || null })}
+        placeholder="Reference, email, phone or trxID"
+        pending={pending}
+      />
 
       <select
         aria-label="Status"
@@ -111,7 +82,7 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
         aria-label="Event"
         value={params.get('event') ?? ''}
         onChange={(e) => navigate({ event: e.target.value || null })}
-        className={`${select} max-w-[190px]`}
+        className={`${select} max-w-47.5`}
       >
         <option value="">All events</option>
         {events.map((e) => (
@@ -126,7 +97,7 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
         aria-label="From"
         value={params.get('from') ?? ''}
         onChange={(e) => navigate({ from: e.target.value || null })}
-        className="h-9 w-[148px] bg-card text-[13px]"
+        className="h-9 w-37 bg-card text-[13px]"
       />
       <span className="text-[13px] text-muted-foreground">–</span>
       <Input
@@ -134,15 +105,14 @@ export function OrdersToolbar({ events }: { events: ToolbarEvent[] }) {
         aria-label="To"
         value={params.get('to') ?? ''}
         onChange={(e) => navigate({ to: e.target.value || null })}
-        className="h-9 w-[148px] bg-card text-[13px]"
+        className="h-9 w-37 bg-card text-[13px]"
       />
 
       {filtered ? (
         <button
           type="button"
           onClick={() => {
-            setQ('');
-            lastPushed.current = '';
+            setGeneration((g) => g + 1);
             startTransition(() => router.replace(pathname));
           }}
           className="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"

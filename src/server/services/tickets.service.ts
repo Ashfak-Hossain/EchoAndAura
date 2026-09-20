@@ -1,6 +1,13 @@
 import type { DbExecutor } from '@/db/executor';
 import { normaliseAttendeeName } from '@/server/lib/attendee-name';
 import {
+  type CheckInSortColumn,
+  filterCheckInRows,
+  normaliseCheckInQuery,
+  sortCheckInRows,
+} from '@/server/lib/check-in';
+import {
+  EventNotFoundError,
   InvalidAttendeeNameError,
   RenameLockedError,
   TicketCancelledError,
@@ -13,7 +20,12 @@ import type {
   TicketTypeRecord,
   TicketTypesRepository,
 } from '@/server/repositories/ticket-types.repository';
-import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
+import type {
+  CheckInTicketRow,
+  TicketRecord,
+  TicketsRepository,
+} from '@/server/repositories/tickets.repository';
+import type { SortState } from '@/lib/table-sort';
 
 /**
  * The buyer-facing ticket (A5). The ticket code is the access key: the page
@@ -45,6 +57,30 @@ export interface TicketView {
   renameLockedAt: Date | null;
 }
 
+/** B11: one flattened line of the door list. */
+export interface CheckInRow extends CheckInTicketRow {
+  id: string;
+  attendeeName: string;
+  code: string;
+  orderId: string;
+}
+
+export interface CheckInListInput {
+  /** Free text: name substring, ticket code or order reference. */
+  q: string;
+  sort: SortState<CheckInSortColumn>;
+}
+
+export interface CheckInList {
+  event: EventRecord;
+  /** Issued tickets matching the search, in the requested order. */
+  rows: CheckInRow[];
+  /** Issued tickets for the event, before the search ("410 names"). */
+  total: number;
+  /** Cancelled tickets — never listed, only counted, so the footer can say so. */
+  cancelled: number;
+}
+
 /** Codes are typed and read aloud: normalise before lookup. */
 export function normaliseTicketCode(raw: string): string {
   return raw.trim().toUpperCase();
@@ -66,6 +102,39 @@ export function createTicketsService({
   }
 
   return {
+    /**
+     * B11: the door list for one event — issued tickets only (a cancelled
+     * ticket is not a seat), searched and sorted in memory from the URL.
+     * @throws EventNotFoundError
+     */
+    async checkInList(eventId: string, input: CheckInListInput): Promise<CheckInList> {
+      const event = await events.findById(eventId);
+      if (!event) throw new EventNotFoundError(eventId);
+      const all = await tickets.listForEvent(eventId);
+      const issued: CheckInRow[] = [];
+      let cancelled = 0;
+      for (const row of all) {
+        if (row.ticket.status !== 'issued') {
+          cancelled++;
+          continue;
+        }
+        issued.push({
+          ...row,
+          id: row.ticket.id,
+          attendeeName: row.ticket.attendeeName,
+          code: row.ticket.code,
+          orderId: row.ticket.orderId,
+        });
+      }
+      const matched = filterCheckInRows(issued, normaliseCheckInQuery(input.q));
+      return {
+        event,
+        rows: sortCheckInRows(matched, input.sort),
+        total: issued.length,
+        cancelled,
+      };
+    },
+
     /** @throws TicketNotFoundError */
     async getTicketByCode(rawCode: string): Promise<TicketView> {
       const code = normaliseTicketCode(rawCode);

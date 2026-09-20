@@ -67,16 +67,24 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         badge={<StatusChip status={event.status} />}
         subtitle={`${formatDhakaLong(event.startsAt)} (Dhaka) · ${sold} of ${total} sold`}
         actions={
-          event.status === 'published' ? (
-            <ButtonLink
-              variant="secondary"
-              href={`/events/${event.slug}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View public page ↗
-            </ButtonLink>
-          ) : undefined
+          event.status === 'draft' ? undefined : (
+            <>
+              {/* The door list stays reachable after archiving (design B5). */}
+              <ButtonLink variant="secondary" href={`/admin/events/${event.id}/check-in`}>
+                Check-in list
+              </ButtonLink>
+              {event.status === 'published' ? (
+                <ButtonLink
+                  variant="secondary"
+                  href={`/events/${event.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View public page ↗
+                </ButtonLink>
+              ) : null}
+            </>
+          )
         }
       />
 

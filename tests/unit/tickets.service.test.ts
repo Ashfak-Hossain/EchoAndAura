@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  EventNotFoundError,
   InvalidAttendeeNameError,
   RenameLockedError,
   TicketCancelledError,
@@ -155,6 +156,71 @@ describe('ticketsService.renameAttendee', () => {
     expect(db.state.events).toHaveLength(events);
     expect(db.state.tickets.find((t) => t.id === tickets[0]!.id)?.attendeeName).toBe(
       'Nusrat Jahan',
+    );
+  });
+});
+
+describe('ticketsService.checkInList (B11)', () => {
+  const byName = { column: 'name', desc: false } as const;
+
+  it('lists issued tickets A–Z with type and order reference, no buyer contact', async () => {
+    const { svc, order } = await setup();
+    const list = await svc.checkInList('ev-1', { q: '', sort: byName });
+    expect(list.event.id).toBe('ev-1');
+    expect(list.total).toBe(2);
+    expect(list.cancelled).toBe(0);
+    expect(list.rows.map((r) => r.attendeeName)).toEqual(['Nusrat Jahan', 'Tanvir Alam']);
+    expect(list.rows[0]).toMatchObject({
+      orderId: order.id,
+      orderReference: order.reference,
+      ticketTypeName: 'General',
+    });
+    expect(list.rows[0]!.code).toMatch(/^TKT-/);
+    expect(JSON.stringify(list.rows)).not.toContain('nusrat@example.com');
+    expect(JSON.stringify(list.rows)).not.toContain('+8801712345678');
+  });
+
+  // A cancelled ticket is not a seat: counted for the footer, never listed,
+  // and `total` (the "N names" figure) excludes it too.
+  it('leaves cancelled tickets out of the list and the total, but counts them', async () => {
+    const { db, svc, tickets } = await setup();
+    db.state.tickets.find((t) => t.id === tickets[1]!.id)!.status = 'cancelled';
+    const list = await svc.checkInList('ev-1', { q: '', sort: byName });
+    expect(list.rows.map((r) => r.id)).toEqual([tickets[0]!.id]);
+    expect(list.total).toBe(1);
+    expect(list.cancelled).toBe(1);
+  });
+
+  it('searches by name, code or reference in memory; total ignores the search', async () => {
+    const { svc, order, tickets } = await setup();
+    const byCode = await svc.checkInList('ev-1', {
+      q: tickets[1]!.code.slice(4).toLowerCase(),
+      sort: byName,
+    });
+    expect(byCode.rows.map((r) => r.id)).toEqual([tickets[1]!.id]);
+    expect(byCode.total).toBe(2);
+
+    const byRef = await svc.checkInList('ev-1', { q: order.reference.slice(3), sort: byName });
+    expect(byRef.rows).toHaveLength(2);
+
+    const byPart = await svc.checkInList('ev-1', { q: 'TANVIR', sort: byName });
+    expect(byPart.rows.map((r) => r.attendeeName)).toEqual(['Tanvir Alam']);
+
+    const none = await svc.checkInList('ev-1', { q: 'nobody', sort: byName });
+    expect(none.rows).toEqual([]);
+    expect(none.total).toBe(2);
+  });
+
+  it('sorts by the requested column and direction', async () => {
+    const { svc } = await setup();
+    const desc = await svc.checkInList('ev-1', { q: '', sort: { column: 'name', desc: true } });
+    expect(desc.rows.map((r) => r.attendeeName)).toEqual(['Tanvir Alam', 'Nusrat Jahan']);
+  });
+
+  it('404s an unknown event', async () => {
+    const { svc } = await setup();
+    await expect(svc.checkInList('ev-nope', { q: '', sort: byName })).rejects.toBeInstanceOf(
+      EventNotFoundError,
     );
   });
 });

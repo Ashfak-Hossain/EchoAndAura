@@ -319,6 +319,17 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       const row = state.tickets.find((t) => t.code === code);
       return row ? { ...row } : null;
     },
+    listForEvent: async (eventId) =>
+      state.tickets
+        .filter((t) => t.eventId === eventId)
+        .sort(
+          (a, b) => a.attendeeName.localeCompare(b.attendeeName) || a.code.localeCompare(b.code),
+        )
+        .map((t) => ({
+          ticket: { ...t },
+          orderReference: state.orders.find((o) => o.id === t.orderId)?.reference ?? '',
+          ticketTypeName: state.types.get(t.ticketTypeId)?.name ?? '',
+        })),
     updateAttendeeName: vi.fn(async (id, expectedName, attendeeName, tx) => {
       expect(tx).toBe(TX);
       const row = state.tickets.find((t) => t.id === id);

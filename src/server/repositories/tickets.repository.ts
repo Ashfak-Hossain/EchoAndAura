@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
-import { tickets } from '@/db/schema';
+import { orders, ticketTypes, tickets } from '@/db/schema';
 import { TicketCodeCollisionError } from '@/server/lib/errors';
 import { isUniqueViolation } from '@/server/lib/pg-errors';
 
@@ -16,11 +16,28 @@ import { isUniqueViolation } from '@/server/lib/pg-errors';
 export type TicketRecord = typeof tickets.$inferSelect;
 export type NewTicket = typeof tickets.$inferInsert;
 
+/**
+ * One line of the check-in list (B11): the ticket plus the two names the
+ * door staff read — the type and the order reference. Deliberately no
+ * buyer email or phone: the list is printed and handed around.
+ */
+export interface CheckInTicketRow {
+  ticket: TicketRecord;
+  orderReference: string;
+  ticketTypeName: string;
+}
+
 export interface TicketsRepository {
   /** @throws TicketCodeCollisionError when any code is already taken. */
   insertMany(rows: NewTicket[], tx?: DbExecutor): Promise<TicketRecord[]>;
   listByOrder(orderId: string): Promise<TicketRecord[]>;
   findByCode(code: string): Promise<TicketRecord | null>;
+  /**
+   * B11: every ticket of one event, all statuses, by attendee name then
+   * code. Unbounded on purpose — a door list is capped by the event's
+   * capacity and has to be printed whole.
+   */
+  listForEvent(eventId: string): Promise<CheckInTicketRow[]>;
   /**
    * Renames while still `issued` AND the name is still `expectedName`
    * (compare-and-swap), so a concurrent rename is refused rather than
@@ -62,6 +79,20 @@ export const ticketsRepository: TicketsRepository = {
   async findByCode(code) {
     const [row] = await db.select().from(tickets).where(eq(tickets.code, code)).limit(1);
     return row ?? null;
+  },
+
+  listForEvent(eventId) {
+    return db
+      .select({
+        ticket: tickets,
+        orderReference: orders.reference,
+        ticketTypeName: ticketTypes.name,
+      })
+      .from(tickets)
+      .innerJoin(orders, eq(tickets.orderId, orders.id))
+      .innerJoin(ticketTypes, eq(tickets.ticketTypeId, ticketTypes.id))
+      .where(eq(tickets.eventId, eventId))
+      .orderBy(asc(tickets.attendeeName), asc(tickets.code));
   },
 
   async updateAttendeeName(id, expectedName, attendeeName, tx = db) {
