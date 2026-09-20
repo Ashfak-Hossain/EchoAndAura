@@ -11,6 +11,7 @@
     "jobs:expire-holds": "dotenv -e .env -- tsx scripts/expire-holds.ts",
     "email:render": "dotenv -e .env -- tsx scripts/render-emails.ts",
     "email:test": "dotenv -e .env -- tsx scripts/send-test-email.ts",
+    "infra:check": "dotenv -e .env -- tsx scripts/infra-check.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint",
     "format": "prettier --write .",
