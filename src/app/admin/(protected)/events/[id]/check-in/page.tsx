@@ -128,7 +128,8 @@ export default async function CheckInPage({ params, searchParams }: Props) {
         />
       </div>
 
-      <div className="print:hidden">
+      {/* `contents`: the wrapper must not take a gap slot on phones, where the table is hidden. */}
+      <div className="contents print:hidden">
         <DataTable
           tableId="check-in"
           columns={checkInColumns}
