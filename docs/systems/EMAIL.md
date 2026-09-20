@@ -160,7 +160,9 @@ Work down; stop at the first hit.
    in spam, verify DKIM/SPF/DMARC with `pnpm infra:check` and, in Gmail,
    _Show original_ on a test message.
 6. **Sandbox?** Until production access is granted, only verified
-   addresses receive anything. AWS.md → SES.
+   addresses receive anything. The first request was **denied on
+   2026-09-21**; the reopen checklist is in AWS.md → "Production access
+   denied or stalled".
 
 ## Adding a new email kind
 

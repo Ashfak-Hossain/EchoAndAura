@@ -110,16 +110,16 @@ this document is running — see _Runbooks → A budget alert fired_.
 
 ## SES
 
-| Item               | Value                                                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Region             | `ap-south-1`                                                                                                                                                          |
-| Domain identity    | `echoandaura.com` — **Verified**, Easy DKIM (RSA 2048, 3 CNAME tokens), MAIL FROM `mail.echoandaura.com`                                                              |
-| Email identity     | the organizer's Gmail — verified so it can _receive_ while the account is in the sandbox                                                                              |
-| Configuration sets | **none.** The identities have no default set. (The wizard's `my-first-configuration-set` was deleted; a dangling default breaks every send with `NotFoundException`.) |
-| Suppression list   | account-level, BOUNCE + COMPLAINT (default)                                                                                                                           |
-| Mail type          | Transactional                                                                                                                                                         |
-| Production access  | **Requested 2026-09-20** (case id in Bitwarden `AWS ash-admin`). Until granted: sandbox — 200 msgs/day, 1/s, verified recipients only                                 |
-| Sending in the app | `MAILER=ses`, `EMAIL_FROM="echoandaura <tickets@echoandaura.com>"`, `EMAIL_REPLY_TO=hello@echoandaura.com` — see [../ENVIRONMENT.md](../ENVIRONMENT.md)               |
+| Item               | Value                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Region             | `ap-south-1`                                                                                                                                                                                                       |
+| Domain identity    | `echoandaura.com` — **Verified**, Easy DKIM (RSA 2048, 3 CNAME tokens), MAIL FROM `mail.echoandaura.com`                                                                                                           |
+| Email identity     | the organizer's Gmail — verified so it can _receive_ while the account is in the sandbox                                                                                                                           |
+| Configuration sets | **none.** The identities have no default set. (The wizard's `my-first-configuration-set` was deleted; a dangling default breaks every send with `NotFoundException`.)                                              |
+| Suppression list   | account-level, BOUNCE + COMPLAINT (default)                                                                                                                                                                        |
+| Mail type          | Transactional                                                                                                                                                                                                      |
+| Production access  | **Denied 2026-09-21** (requested 2026-09-20; case id in Bitwarden `AWS ash-admin`). Sandbox until re-granted — 200 msgs/day, 1/s, verified recipients only. Reopen after the domain is live: see the runbook below |
+| Sending in the app | `MAILER=ses`, `EMAIL_FROM="echoandaura <tickets@echoandaura.com>"`, `EMAIL_REPLY_TO=hello@echoandaura.com` — see [../ENVIRONMENT.md](../ENVIRONMENT.md)                                                            |
 
 What each DNS record does for SES, and the authoritative record list, is
 in [CLOUDFLARE.md](CLOUDFLARE.md). The worker sends raw MIME through the
@@ -182,11 +182,51 @@ the console URL above. Never share `ash-admin`.
 
 ### Production access denied or stalled
 
-Reply on the support case (Support Center → Your support cases) with the
-volume, trigger, bounce handling and example subjects — the text used on
-2026-09-20 is in `notes/aws.md` history and in ENVIRONMENT.md § Email.
-AWS answers within 24 h; a second follow-up usually resolves it. The app
-does not need changes when access is granted.
+**Status 2026-09-21: denied** with AWS's generic "unable to approve a
+sending limit increase at this time" (no criteria given). Probable causes,
+from experience rather than anything AWS states: the account was one day
+old, `https://echoandaura.com` had nothing behind it when the reviewer
+looked, and the reply said bounce/complaint notifications "will be added".
+The use-case text itself (transactional only, ~1,000–2,000/month, no lists,
+account-level suppression, verified domain with DKIM/SPF/DMARC) was fine
+and can be reused.
+
+Do **not** reopen with the same facts — repeated identical requests hurt
+the account's standing. Reopen once all of these are true:
+
+1. **Something is live at `echoandaura.com`** — at minimum a landing page
+   (organizer, what the site is, `hello@` contact); ideally the staging
+   deployment with a published event. The reviewer visits the URL.
+2. **Bounce and complaint notifications exist**: SES → configuration set
+   or identity → event destination → SNS topic → email subscription to
+   `hello@` (or a Cloudflare-routed address). Say "configured", not
+   "will add". Keep the account-level suppression list on.
+3. **Virtual Deliverability Manager is off** (it bills per message; wizard
+   default). SES → Virtual Deliverability Manager → disable.
+4. The account is at least a couple of weeks old and `pnpm email:test` to
+   the verified Gmail has sent a few real messages (a little history).
+
+Then **Reopen case** on the original case (Support Center → Your support
+cases → _SES: Production Access_), not a new one, with:
+
+- the live URL and a screenshot of the registration page;
+- one real example each of C1 (payment instructions) and C2 (tickets)
+  rendered from `pnpm email:render`;
+- volume: ~1,000–2,000/month, peaks of a few hundred/day in the three
+  weeks before an event; worker rate limit 5/s;
+- trigger: every message follows an action by its own recipient minutes
+  earlier (registration, organizer approval); no lists, no marketing;
+- bounces/complaints: SNS notifications to a monitored inbox + the
+  account-level suppression list; permanent rejections are not retried;
+- authentication: domain verified in `ap-south-1`, Easy DKIM, SPF, DMARC
+  policy published, `hello@` monitored for replies;
+- the first event date and that the earlier request was submitted before
+  the site was live.
+
+AWS answers within 24 h. If denied a second time, switch provider behind
+the `Mailer` port ([../systems/EMAIL.md](../systems/EMAIL.md), ADR-016):
+one adapter file plus env — Postmark or Resend both cover the volume for
+~$15–20/month — and keep SES for later. Launch must not wait on this case.
 
 ### Move to another region or account
 
@@ -218,7 +258,8 @@ pnpm email:test <verified address>                            # "SES accepted th
 
 ## History
 
-| Date       | Change                                                                                                                           |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested |
-| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities    |
+| Date       | Change                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested            |
+| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities               |
+| 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above |

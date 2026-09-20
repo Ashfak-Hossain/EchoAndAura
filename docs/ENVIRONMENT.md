@@ -99,6 +99,9 @@ instead of sending. Cost at this volume (~1,500/month) is cents; the first
    that the only key on any server is the send-only one below.
    Production access is a support case: answer AWS's "tell us more" reply
    with volume, trigger, bounce handling and example subjects, or it stalls.
+   Ask only once something is live at the domain — the 2026-09-21 request
+   was denied with nothing published there (infra/AWS.md has the reopen
+   checklist).
 2. SES (region **`ap-south-1`**, Mumbai) → _Identities_ → _Create identity_ →
    Domain `echoandaura.com`, Easy DKIM. SES shows **3 CNAME records**.
 3. IAM → _Users_ → create `echoandaura-worker`, access key only, with this
