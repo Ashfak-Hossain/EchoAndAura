@@ -68,11 +68,7 @@ export function LoginForm() {
         </div>
       </Field>
 
-      <Button
-        type="submit"
-        disabled={pending}
-        className="h-12 w-full text-base"
-      >
+      <Button type="submit" disabled={pending} className="h-12 w-full text-base">
         {pending ? 'Signing in…' : 'Sign in'}
       </Button>
     </form>

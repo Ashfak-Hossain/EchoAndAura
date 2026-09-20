@@ -22,7 +22,9 @@ import type {
   OrderEventRecord,
   OrderRecord,
   OrdersRepository,
+  QueueRow,
 } from '@/server/repositories/orders.repository';
+import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
 import type {
   TicketTypeRecord,
   TicketTypesRepository,
@@ -43,6 +45,7 @@ const SUBMITTABLE = ['pending_payment', 'pending_verification'] as const;
 
 export interface OrdersServiceDeps {
   orders: OrdersRepository;
+  tickets: TicketsRepository;
   events: EventsRepository;
   ticketTypes: TicketTypesRepository;
   inventory: InventoryService;
@@ -54,6 +57,13 @@ export interface OrdersServiceDeps {
   runInTransaction: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
   now?: () => Date;
   reference?: () => string;
+  /**
+   * After-commit hooks — the seams for the C1 / C4 emails. They run outside
+   * every transaction (Invariant 7) and their failure is logged, never
+   * surfaced: an order that could not be *announced* is still an order.
+   */
+  onOrderCreated?: (orderId: string) => Promise<void>;
+  onOrderExpired?: (orderId: string) => Promise<void>;
 }
 
 export interface CreateOrderInput {
@@ -74,6 +84,14 @@ export interface OrderView {
   ticketType: TicketTypeRecord;
   /** Append-only audit trail, oldest first (Invariant 6). */
   events: OrderEventRecord[];
+  /** Empty until fulfilment issues them. */
+  tickets: TicketRecord[];
+}
+
+/** One verification-queue row with the derived timing the B7 table shows. */
+export interface QueueEntry extends QueueRow {
+  /** When the trxID was (last) submitted. */
+  submittedAt: Date;
 }
 
 export interface SubmitPaymentInput {
@@ -91,13 +109,24 @@ export interface SubmitPaymentInput {
  */
 export function createOrdersService({
   orders,
+  tickets,
   events,
   ticketTypes,
   inventory,
   runInTransaction,
   now = () => new Date(),
   reference = generateOrderReference,
+  onOrderCreated = async () => {},
+  onOrderExpired = async () => {},
 }: OrdersServiceDeps) {
+  async function afterCommit(hook: () => Promise<void>, what: string, orderId: string) {
+    try {
+      await hook();
+    } catch (err: unknown) {
+      logger.error({ orderId, err }, `orders.service: ${what} hook failed`);
+    }
+  }
+
   return {
     /**
      * @throws EventNotFoundError (unknown slug or draft), RegistrationClosedError,
@@ -152,7 +181,7 @@ export function createOrdersService({
       for (let attempt = 1; ; attempt++) {
         const ref = reference();
         try {
-          return await runInTransaction(async (tx) => {
+          const created = await runInTransaction(async (tx) => {
             const held = await inventory.hold(ticketType.id, input.quantity, tx);
             if (!held) throw new SoldOutError(ticketType.id, input.quantity);
 
@@ -190,6 +219,8 @@ export function createOrdersService({
 
             return order;
           });
+          await afterCommit(() => onOrderCreated(created.id), 'onOrderCreated', created.id);
+          return created;
         } catch (err: unknown) {
           // The transaction rolled back (hold included); a fresh reference
           // is all that is needed. Anything else propagates.
@@ -203,15 +234,44 @@ export function createOrdersService({
     async getOrder(id: string): Promise<OrderView> {
       const order = await orders.findById(id);
       if (!order) throw new OrderNotFoundError(id);
-      const [event, ticketType, auditEvents] = await Promise.all([
+      const [event, ticketType, auditEvents, ticketRows] = await Promise.all([
         events.findById(order.eventId),
         ticketTypes.findById(order.ticketTypeId),
         orders.listEvents(order.id),
+        tickets.listByOrder(order.id),
       ]);
       // FKs guarantee these; a miss is corruption, not a 404.
       if (!event) throw new Error(`order ${id}: event ${order.eventId} missing`);
       if (!ticketType) throw new Error(`order ${id}: ticket type ${order.ticketTypeId} missing`);
-      return { order, event, ticketType, events: auditEvents };
+      return { order, event, ticketType, events: auditEvents, tickets: ticketRows };
+    },
+
+    /** B7: what is waiting for a person, oldest first. */
+    async listVerificationQueue(): Promise<QueueEntry[]> {
+      const rows = await orders.listVerificationQueue();
+      // updated_at is the submission time: the trxID write is the last one
+      // an order in this status has had.
+      return rows.map((r) => ({ ...r, submittedAt: r.order.updatedAt }));
+    },
+
+    countPendingVerification(): Promise<number> {
+      return orders.countByStatus('pending_verification');
+    },
+
+    /**
+     * "Find my order" without an account: the reference plus the phone used
+     * at registration (E.164, normalised at the boundary). Null on any
+     * mismatch — the page says one generic thing either way.
+     */
+    async findByReferenceAndPhone(reference: string, phone: string): Promise<OrderRecord | null> {
+      const order = await orders.findByReference(reference.trim().toUpperCase());
+      if (!order || order.buyerPhone !== phone) return null;
+      return order;
+    },
+
+    /** "My orders" for a signed-in buyer: proof of the email is the access rule. */
+    listForBuyer(email: string): Promise<QueueRow[]> {
+      return orders.listByBuyerEmail(email.trim().toLowerCase());
     },
 
     /**
@@ -313,6 +373,7 @@ export function createOrdersService({
               { orderId: hold.id, quantity: hold.quantity },
               'order expired, hold released',
             );
+            await afterCommit(() => onOrderExpired(hold.id), 'onOrderExpired', hold.id);
           }
         } catch (err: unknown) {
           failed++;

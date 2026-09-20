@@ -45,14 +45,18 @@ export function TicketList({ ticketTypes, phase, now, compact }: Props) {
             key={t.id}
             className={cn(
               'flex items-start justify-between gap-2.5 rounded-xl border p-3.5',
-              inactive ? 'border-border bg-secondary text-muted-foreground' : 'border-border-strong bg-card',
-              compact && 'rounded-[10px] items-center',
+              inactive
+                ? 'border-border bg-secondary text-muted-foreground'
+                : 'border-border-strong bg-card',
+              compact && 'items-center rounded-[10px]',
             )}
           >
             <div className="min-w-0">
-              <div className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')}>{t.name}</div>
+              <div className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')}>
+                {t.name}
+              </div>
               {subtitle && showQuantities ? (
-                <div className="tabular mt-0.5 text-[13px] text-muted-foreground">{subtitle}</div>
+                <div className="mt-0.5 text-[13px] text-muted-foreground tabular">{subtitle}</div>
               ) : null}
               {compact && showQuantities && availability.kind === 'left' ? (
                 <div
@@ -69,7 +73,10 @@ export function TicketList({ ticketTypes, phase, now, compact }: Props) {
               ) : null}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
-              <Money paisa={t.pricePaisa} className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')} />
+              <Money
+                paisa={t.pricePaisa}
+                className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')}
+              />
               {!compact && showQuantities ? (
                 availability.kind === 'left' ? (
                   <Chip size="sm" tone={scarce ? 'warning' : 'success'}>

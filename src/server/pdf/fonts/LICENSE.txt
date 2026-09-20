@@ -1,0 +1,5 @@
+Noto Sans and Noto Sans Bengali — Copyright The Noto Project Authors.
+Licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+Bundled so the ticket PDF renders Bengali and Latin names offline — no
+network access during rendering (CLAUDE.md Invariant 7).
+Source: https://github.com/notofonts/notofonts.github.io

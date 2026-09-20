@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
-import { buildAuthOptions } from './auth-options';
+import { buildAuthOptions, magicLinkPlugin } from './auth-options';
 
 /**
  * The app's better-auth instance.
@@ -11,7 +11,7 @@ import { buildAuthOptions } from './auth-options';
  */
 export const auth = betterAuth({
   ...buildAuthOptions({ disableSignUp: true }),
-  // Lets server actions set/clear the session cookie after signInEmail/signOut.
-  // Must be the last plugin.
-  plugins: [nextCookies()],
+  // Buyer sign-in by email link, then nextCookies (lets server actions
+  // set/clear the session cookie). nextCookies must be the last plugin.
+  plugins: [magicLinkPlugin(), nextCookies()],
 });

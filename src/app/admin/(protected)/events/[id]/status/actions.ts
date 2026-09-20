@@ -11,6 +11,7 @@ import {
   InvalidEventTransitionError,
 } from '@/server/lib/errors';
 import { editorPath } from '../editor-path';
+import { requireAdmin } from '@/lib/session';
 
 export interface StatusActionState {
   error?: string;
@@ -23,6 +24,7 @@ export async function changeEventStatusAction(
   eventId: string,
   to: string,
 ): Promise<StatusActionState> {
+  await requireAdmin();
   const parsed = z.enum(eventStatus.enumValues).safeParse(to);
   if (!parsed.success) return { error: 'Unknown status' };
 

@@ -9,6 +9,7 @@ import {
 } from '@/server/lib/errors';
 import { coverImageKeySchema, coverUploadRequestSchema } from '@/lib/validation/cover-image';
 import { editorPath } from '../editor-path';
+import { requireAdmin } from '@/lib/session';
 
 export type CoverActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -17,6 +18,7 @@ export async function createCoverUploadAction(
   eventId: string,
   input: unknown,
 ): Promise<CoverActionResult<{ uploadUrl: string; key: string }>> {
+  await requireAdmin();
   const parsed = coverUploadRequestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Choose a JPEG, PNG or WebP up to 5 MB' };
 
@@ -33,6 +35,7 @@ export async function setCoverImageAction(
   eventId: string,
   key: unknown,
 ): Promise<CoverActionResult> {
+  await requireAdmin();
   const parsed = coverImageKeySchema.safeParse(key);
   if (!parsed.success) return { ok: false, error: 'Upload did not complete. Please try again.' };
 
@@ -47,6 +50,7 @@ export async function setCoverImageAction(
 }
 
 export async function removeCoverImageAction(eventId: string): Promise<CoverActionResult> {
+  await requireAdmin();
   try {
     await eventsService.removeCoverImage(eventId);
   } catch (err: unknown) {

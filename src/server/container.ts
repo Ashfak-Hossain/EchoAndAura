@@ -12,9 +12,13 @@ import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
+import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
+import { enqueueEmail } from '@/server/queue/producer';
+import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
   type ObjectStorage,
@@ -41,8 +45,31 @@ export const ticketTypesService = createTicketTypesService(ticketTypesRepository
 export const inventoryService = createInventoryService(inventoryRepository);
 export const ordersService = createOrdersService({
   orders: ordersRepository,
+  tickets: ticketsRepository,
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
+  runInTransaction: (fn) => db.transaction(fn),
+  // Emails are queued after commit and sent by the worker (Invariant 7).
+  onOrderCreated: (orderId) => enqueueEmail('payment-instructions', orderId),
+  onOrderExpired: (orderId) => enqueueEmail('expired', orderId),
+});
+
+// The only place fulfilment is constructed (Invariant 4).
+export const fulfilmentService = createFulfilmentService({
+  orders: ordersRepository,
+  tickets: ticketsRepository,
+  inventory: inventoryService,
+  runInTransaction: (fn) => db.transaction(fn),
+  onTicketsIssued: (orderId) => enqueueEmail('tickets-issued', orderId),
+  onOrderRejected: (orderId) => enqueueEmail('rejected', orderId),
+  onTicketsResendRequested: (orderId) => enqueueEmail('tickets-issued', orderId, { resend: true }),
+});
+
+export const ticketsService = createTicketsService({
+  tickets: ticketsRepository,
+  orders: ordersRepository,
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
   runInTransaction: (fn) => db.transaction(fn),
 });

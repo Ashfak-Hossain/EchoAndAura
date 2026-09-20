@@ -36,6 +36,41 @@
       "when": 1789800893901,
       "tag": "0004_safe_sally_floyd",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789810885658,
+      "tag": "0005_ancient_thena",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789836694992,
+      "tag": "0006_melodic_the_santerians",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789838976672,
+      "tag": "0007_backfill_ticket_positions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789839055149,
+      "tag": "0008_calm_cloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789902503022,
+      "tag": "0009_silent_corsair",
+      "breakpoints": true
     }
   ]
 }

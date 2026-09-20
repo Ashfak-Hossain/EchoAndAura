@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Minus, Plus } from 'lucide-react';
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
@@ -28,6 +29,8 @@ interface Props {
   action: (prev: RegistrationFormState, formData: FormData) => Promise<RegistrationFormState>;
   options: TicketOption[];
   registrationClosesAt: string | null;
+  /** From the buyer's session, when signed in. */
+  prefill?: { name: string; email: string } | null;
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -38,7 +41,7 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
  * display only — the server recomputes every number from the ticket_types
  * row (Invariant 5) and re-checks stock atomically on submit.
  */
-export function RegistrationForm({ action, options, registrationClosesAt }: Props) {
+export function RegistrationForm({ action, options, registrationClosesAt, prefill }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   // After an action React resets uncontrolled inputs; seeding from the last
   // submission keeps the buyer's input on error (nothing is ever cleared).
@@ -63,17 +66,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
   const maxQty = selected?.maxPerOrder ?? 0;
   const overStock = selected !== null && quantity > selected.available;
 
-  const [buyerName, setBuyerName] = useState(str(values.buyerName));
-  const submittedNames = Array.isArray(values.attendeeNames)
-    ? values.attendeeNames.map(str)
-    : [];
-  const [typedNames, setTypedNames] = useState<string[]>(submittedNames);
-  const [firstIsMe, setFirstIsMe] = useState(false);
-  // Exactly one name per ticket, derived: the quantity decides how many
-  // fields exist and "Ticket 1 is for me" mirrors the buyer's name live.
-  const names = Array.from({ length: quantity }, (_, i) =>
-    i === 0 && firstIsMe ? buyerName : (typedNames[i] ?? ''),
-  );
+  const [buyerName, setBuyerName] = useState(str(values.buyerName) || (prefill?.name ?? ''));
 
   // Failed submit: focus moves to the summary (design A3 · validation errors).
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -93,7 +86,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
           ref={summaryRef}
           tabIndex={-1}
           role="alert"
-          className="flex flex-col gap-1 rounded-xl border border-destructive/30 border-l-4 border-l-destructive bg-destructive-tint px-4 py-3.5 outline-none"
+          className="flex flex-col gap-1 rounded-xl border border-l-4 border-destructive/30 border-l-destructive bg-destructive-tint px-4 py-3.5 outline-none"
         >
           <p className="text-[15px] font-semibold">
             {state.banner
@@ -144,7 +137,12 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
                   <span className="font-semibold">{o.name}</span>
                   <Money paisa={o.pricePaisa} className="font-semibold" />
                 </span>
-                <span className={cn('text-[13px]', !disabled && o.available <= 10 && 'font-medium text-[#7a4600]')}>
+                <span
+                  className={cn(
+                    'text-[13px]',
+                    !disabled && o.available <= 10 && 'font-medium text-[#7a4600]',
+                  )}
+                >
                   {o.id === soldOutId
                     ? 'Sold out'
                     : (o.reason ??
@@ -180,7 +178,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
               const n = Number.parseInt(e.target.value, 10);
               if (Number.isInteger(n)) setQuantity(Math.max(1, Math.min(MAX_TICKETS_PER_ORDER, n)));
             }}
-            className="tabular h-11 w-16 rounded-md border border-input bg-card text-center text-lg font-semibold outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="h-11 w-16 rounded-md border border-input bg-card text-center text-lg font-semibold tabular outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
           <StepButton
             label="More tickets"
@@ -207,7 +205,12 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
       <fieldset className="flex flex-col gap-5">
         <legend className="mb-1 text-[15px] font-semibold">Your details</legend>
         <p className="-mt-1 text-sm text-muted-foreground">
-          Tickets are emailed to this address once your payment is checked.
+          Tickets are emailed to this address once your payment is checked. Each ticket carries your
+          name
+          {registrationClosesAt
+            ? ` — you can change it on the ticket until ${registrationClosesAt}`
+            : ''}
+          .
         </p>
         <div className="flex flex-col gap-2">
           <Label htmlFor="buyerName">Full name</Label>
@@ -230,7 +233,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
             type="email"
             autoComplete="email"
             inputMode="email"
-            defaultValue={str(values.buyerEmail)}
+            defaultValue={str(values.buyerEmail) || (prefill?.email ?? '')}
             aria-invalid={Boolean(errors.buyerEmail)}
             className="h-11 bg-card"
           />
@@ -243,7 +246,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
         <div className="flex flex-col gap-2">
           <Label htmlFor="buyerPhone">Mobile number</Label>
           <div className="flex items-stretch">
-            <span className="tabular flex items-center rounded-l-md border border-r-0 border-input bg-secondary px-3 text-[15px] text-muted-foreground">
+            <span className="flex items-center rounded-l-md border border-r-0 border-input bg-secondary px-3 text-[15px] text-muted-foreground tabular">
               {BD_MOBILE_PREFIX}
             </span>
             <Input
@@ -255,7 +258,7 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
               placeholder="1712345678"
               defaultValue={str(values.buyerPhone)}
               aria-invalid={Boolean(errors.buyerPhone)}
-              className="tabular h-11 rounded-l-none bg-card"
+              className="h-11 rounded-l-none bg-card tabular"
             />
           </div>
           {errors.buyerPhone ? (
@@ -266,61 +269,20 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
         </div>
       </fieldset>
 
-      {/* Who is coming */}
-      <fieldset className="flex flex-col gap-4">
-        <legend className="mb-1 text-[15px] font-semibold">Who is coming?</legend>
-        <p className="-mt-1 text-sm text-muted-foreground">
-          One name per ticket.
-          {registrationClosesAt
-            ? ` You can change these until registration closes on ${registrationClosesAt}.`
-            : ''}
-        </p>
-        <label className="flex items-center gap-2.5 text-[15px]">
-          <input
-            type="checkbox"
-            checked={firstIsMe}
-            onChange={(e) => setFirstIsMe(e.target.checked)}
-            className="size-4 accent-foreground"
-          />
-          Ticket 1 is for me
-        </label>
-        {names.map((name, i) => {
-          const key = `attendeeNames.${i}`;
-          return (
-            <div key={i} className="flex flex-col gap-2">
-              <Label htmlFor={key}>Ticket {i + 1} — attendee name</Label>
-              <Input
-                id={key}
-                name="attendeeNames"
-                autoComplete="off"
-                value={name}
-                onChange={(e) => {
-                  const next = [...names];
-                  next[i] = e.target.value;
-                  setTypedNames(next);
-                  if (i === 0 && firstIsMe) setFirstIsMe(false);
-                }}
-                readOnly={i === 0 && firstIsMe}
-                aria-invalid={Boolean(errors[key])}
-                className="h-11 bg-card"
-              />
-              {errors[key] ? <FieldError>{errors[key]}</FieldError> : null}
-            </div>
-          );
-        })}
-        {errors.attendeeNames ? <FieldError>{errors.attendeeNames}</FieldError> : null}
-      </fieldset>
-
       {/* Summary */}
-      <section aria-labelledby="summary-heading" className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4">
-        <h2 id="summary-heading" className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase">
+      <section
+        aria-labelledby="summary-heading"
+        className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4"
+      >
+        <h2
+          id="summary-heading"
+          className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase"
+        >
           Order summary
         </h2>
         <dl className="flex flex-col gap-1.5 text-[15px]">
           <div className="flex justify-between gap-4">
-            <dt>
-              {selected ? `${selected.name} × ${quantity}` : 'No ticket chosen'}
-            </dt>
+            <dt>{selected ? `${selected.name} × ${quantity}` : 'No ticket chosen'}</dt>
             <dd>
               <Money paisa={subtotal} />
             </dd>
@@ -333,8 +295,8 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
           </div>
         </dl>
         <p className="text-[13px] leading-snug text-muted-foreground">
-          The final price is confirmed by our server when you submit, so what you pay always
-          matches what you see here.
+          The final price is confirmed by our server when you submit, so what you pay always matches
+          what you see here.
         </p>
       </section>
 
@@ -348,8 +310,17 @@ export function RegistrationForm({ action, options, registrationClosesAt }: Prop
             aria-invalid={Boolean(errors.terms)}
             className="mt-1 size-4 shrink-0 accent-foreground"
           />
-          I agree to the terms and understand that payments are checked by hand and there are no
-          refunds in the app.
+          <span>
+            I agree to the{' '}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="underline">
+              terms
+            </Link>{' '}
+            and understand that payments are checked by hand and there are{' '}
+            <Link href="/refund" target="_blank" rel="noreferrer" className="underline">
+              no refunds in the app
+            </Link>
+            .
+          </span>
         </label>
         {errors.terms ? <FieldError>{errors.terms}</FieldError> : null}
       </div>

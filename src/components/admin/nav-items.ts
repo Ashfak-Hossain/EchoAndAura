@@ -11,12 +11,19 @@ export interface NavItem {
   disabled?: boolean;
   /** Match child routes too (e.g. /admin/events/…). */
   prefix?: boolean;
+  /** Which live count this item shows. Only Verification ever carries one. */
+  badge?: 'verification';
+}
+
+/** Live counts the shell passes down to the nav. */
+export interface NavCounts {
+  verification: number;
 }
 
 export const ADMIN_NAV: readonly NavItem[] = [
   { label: 'Dashboard', href: '/admin' },
   { label: 'Events', href: '/admin/events', prefix: true },
-  { label: 'Verification', href: '/admin/verification', disabled: true },
+  { label: 'Verification', href: '/admin/verification', prefix: true, badge: 'verification' },
   { label: 'Orders', href: '/admin/orders', disabled: true },
   { label: 'Promo codes', href: '/admin/promo-codes', disabled: true },
   { label: 'Reports', href: '/admin/reports', disabled: true },

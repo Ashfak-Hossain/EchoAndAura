@@ -13,7 +13,7 @@ style preferences. Violating them causes financial loss or data corruption.
 
 Next.js 16 App Router · React 19 · Node 26 · TypeScript `strict` · Postgres 17 +
 Drizzle 0.45 (postgres-js driver) · Redis 7 + BullMQ · Zod · better-auth (admin
-only) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
+password login; optional passwordless buyer sign-in) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
 Playwright · Docker · Timezone `Asia/Dhaka`
 
 > Latest majors were adopted at scaffold time — see [ADR-003](docs/DECISIONS.md).
@@ -112,8 +112,9 @@ Full system diagram, data flow, and data model overview:
 ## Business rules
 
 - One order contains exactly ONE ticket type, any quantity (max 10 per order)
-- Tickets are named and transferable; the buyer may edit the attendee name
-  until registration closes
+- Registration asks for one name (the buyer's). Every ticket starts with it;
+  tickets are transferable and the attendee name on each ticket can be
+  edited on the ticket page until registration closes
 - Registration opens 20 days before an event and closes 5 days before
 - Early Bird is a separate ticket type with its own sales window, not a
   price-change rule
@@ -149,3 +150,36 @@ covering the failure path, not just the happy path.
 - Never disable a test to make CI pass
 - Never `git push --force` to main
 - Never run destructive SQL against production
+
+---
+
+<!-- BEGIN AWS Agent Toolkit rules -->
+# AWS Guidance
+
+- Where these AWS rules conflict with the project's own instructions, the
+  project's instructions take precedence.
+- Prefer the AWS MCP Server for AWS interactions — it provides sandboxed
+  execution, observability, and audit logging. If unavailable, use the
+  AWS CLI directly.
+- Before starting a task, check whether a relevant AWS skill is available.
+  Load the skill with `retrieve_skill` and prefer its guidance over
+  general knowledge.
+- When uncertain about specific AWS details (API parameters, permissions,
+  limits, error codes), verify against documentation rather than guessing.
+  State uncertainty explicitly if you cannot confirm.
+- When creating infrastructure, prefer infrastructure-as-code (AWS CDK or
+  CloudFormation) over direct CLI commands.
+- When working with infrastructure, follow AWS Well-Architected Framework
+  principles.
+- Do not use em dashes in AWS resource names or descriptions. Use
+  hyphens instead.
+
+## Secret Safety
+
+- MUST load the `aws-secrets-manager` skill first for any secret,
+  credential, API key, token, or password task. MUST NOT call
+  `secretsmanager get-secret-value` or `batch-get-secret-value`, and MUST
+  NOT hit the Secrets Manager Agent daemon directly. MUST use
+  `{{resolve:secretsmanager:secret-id:SecretString:json-key}}` with
+  `asm-exec` so the secret resolves at runtime without entering context.
+<!-- END AWS Agent Toolkit rules -->

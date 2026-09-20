@@ -520,3 +520,307 @@ production.
 **Revisit when:** a waitlist wants to be told about releases (emit an event
 from the expiry tx), or when the verification queue needs a "stale claims"
 view for orders sitting in `pending_verification` past their hold.
+
+---
+
+## ADR-014 — Fulfilment: approve is one transaction to `issued`, email hooks after commit, rejection reasons on the order
+
+**Date:** 2026-09-19 · **Status:** Accepted
+
+**Context:** Invariant 4 names `fulfilment.service.ts` as the only code
+that marks an order paid and issues tickets. The design (B8) says approving
+"issues N tickets and emails them immediately", rejecting requires a reason
+from a fixed list the buyer then reads, and two admin tabs may act on the
+same order.
+
+**Decision:**
+
+- **Approve = `pending_verification → paid → issued` in ONE transaction**:
+  lock the order (`SELECT … FOR UPDATE`) → `paid` + audit row →
+  `inventory.convertToSold` (its one and only call site) → one ticket row per
+  attendee name captured at registration → `issued` + audit row. `paid`
+  stays in the state machine as the legal intermediate but never persists
+  on its own in normal operation. A ticket-code UNIQUE collision rolls the
+  whole transaction back and retries with fresh codes (×3).
+- **The email is an after-commit port.** `onTicketsIssued(orderId)` is
+  injected; the container passes a log-only implementation until the email
+  slice replaces it with a queue producer. Its failure is logged, never
+  surfaced — the tickets are real and the email can be re-sent (Invariant
+  7: nothing network inside the transaction).
+- **Reject requires a reason from a fixed list** (`rejection-reasons.ts`;
+  labels are the buyer-facing wording) and an optional note shown word for
+  word. Both are stored on the order (`rejection_reason`,
+  `rejection_note`, migration `0005`) _and_ in the audit note; inventory is
+  released in the same transaction, after the status flip, so a double
+  reject can never double-release.
+- **Approve carries the trxID the admin verified.** A buyer may edit the
+  trxID while `pending_verification` (ADR-013). Approving by order id alone
+  would issue tickets against a swapped id and free the verified one for a
+  second order — one payment, two orders. The action binds the trxID the
+  page showed; the service compares it under the row lock and refuses with
+  `TrxIdChangedError` so the admin looks again. Found in review.
+- **Concurrency is settled by the row lock and the conditional UPDATE**: of
+  two simultaneous approves exactly one issues tickets; approve × reject
+  yields exactly one of {tickets, release}; approve × buyer-edit never
+  issues against an unverified id. All three proven against Postgres.
+- An order whose attendee names no longer match its quantity is refused
+  (`AttendeeNamesMismatchError`), never padded — that is corruption.
+- **Ticket codes** are `TKT-` + 8 unambiguous characters — the code is the
+  access key of the web ticket page, so it is longer than an order
+  reference.
+- **The actor** on admin audit rows is the admin's email from the session,
+  passed in by the action (services never touch auth, ADR-004).
+- The design's "trxID seen before" chip is not built: the UNIQUE index
+  already makes two orders with one trxID impossible.
+
+**Consequences:** `paid` orders should never be observed; if one is, a
+transaction failed between the two transitions and the row lock protected
+it — investigate, do not "repair" by hand. Cancelling a ticket (Phase 6)
+must release exactly one seat via the same inventory primitive.
+
+**Revisit when:** issuing needs to be deferred from approval (e.g. a
+separate "generate tickets" job), or when partial approval (fewer tickets
+than paid for) is ever requested — neither is planned.
+
+---
+
+## ADR-015 — The web ticket: code as access key, on-demand PDF, rename until close, a QR without a scanner
+
+**Date:** 2026-09-19 · **Status:** Accepted
+
+**Context:** Each issued ticket needs a page the attendee can show and
+print (A5/C5), and the business rule says the buyer may edit the attendee
+name until registration closes. CLAUDE.md rules "all I/O is queued" and
+"no QR scanning at the gate".
+
+**Decision:**
+
+- **`/tickets/<code>` is keyed by the ticket code** (`TKT-` + 8 chars of a
+  31-symbol alphabet, ~40 bits). It shows attendee, event, type and code —
+  never the buyer's email or phone — and names the order reference as text,
+  not a link, because the order page carries PII. Rate limiting the path is
+  Phase 7 hardening.
+- **The PDF renders on demand** (`GET /tickets/<code>/pdf`,
+  `@react-pdf/renderer`, `serverExternalPackages`). One ticket is a single
+  ~5 KB document with no external I/O: a page view, not the bulk work the
+  "queue all I/O" rule protects against. The whole order's tickets are in
+  the file, the requested one first. The component is plain React under
+  `src/server/pdf/` so the email worker can attach the same document.
+- **A `position` column on tickets** (migration `0006`, 1-based, fixed at
+  issue) makes "ticket 2 of 3" stable — rows share a `created_at` and codes
+  are random, so nothing else orders them. `0007` (custom) backfills
+  existing rows by issue order; `0008` adds UNIQUE `(order_id, position)`
+  and `CHECK (position >= 1)` so the fact lives in the database.
+- **The PDF bundles Noto Sans + Noto Sans Bengali** (OFL) and picks the
+  face per text run by script: react-pdf's built-in Helvetica is
+  WinAnsi-only and renders a Bengali name as Latin-1 garbage — for a Dhaka
+  audience that is most of the door list. Fonts load from disk, never the
+  network (Invariant 7). Found in review.
+- **Rename is allowed while `issued` and `now < registration_closes_at`**
+  (a missing close date locks, never opens). It is a compare-and-swap
+  UPDATE on `status = 'issued' AND attendee_name = <old>` plus an
+  `order_events` row (`buyer / ticket.renamed`, "old → new") — not a status
+  change, but the first thing Raj will ask at the door; the CAS means the
+  audit row's old name is exact and a concurrent rename is refused, not
+  overwritten. Anyone holding the code can rename — the business rule says
+  "the buyer", but tickets are transferable and the code _is_ possession.
+  The name rule (2–120, whitespace collapsed) lives in `attendee-name.ts`
+  and is shared by Zod and the service.
+- **The QR encodes the ticket code and nothing else**, generated
+  server-side as SVG. Door staff work from the printed list by name and
+  code; copy on page and PDF says so. It is a convenience for reading the
+  code, never the only way in, and there is no scanner to build.
+- `/tickets/<code>/calendar.ics` is a hand-built single VEVENT (UID = code).
+
+**Consequences:** No storage of rendered PDFs; a buyer can regenerate one
+forever. At most two PDFs render concurrently per process (a burst queues
+rather than starving the order pages); `Cache-Control: private, max-age=60`.
+Cancelled tickets render greyscale with a stamp (cancel itself is Phase 6).
+The `.ics` folds by UTF-8 octets on code-point boundaries (RFC 5545 §3.1).
+
+**Revisit when:** the check-in list (Phase 6) wants something beyond name +
+code, or a scanner is ever requested (then the QR payload becomes signed).
+
+---
+
+## ADR-016 — Transactional email: SES behind a Mailer port, sent by the worker, audited per message
+
+**Date:** 2026-09-20 · **Status:** Accepted
+
+**Context:** Four emails are designed (C1 payment instructions, C2 tickets
+
+- PDF, C3 rejected, C4 expired). Invariant 7 forbids network calls inside
+  transactions; CLAUDE.md says all I/O is queued. The provider must be cheap
+  at ~1,500 messages/month and must not drop messages on a launch-day spike
+  (the free tier first considered capped at 100/day).
+
+**Decision:**
+
+- **Amazon SES**, region `ap-south-1`, via `@aws-sdk/client-sesv2` with raw
+  MIME built by nodemailer's `MailComposer` (the only sane way to attach the
+  ticket PDF). Cents per month; the sandbox → production request is the one
+  manual step. `resend` was removed as never used.
+- **A `Mailer` port** with two adapters: `ses` and `log` (pino + files in
+  `tmp/emails/`). `MAILER` selects; the worker refuses to start in
+  production with anything but `ses`, because a logged send is not a send.
+- **Services never send.** Each state change exposes an after-commit hook
+  (`onOrderCreated`, `onTicketsIssued`, `onOrderRejected`, `onOrderExpired`);
+  the container wires them to `enqueueEmail(kind, orderId)`. A hook failure
+  is logged and swallowed — an order that could not be announced is still
+  an order, and Raj can re-send.
+- **The worker renders and sends.** Job `email.<kind>` `{ orderId }`;
+  deterministic id `<kind>__<orderId>` dedupes double enqueues (BullMQ
+  forbids `:` in custom ids — found live); re-sends get a timestamp suffix.
+  Five attempts with exponential backoff from 30 s; SES throttling maps to
+  `MailerThrottledError` and is retried; the worker's limiter is 5/s.
+- **The order's status is re-checked at send time** (`email.skipped` when
+  it no longer fits — C2 only for `issued`), and **every send writes
+  `order_events` `email.sent`** with the kind and provider message id;
+  the final failed attempt writes `email.failed`. B8 answers "did they get
+  it?" from the same audit trail as everything else.
+- **Templates are `@react-email/components`** (tables, inline styles,
+  600 px, system fonts) with a plain-text alternative; the QR is not
+  embedded (hosted images hurt deliverability — the ticket page and PDF
+  carry it).
+- **The worker is bundled with esbuild** (`dist/worker.mjs`, ESM, packages
+  external) and run by plain Node. tsx's CJS loader mis-resolves
+  react-pdf's nested ESM exports (`@react-pdf/hyphenate/en-us`); a built
+  artifact is also what the VPS should run.
+
+- **Nothing after a successful send may fail the job.** The `email.sent`
+  audit insert is wrapped: a Postgres blip there is logged (with the
+  provider id) rather than thrown, because a retry would re-send and SES
+  has no idempotency key. Permanent SES errors (rejected message, unverified
+  domain, suspended account) map to BullMQ's `UnrecoverableError` — one
+  `email.failed` row, no pointless retries; throttling and daily-quota
+  errors are retried.
+- **The app's producer connection fails fast** (`enableOfflineQueue: false`,
+  2 s connect timeout, 3 s enqueue timeout) so a Redis outage can never
+  hang a registration request; the hook logs and the order stands.
+- C1 is skipped once `hold_expires_at` has passed even if the row is still
+  `pending_payment` — a late job must not ask for money on a lapsing hold.
+
+**Consequences:** `REDIS_URL` is now required by the app too (it enqueues).
+C1 doubles the per-order message count — fine at SES prices. DNS (DKIM ×3,
+SPF, DMARC) and Cloudflare Email Routing for `hello@` are documented in
+ENVIRONMENT.md; until production access is granted only verified addresses
+receive mail. `dist/worker.mjs` must run from the repo root (fonts are read
+from `src/server/pdf/fonts`).
+
+**Revisit when:** bounces/complaints need handling (SES → SNS → a
+suppression list), or a second organizer wants their own sending domain.
+
+---
+
+## ADR-017 — Buyer access: one name per order, Find my order, optional passwordless accounts
+
+**Date:** 2026-09-20 · **Status:** Accepted
+
+**Context:** A buyer who closed the tab before paying had no way back
+except the C1 email. Accounts were wanted but must never be required to
+buy. Asking for a name per ticket was friction nobody needed at registration.
+
+**Decision:**
+
+- **One name per order.** The form takes the buyer's name only; the Zod
+  schema fills `attendee_names` with it for every ticket, and the service
+  still enforces names === quantity. Tickets stay named and transferable:
+  each ticket's name is editable on its own page until registration closes.
+- **Find my order** (`/orders/find`) needs no account and no email: the
+  reference (which the buyer typed into bKash) plus the phone used at
+  registration, normalised with the same rule. One generic message for any
+  mismatch; the reference is not a secret, but which phone it belongs to is.
+- **Optional accounts are passwordless.** better-auth's `magicLink` plugin:
+  `/account/sign-in` emails a 15-minute link (through the worker, like every
+  email — Invariant 7); the first sign-in creates the account. **My orders**
+  (`/account`) lists orders whose `buyer_email` equals the session email —
+  proof of the email is the access rule, so past orders are covered without
+  a `user_id` column. Registration pre-fills name/email when signed in.
+- **Roles.** `users.role` (`admin` | `buyer`, migration `0009`, never
+  settable from a request). Before this slice "a session exists" meant
+  "is the admin" (sign-up was off); now sessions are free to obtain, so
+  **every admin server action calls `requireAdmin()` itself** — the
+  `(protected)` layout only guards page renders, and a server action is
+  its own POST endpoint. A buyer session at `/admin` is sent home. Admins keep the password login only: a
+  magic link requested for an admin email is silently not sent (the
+  endpoint still says "sent", so admin emails stay unenumerable).
+  `admin:create` sets the role; `admin:promote` exists for the admin created
+  before the column.
+- **Throttling is ours, not better-auth's.** better-auth's limiter runs
+  only in its HTTP handler (and only under `NODE_ENV=production`, in
+  memory); the UI calls `auth.api.signInMagicLink` directly, which
+  bypasses it. `src/server/lib/rate-limit.ts` is a Redis fixed-window
+  counter: sign-in links 10/min per IP and 3/15 min per address (Redis
+  down → refused, since the email could not be queued either); Find my
+  order 20/min per IP (Redis down → allowed, it only reads Postgres).
+- **Test seam:** `E2E_EXPOSE_MAGIC_LINK=1` shows the link on the sign-in
+  page so Playwright can follow it — a positive gate on `APP_ENV=test`
+  (what the Playwright web server sets), so a staging or production box
+  that inherits the flag never shows a link; `NODE_ENV` plays no part
+  because `next start` forces it to `production` even for the e2e build.
+  The e2e server also runs with `BETTER_AUTH_URL` on its own port, because
+  the verify endpoint redirects to `callbackURL` on that origin.
+
+**Consequences:** Every public page reads the session (they were already
+dynamic). The `magicLink` plugin must be passed to `betterAuth()` as a
+concrete value (`magicLinkPlugin()`), not inside the widened
+`BetterAuthOptions`, or `auth.api.signInMagicLink` is erased from the type.
+**Deploy order matters once:** migration `0009` defaults every existing
+user to `buyer`, so run `pnpm admin:promote <email>` right after it or
+the admin is bounced to the home page until someone does.
+
+**Revisit when:** buyers want to change the email on an order (then a
+`user_id` link and an admin tool), or a second organizer needs their own
+admin.
+
+---
+
+## ADR-018 — Static pages: copy in TSX, contact from env, a native accordion
+
+**Date:** 2026-09-20 · **Status:** Accepted
+
+**Context:** The registration checkbox said "I agree to the terms" with no
+terms page behind it; tickets and emails said "refunds are handled outside
+the app" with no policy to point at. The design (canvas 2, A7) fixes one
+long-form template for About/Terms/Privacy/Refunds/Contact and a FAQ
+accordion whose rows are shareable anchors.
+
+**Decision:**
+
+- **Copy lives in TSX**, not a CMS, MDX or the rich-text editor. Six pages
+  that change a few times a year; a `StaticPage` template
+  (`src/components/public/static-page.tsx`) plus a JSX body per page is
+  typed, reviewable in a diff, and needs no dependency. The body reuses the
+  `.rich-text` styles from globals.css so a policy reads exactly like an
+  event description — one prose style for the public site. ADR-010's
+  editor stays for organizer-authored event copy only.
+- **Every number a page promises is a constant in `src/content/site.ts`**
+  (verification SLA, hold hours, refund working days, rename cut-off) and
+  the order page imports the SLA from there too. When the organizer changes
+  a promise, it changes everywhere at once. The FAQ items are data in
+  `src/content/faq.tsx`; their ids are permanent anchors.
+- **Contact details come from the environment** (`ORGANIZER_CONTACT_EMAIL`,
+  `ORGANIZER_PHONE`, `FACEBOOK_PAGE_URL`) through `ContactCard`, which
+  omits each unset channel and renders nothing when none is set; `/contact`
+  says so instead of showing a blank.
+- **FAQ = native `<details name="faq">`.** The HTML exclusive-accordion
+  attribute gives "one open at a time" with no JavaScript; the only client
+  code opens the item named in the URL hash (browsers scroll to an anchor
+  but do not expand a closed `details`). The question text toggles; a
+  separate `#` link sets the hash, so a link inside the summary never
+  fights the toggle.
+- **The copy is a draft the organizer signs off**, not legal advice. The
+  refund promises (bKash transfer within three working days; full refund on
+  cancellation or postponement) and the 4-hour SLA come from the design
+  frames and PROGRESS.md lists them for confirmation. Terms name the law of
+  Bangladesh and no legal entity; both are placeholders until confirmed.
+
+**Consequences:** Pages are static server components with canonical URLs
+and are indexable (unlike order and account pages). Changing copy is a
+code change with a `LAST_UPDATED` bump. Browser support for `details
+name=` is Chrome 120+, Safari 17.2+, Firefox 130+; older browsers get an
+accordion where several rows can be open, which is harmless.
+
+**Revisit when:** the organizer wants to edit copy without a deploy (then
+a `site_pages` table behind the existing rich-text editor), or a second
+language arrives (post-launch Bangla).

@@ -1,9 +1,16 @@
-export type AppEnvironment = 'local' | 'staging' | 'production';
+export type AppEnvironment = 'local' | 'test' | 'staging' | 'production';
 
 /** `APP_ENV` if set, else derived from NODE_ENV. */
 export function currentEnvironment(env: NodeJS.ProcessEnv = process.env): AppEnvironment {
   const explicit = env.APP_ENV;
-  if (explicit === 'local' || explicit === 'staging' || explicit === 'production') return explicit;
+  if (
+    explicit === 'local' ||
+    explicit === 'test' ||
+    explicit === 'staging' ||
+    explicit === 'production'
+  ) {
+    return explicit;
+  }
   return env.NODE_ENV === 'production' ? 'production' : 'local';
 }
 
@@ -13,6 +20,7 @@ const STYLES: Record<AppEnvironment, string> = {
   production: 'bg-foreground text-background',
   staging: 'border border-[#f0d9ac] bg-accent text-[#5c4514]',
   local: 'border border-[#c3d6ec] bg-info-tint text-[#194673]',
+  test: 'border border-[#c3d6ec] bg-info-tint text-[#194673]',
 };
 
 export function EnvChip() {

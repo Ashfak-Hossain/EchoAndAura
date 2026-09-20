@@ -22,11 +22,11 @@ export function Countdown({ until }: { until: string }) {
 
   if (now === null) return null;
   const ms = target - now;
-  if (ms <= 0) return <span className="tabular font-semibold">expired</span>;
+  if (ms <= 0) return <span className="font-semibold tabular">expired</span>;
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return (
-    <span className="tabular font-mono font-medium">
+    <span className="font-mono font-medium tabular">
       {h}h {m}m
     </span>
   );

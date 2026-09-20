@@ -182,6 +182,11 @@ export const orders = pgTable(
     bkashTrxId: text('bkash_trx_id'),
     bkashSenderMsisdn: text('bkash_sender_msisdn'),
     promoCodeId: uuid('promo_code_id').references(() => promoCodes.id),
+    // Set on reject (B8): a code from the fixed list and the organizer's
+    // optional note, shown to the buyer word for word. The audit row carries
+    // the same text; these columns make the current reason cheap to read.
+    rejectionReason: text('rejection_reason'),
+    rejectionNote: text('rejection_note'),
     // 24-hour inventory hold (ADR-002). The expiry job releases stock once this
     // passes without payment being verified.
     holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),
@@ -250,13 +255,22 @@ export const tickets = pgTable(
       .references(() => events.id),
     // Public code for the web ticket page (no QR scanning at the gate).
     code: text('code').notNull().unique(),
+    // 1-based place within the order ("ticket 2 of 3"), fixed at issue so
+    // pages, PDFs and emails never disagree about which ticket is which.
+    position: integer('position').notNull().default(1),
     // Attendee name is editable until registration closes.
     attendeeName: text('attendee_name').notNull(),
     status: ticketStatus('status').notNull().default('issued'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('tickets_order_id_idx').on(t.orderId), index('tickets_event_id_idx').on(t.eventId)],
+  (t) => [
+    index('tickets_order_id_idx').on(t.orderId),
+    index('tickets_event_id_idx').on(t.eventId),
+    // "Ticket 2 of 3" is a database fact, not a loop index.
+    uniqueIndex('tickets_order_position_uq').on(t.orderId, t.position),
+    check('tickets_position_positive', sql`${t.position} >= 1`),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -275,6 +289,9 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   emailVerified: boolean('email_verified').notNull().default(false),
   image: text('image'),
+  // 'admin' (password login, the back office) or 'buyer' (passwordless,
+  // "My orders"). Never settable from a request: additionalFields input=false.
+  role: text('role').notNull().default('buyer'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

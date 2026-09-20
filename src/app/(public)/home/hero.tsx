@@ -29,7 +29,8 @@ export function Hero({ featured }: { featured: HomeEvent }) {
       const days = differenceInCalendarDays(event.startsAt, event.registrationOpensAt);
       return `Registration opens ${formatDhakaLong(event.registrationOpensAt)} (Dhaka) — ${days} days before the show.`;
     }
-    if (phase === 'sold_out') return 'Every ticket has gone. If a hold expires, tickets come back on sale here.';
+    if (phase === 'sold_out')
+      return 'Every ticket has gone. If a hold expires, tickets come back on sale here.';
     if (phase === 'closed') return 'Registration has closed for this event.';
     return null;
   })();
@@ -40,7 +41,12 @@ export function Hero({ featured }: { featured: HomeEvent }) {
         <div className="aspect-video w-full bg-secondary lg:overflow-hidden lg:rounded-2xl">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={coverUrl} alt="" className="size-full object-cover" data-testid="hero-cover" />
+            <img
+              src={coverUrl}
+              alt=""
+              className="size-full object-cover"
+              data-testid="hero-cover"
+            />
           ) : null}
         </div>
 
@@ -66,7 +72,12 @@ export function Hero({ featured }: { featured: HomeEvent }) {
 
           <div className="flex flex-col gap-2.5 pt-1 sm:flex-row sm:items-center">
             {canRegister ? (
-              <ButtonLink href={`${href}/register`} variant="cta" size="lg" className="w-full sm:w-auto">
+              <ButtonLink
+                href={`${href}/register`}
+                variant="cta"
+                size="lg"
+                className="w-full sm:w-auto"
+              >
                 Get tickets
               </ButtonLink>
             ) : (
@@ -74,12 +85,19 @@ export function Hero({ featured }: { featured: HomeEvent }) {
                 Get tickets
               </div>
             )}
-            <ButtonLink href={href} variant="secondary" size="lg" className="w-full border-foreground sm:w-auto">
+            <ButtonLink
+              href={href}
+              variant="secondary"
+              size="lg"
+              className="w-full border-foreground sm:w-auto"
+            >
               Details
             </ButtonLink>
           </div>
           {registrationLine ? (
-            <p className="text-[13px] leading-snug text-muted-foreground tabular">{registrationLine}</p>
+            <p className="text-[13px] leading-snug text-muted-foreground tabular">
+              {registrationLine}
+            </p>
           ) : null}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { differenceInCalendarDays } from 'date-fns';
-import { eventsService, ticketTypesService } from '@/server/container';
+import { eventsService, ordersService, ticketTypesService } from '@/server/container';
 import { ButtonLink } from '@/components/button-link';
 import { EmptyState } from '@/components/empty-state';
 import { Money } from '@/components/money';
@@ -53,7 +53,7 @@ export default async function AdminDashboardPage() {
     : `${formatDhakaLong(now)} (Dhaka)`;
 
   // Phase 3/4 wire these to orders; the zero states are the design's own copy.
-  const pendingVerification = 0;
+  const pendingVerification = await ordersService.countPendingVerification();
   const ordersToday = 0;
   const revenueTodayPaisa = 0;
   const holdsExpiring = 0;
@@ -67,7 +67,15 @@ export default async function AdminDashboardPage() {
           label="Pending verification"
           value={pendingVerification}
           urgent={pendingVerification > 0}
-          detail={pendingVerification > 0 ? 'Open queue →' : 'All clear'}
+          detail={
+            pendingVerification > 0 ? (
+              <Link href="/admin/verification" className="font-semibold underline">
+                Open queue →
+              </Link>
+            ) : (
+              'All clear'
+            )
+          }
           detailTone="success"
         />
         <StatCard
@@ -103,7 +111,11 @@ export default async function AdminDashboardPage() {
       ) : null}
 
       {withTypes.map(({ event, types }) => {
-        const { total, sold: eSold, held: eHeld } = capacityMap.get(event.id) ?? {
+        const {
+          total,
+          sold: eSold,
+          held: eHeld,
+        } = capacityMap.get(event.id) ?? {
           total: 0,
           sold: 0,
           held: 0,
@@ -121,7 +133,7 @@ export default async function AdminDashboardPage() {
                 </h2>
                 <StatusChip status={event.status} />
               </div>
-              <p className="tabular text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground tabular">
                 {formatDhakaLong(event.startsAt)} (Dhaka)
                 {event.registrationClosesAt
                   ? ` · closes ${formatDhakaLong(event.registrationClosesAt)}`
@@ -150,7 +162,7 @@ export default async function AdminDashboardPage() {
                             {state === 'opens_later' ? ' · not on sale yet' : ''}
                           </span>
                         </span>
-                        <span className="tabular text-muted-foreground">
+                        <span className="text-muted-foreground tabular">
                           {t.quantitySold} / {t.quantityTotal} sold
                           {t.quantityReserved > 0 ? ` · ${t.quantityReserved} held` : ''}
                         </span>
@@ -171,7 +183,7 @@ export default async function AdminDashboardPage() {
             <div className="flex flex-wrap items-center gap-6 border-t border-border pt-4 text-sm">
               <span>
                 <span className="text-muted-foreground">Sold </span>
-                <span className="tabular font-semibold">
+                <span className="font-semibold tabular">
                   {eSold} / {total}
                 </span>
               </span>
@@ -181,7 +193,7 @@ export default async function AdminDashboardPage() {
               </span>
               <span>
                 <span className="text-muted-foreground">Held </span>
-                <span className="tabular font-semibold">{eHeld}</span>
+                <span className="font-semibold tabular">{eHeld}</span>
               </span>
               <Link
                 href={`/admin/events/${event.id}/edit`}

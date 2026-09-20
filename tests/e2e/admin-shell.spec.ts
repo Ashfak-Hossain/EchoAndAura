@@ -22,16 +22,23 @@ test.describe('admin shell (B2)', () => {
       'page',
     );
     await expect(nav.getByRole('link', { name: 'Events' })).toBeVisible();
+    // Verification is live since Phase 4 (and is the only item allowed a count badge).
+    await expect(nav.getByRole('link', { name: /verification/i })).toHaveAttribute(
+      'href',
+      '/admin/verification',
+    );
 
     // Unbuilt sections are visible but not links — no dead ends.
-    for (const label of ['Verification', 'Orders', 'Promo codes', 'Reports', 'Settings']) {
+    for (const label of ['Orders', 'Promo codes', 'Reports', 'Settings']) {
       await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
       await expect(nav.locator('[aria-disabled="true"]', { hasText: label })).toBeVisible();
     }
 
     // Environment chip + signed-in email in the header.
-    // The chip reflects APP_ENV (or NODE_ENV: a production build says "production").
-    await expect(page.getByRole('banner').getByText(/^(local|staging|production)$/i)).toBeVisible();
+    // The chip reflects APP_ENV (the Playwright web server sets "test").
+    await expect(
+      page.getByRole('banner').getByText(/^(local|test|staging|production)$/i),
+    ).toBeVisible();
     await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
     await nav.getByRole('link', { name: 'Events' }).click();

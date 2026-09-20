@@ -19,7 +19,7 @@ export function CopyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-stretch overflow-hidden rounded-lg border border-border-strong bg-card">
       <span className="sr-only">{label}</span>
-      <span className="tabular flex flex-1 items-center px-3.5 font-mono text-[17px] font-medium tracking-wide">
+      <span className="flex flex-1 items-center px-3.5 font-mono text-[17px] font-medium tracking-wide tabular">
         {value}
       </span>
       <button

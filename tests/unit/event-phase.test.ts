@@ -35,7 +35,10 @@ describe('eventPhase', () => {
 
   it('is closing_soon strictly under 48h before close', () => {
     expect(
-      eventPhase({ ...base, event: { ...base.event, registrationClosesAt: at(CLOSING_SOON_HOURS) } }),
+      eventPhase({
+        ...base,
+        event: { ...base.event, registrationClosesAt: at(CLOSING_SOON_HOURS) },
+      }),
     ).toBe('open');
     expect(
       eventPhase({

@@ -53,10 +53,7 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, StatusLabel> = {
   cancelled: { label: 'Cancelled', tone: 'neutral', strike: true },
 };
 
-import {
-  type TicketTypeSaleState,
-  ticketTypeSaleState,
-} from '@/server/lib/ticket-type-sale-state';
+import { type TicketTypeSaleState, ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 
 export { type TicketTypeSaleState, ticketTypeSaleState };
 
