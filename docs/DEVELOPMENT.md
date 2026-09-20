@@ -92,6 +92,13 @@ failure path, not just the happy path.
 `pnpm verify` runs typecheck → lint → unit tests → build. **Nothing merges unless
 it passes**, locally and in CI (`.github/workflows/ci.yml`).
 
+Builds write to `.next-build/`, the dev server to `.next/` (`NEXT_DIST_DIR`
+in the `build`, `start` and `typecheck` scripts; `distDir` in
+`next.config.ts`). That is what lets `pnpm verify` and the Playwright suite
+run while `pnpm dev` is up: sharing one folder corrupts Turbopack's dev
+cache ("Restore of All for task … failed") and the dev typegen. If the dev
+server ever dies that way anyway, `rm -rf .next` and start it again.
+
 ## Project structure
 
 ```
