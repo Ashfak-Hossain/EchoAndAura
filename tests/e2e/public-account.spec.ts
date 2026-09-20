@@ -108,7 +108,7 @@ test.describe('buyer access without an account, and with one', () => {
     // Anonymous: header offers Sign in.
     await page.goto('/');
     await page
-      .getByRole('navigation', { name: 'Site' })
+      .getByRole('navigation', { name: 'Site', exact: true })
       .getByRole('link', { name: 'Sign in' })
       .click();
     await expect(page).toHaveURL(/\/account\/sign-in$/);

@@ -58,6 +58,13 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
   return {
     secret,
     baseURL,
+    // better-auth's own limiter (3 sign-ins / 10 s per IP) is brute-force
+    // protection for /admin/login and stays on in production. The e2e
+    // build is also NODE_ENV=production (next start) but signs in as the
+    // admin from six workers at once, so APP_ENV=test turns it off.
+    rateLimit: {
+      enabled: process.env.APP_ENV === 'test' ? false : process.env.NODE_ENV === 'production',
+    },
     // Table names are plural (users, sessions, accounts, verifications) — see the
     // Auth section of src/db/schema.ts.
     database: drizzleAdapter(db, { provider: 'pg', schema, usePlural: true }),

@@ -11,6 +11,8 @@ interface Props {
   now: Date;
   /** Desktop panel rows are denser than the mobile cards (A2 · 1440). */
   compact?: boolean;
+  /** The row to tint marigold: the open type whose sales end soonest (an Early Bird). */
+  highlightId?: string | null;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * or closed type stays visible, greyed, with its price — removing it makes
  * the page look wrong to anyone who saw it earlier.
  */
-export function TicketList({ ticketTypes, phase, now, compact }: Props) {
+export function TicketList({ ticketTypes, phase, now, compact, highlightId }: Props) {
   const showQuantities = phase === 'open' || phase === 'closing_soon' || phase === 'sold_out';
   const scarce = phase === 'closing_soon';
 
@@ -47,12 +49,20 @@ export function TicketList({ ticketTypes, phase, now, compact }: Props) {
               'flex items-start justify-between gap-2.5 rounded-xl border p-3.5',
               inactive
                 ? 'border-border bg-secondary text-muted-foreground'
-                : 'border-border-strong bg-card',
+                : t.id === highlightId
+                  ? 'border-[#f0d9ac] bg-accent'
+                  : 'border-border bg-card',
               compact && 'items-center rounded-[10px]',
             )}
           >
             <div className="min-w-0">
-              <div className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')}>
+              <div
+                className={cn(
+                  'font-semibold',
+                  compact ? 'text-[15px]' : 'text-base',
+                  inactive && 'line-through',
+                )}
+              >
                 {t.name}
               </div>
               {subtitle && showQuantities ? (
@@ -62,7 +72,7 @@ export function TicketList({ ticketTypes, phase, now, compact }: Props) {
                 <div
                   className={cn(
                     'mt-0.5 text-[13px] font-medium',
-                    scarce ? 'text-[#5c4514]' : 'text-[#17603b]',
+                    scarce || t.id === highlightId ? 'text-accent-ink' : 'text-[#17603b]',
                   )}
                 >
                   {availability.count} left
@@ -75,7 +85,7 @@ export function TicketList({ ticketTypes, phase, now, compact }: Props) {
             <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
               <Money
                 paisa={t.pricePaisa}
-                className={cn('font-semibold', compact ? 'text-[15px]' : 'text-base')}
+                className={cn('font-heading font-bold', compact ? 'text-[18px]' : 'text-[17px]')}
               />
               {!compact && showQuantities ? (
                 availability.kind === 'left' ? (

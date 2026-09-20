@@ -96,7 +96,7 @@ test.describe('public event page (A2)', () => {
     // Content.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByText('1 Oct 2030, 19:00 (Dhaka)')).toBeVisible();
-    await expect(page.getByText('ICCB Hall 4, Dhaka')).toBeVisible();
+    await expect(page.getByText('ICCB Hall 4, Dhaka').first()).toBeVisible();
     await expect(page.getByTestId('event-cover')).toBeVisible();
     // The description is rich text (ADR-010): rendered as a paragraph, not raw markup.
     await expect(page.locator('.rich-text p')).toHaveText(

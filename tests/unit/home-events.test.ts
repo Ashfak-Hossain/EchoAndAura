@@ -3,6 +3,7 @@ import type { EventStatus } from '@/server/lib/event-status';
 import {
   PAST_EVENTS_LIMIT,
   UPCOMING_EVENTS_LIMIT,
+  selectArchiveEvents,
   selectHomeEvents,
 } from '@/server/lib/home-events';
 
@@ -76,6 +77,48 @@ describe('selectHomeEvents', () => {
     );
     const sel = selectHomeEvents(many, NOW);
     expect(sel.past).toHaveLength(PAST_EVENTS_LIMIT);
-    expect(sel.past.map((e) => e.id)).toEqual(['p0', 'p1', 'p2']);
+    expect(sel.past.map((e) => e.id)).toEqual(
+      Array.from({ length: PAST_EVENTS_LIMIT }, (_, i) => `p${i}`),
+    );
+  });
+});
+
+describe('selectArchiveEvents (A6)', () => {
+  it('lists every started event newest first, no cap; drafts and future events never', () => {
+    const events = [
+      ev('feb', 'archived', day(-200)),
+      ev('aug', 'published', day(-20)),
+      ev('may', 'archived', day(-120)),
+      ev('draft-old', 'draft', day(-300)),
+      ev('pulled-future', 'archived', day(10)),
+      ev('live', 'published', day(13)),
+      ...Array.from({ length: PAST_EVENTS_LIMIT + 2 }, (_, i) =>
+        ev(`x${i}`, 'archived', day(-400 - i)),
+      ),
+    ];
+    const ids = selectArchiveEvents(events, NOW).map((e) => e.id);
+    expect(ids.slice(0, 3)).toEqual(['aug', 'may', 'feb']);
+    expect(ids).toHaveLength(3 + PAST_EVENTS_LIMIT + 2);
+    expect(ids).not.toContain('draft-old');
+    expect(ids).not.toContain('pulled-future');
+    expect(ids).not.toContain('live');
+  });
+
+  it('an event starting this very minute is not past yet', () => {
+    expect(selectArchiveEvents([ev('now', 'published', NOW)], NOW)).toEqual([]);
+    expect(
+      selectArchiveEvents([ev('just', 'published', new Date(NOW.getTime() - 1))], NOW),
+    ).toHaveLength(1);
+  });
+
+  it('never lists fewer than the home strip shows', () => {
+    const events = [
+      ev('a', 'archived', day(-1)),
+      ev('b', 'published', day(-2)),
+      ev('c', 'archived', day(-3)),
+    ];
+    const strip = selectHomeEvents(events, NOW).past.map((e) => e.id);
+    const archive = selectArchiveEvents(events, NOW).map((e) => e.id);
+    expect(archive.slice(0, strip.length)).toEqual(strip);
   });
 });

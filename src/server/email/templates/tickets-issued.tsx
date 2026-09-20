@@ -69,7 +69,8 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.small}>
         Wrong name on a ticket? Open it and edit the name yourself
-        {closes ? ` until registration closes on ${closes}` : ''}. Paid {formatBDT(v.order.totalPaisa)}
+        {closes ? ` until registration closes on ${closes}` : ''}. Paid{' '}
+        {formatBDT(v.order.totalPaisa)}
         {v.order.bkashTrxId ? ` · trxID ${v.order.bkashTrxId}` : ''}.
       </Text>
     </EmailLayout>

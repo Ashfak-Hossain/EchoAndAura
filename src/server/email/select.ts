@@ -16,7 +16,10 @@ export function selectMailer(env: NodeJS.ProcessEnv = process.env): Mailer {
   if (env.NODE_ENV === 'production') {
     throw new Error(`MAILER=${choice} is not allowed in production — set MAILER=ses`);
   }
-  logger.warn({ mailer: choice }, 'using the log mailer: emails are written to tmp/emails, not sent');
+  logger.warn(
+    { mailer: choice },
+    'using the log mailer: emails are written to tmp/emails, not sent',
+  );
   return createLogMailer();
 }
 

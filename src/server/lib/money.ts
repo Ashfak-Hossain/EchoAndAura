@@ -88,3 +88,14 @@ export function formatBDT(paisa: number): string {
   const grouped = takaPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return `৳${grouped}.${paisaPart.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Plain decimal for spreadsheets, e.g. 123456 → "1234.56": no symbol, no
+ * grouping, always two decimals, so a CSV column sums in Excel/Numbers.
+ */
+export function formatDecimalBDT(paisa: number): string {
+  assertValidPaisa(paisa);
+  const takaPart = Math.floor(paisa / PAISA_PER_TAKA);
+  const paisaPart = paisa % PAISA_PER_TAKA;
+  return `${takaPart}.${paisaPart.toString().padStart(2, '0')}`;
+}

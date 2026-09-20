@@ -3,5 +3,6 @@ drizzle/
 src/components/ui/
 # Build output and personal notes (may contain third-party exports).
 .next/
+.next-build/
 notes/
 pnpm-lock.yaml

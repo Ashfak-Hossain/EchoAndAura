@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
 import { events, orderEvents, orders, ticketTypes } from '@/db/schema';
@@ -31,6 +31,28 @@ export interface QueueRow {
   order: OrderRecord;
   eventTitle: string;
   ticketTypeName: string;
+}
+
+/** B9 filter: every field optional; the repository ANDs what is set. */
+export interface OrdersSearchFilter {
+  /** ORed equality on reference / trxID / phone, ILIKE on email. */
+  term?: {
+    reference: string | null;
+    trxId: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+  status?: OrderStatus | null;
+  eventId?: string | null;
+  /** Inclusive lower bound on created_at. */
+  createdFrom?: Date | null;
+  /** Exclusive upper bound on created_at. */
+  createdBefore?: Date | null;
+}
+
+export interface OrdersSearchPage {
+  rows: QueueRow[];
+  total: number;
 }
 
 export interface OrderTransition {
@@ -76,6 +98,14 @@ export interface OrdersRepository {
   countByStatus(status: OrderStatus): Promise<number>;
   /** "My orders": everything placed with this (lower-cased) email, newest first. */
   listByBuyerEmail(email: string): Promise<QueueRow[]>;
+  /**
+   * B9: filtered, newest first, one page plus the total for the pager.
+   * `limit` is the caller's page size (the CSV export passes its cap).
+   */
+  search(
+    filter: OrdersSearchFilter,
+    page: { limit: number; offset: number },
+  ): Promise<OrdersSearchPage>;
 }
 
 // Constraint names as generated in drizzle/0000_*.sql.
@@ -175,4 +205,49 @@ export const ordersRepository: OrdersRepository = {
       .where(eq(orders.buyerEmail, email))
       .orderBy(desc(orders.createdAt));
   },
+
+  async search(filter, page) {
+    const where = searchWhere(filter);
+    const [rows, [counted]] = await Promise.all([
+      db
+        .select({ order: orders, eventTitle: events.title, ticketTypeName: ticketTypes.name })
+        .from(orders)
+        .innerJoin(events, eq(orders.eventId, events.id))
+        .innerJoin(ticketTypes, eq(orders.ticketTypeId, ticketTypes.id))
+        .where(where)
+        .orderBy(desc(orders.createdAt), desc(orders.id))
+        .limit(page.limit)
+        .offset(page.offset),
+      db.select({ n: count() }).from(orders).where(where),
+    ]);
+    return { rows, total: counted?.n ?? 0 };
+  },
 };
+
+/**
+ * The search term is pre-normalised (validation/orders-search.ts) so the
+ * identifier matches are plain equality — they hit the unique indexes —
+ * and only the email is a substring scan. An empty term means no term.
+ */
+function searchWhere(filter: OrdersSearchFilter): SQL | undefined {
+  const clauses: SQL[] = [];
+  const t = filter.term;
+  if (t && (t.reference || t.trxId || t.phone || t.email)) {
+    const alternatives: SQL[] = [];
+    if (t.reference) alternatives.push(eq(orders.reference, t.reference));
+    if (t.trxId) alternatives.push(eq(orders.bkashTrxId, t.trxId));
+    if (t.phone) alternatives.push(eq(orders.buyerPhone, t.phone));
+    if (t.email) alternatives.push(ilike(orders.buyerEmail, `%${escapeLike(t.email)}%`));
+    clauses.push(or(...alternatives)!);
+  }
+  if (filter.status) clauses.push(eq(orders.status, filter.status));
+  if (filter.eventId) clauses.push(eq(orders.eventId, filter.eventId));
+  if (filter.createdFrom) clauses.push(gte(orders.createdAt, filter.createdFrom));
+  if (filter.createdBefore) clauses.push(lt(orders.createdAt, filter.createdBefore));
+  return clauses.length ? and(...clauses) : undefined;
+}
+
+/** `%` and `_` in a typed term must match literally, not as wildcards. */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
+}

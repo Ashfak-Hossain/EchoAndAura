@@ -199,6 +199,11 @@ export const orders = pgTable(
     index('orders_ticket_type_id_idx').on(t.ticketTypeId),
     index('orders_status_idx').on(t.status),
     index('orders_hold_expires_at_idx').on(t.holdExpiresAt),
+    // B9 orders search: equality on phone, prefix/substring on email, and
+    // the newest-first sort with a date range.
+    index('orders_buyer_email_idx').on(t.buyerEmail),
+    index('orders_buyer_phone_idx').on(t.buyerPhone),
+    index('orders_created_at_idx').on(t.createdAt),
     check('orders_quantity_range', sql`${t.quantity} >= 1 AND ${t.quantity} <= 10`),
     // Invariant 3 backstop: the UNIQUE index compares bytes, so a trxID that
     // is not upper-cased and trimmed could slip past it. The database

@@ -13,7 +13,11 @@ import {
 import { descriptionToHtml } from '@/server/lib/description';
 import { type EventStatus, assertEventTransition } from '@/server/lib/event-status';
 import { type EventPhase, eventPhase } from '@/server/lib/event-phase';
-import { type HomeSelection, selectHomeEvents } from '@/server/lib/home-events';
+import {
+  type HomeSelection,
+  selectArchiveEvents,
+  selectHomeEvents,
+} from '@/server/lib/home-events';
 import { type PublishProblem, publishReadiness } from '@/server/lib/publish-readiness';
 import { defaultRegistrationWindow } from '@/server/lib/registration-window';
 import { slugify } from '@/server/lib/slug';
@@ -67,6 +71,14 @@ export interface HomeEvent {
   phase: EventPhase;
   /** Lowest ticket price in paisa; null when no ticket types exist. */
   fromPricePaisa: number | null;
+  /** Tickets still available across every type (the hero's "112 left"). */
+  availableTotal: number;
+  coverUrl: string | null;
+}
+
+/** One past event as the archive lists it. */
+export interface ArchiveEvent {
+  event: EventRecord;
   coverUrl: string | null;
 }
 
@@ -134,6 +146,7 @@ export function createEventsService(
           event,
           phase: eventPhase({ event, availableTotal, now: at }),
           fromPricePaisa: cap?.fromPricePaisa ?? null,
+          availableTotal,
           coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
         };
       };
@@ -143,6 +156,18 @@ export function createEventsService(
         alsoUpcoming: picked.alsoUpcoming.map(decorate),
         past: picked.past.map(decorate),
       };
+    },
+
+    /**
+     * The archive read model (A6): everything that has happened, newest
+     * first. One events query; no capacity query, nothing here is on sale.
+     */
+    async getArchivePage(at: Date = now()): Promise<ArchiveEvent[]> {
+      const visible = await repo.listByStatus(['published', 'archived']);
+      return selectArchiveEvents(visible, at).map((event) => ({
+        event,
+        coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
+      }));
     },
 
     /** @throws EventSlugTakenError (from the repository) on a duplicate slug. */

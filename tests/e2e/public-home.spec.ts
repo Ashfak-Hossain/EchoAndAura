@@ -104,7 +104,7 @@ test.describe('home page (A1)', () => {
       await expect(page.getByTestId('home-dormant')).toHaveCount(0);
 
       // Trust points are always there.
-      await expect(page.getByText('Pay with bKash — no card needed')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Paid by bKash' })).toBeVisible();
 
       // Share preview of the home page names the next event and uses its cover.
       const meta = (p: string) =>

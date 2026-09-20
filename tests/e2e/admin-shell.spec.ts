@@ -28,8 +28,13 @@ test.describe('admin shell (B2)', () => {
       '/admin/verification',
     );
 
+    // Orders is live since B9.
+    await expect(nav.getByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'href',
+      '/admin/orders',
+    );
     // Unbuilt sections are visible but not links — no dead ends.
-    for (const label of ['Orders', 'Promo codes', 'Reports', 'Settings']) {
+    for (const label of ['Promo codes', 'Reports', 'Settings']) {
       await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
       await expect(nav.locator('[aria-disabled="true"]', { hasText: label })).toBeVisible();
     }

@@ -1,4 +1,5 @@
-import { addHours } from 'date-fns';
+import { addDays, addHours } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
 import type { DbExecutor } from '@/db/executor';
 import {
   AttendeeNamesMismatchError,
@@ -23,6 +24,8 @@ import type {
   OrderRecord,
   OrdersRepository,
   QueueRow,
+  OrdersSearchFilter,
+  OrdersSearchPage,
 } from '@/server/repositories/orders.repository';
 import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
 import type {
@@ -30,6 +33,12 @@ import type {
   TicketTypesRepository,
 } from '@/server/repositories/ticket-types.repository';
 import type { InventoryService } from '@/server/services/inventory.service';
+import {
+  type MatchedField,
+  normaliseSearchTerm,
+  type OrdersSearchInput,
+} from '@/lib/validation/orders-search';
+import { DHAKA_TZ } from '@/lib/time';
 
 /** Inventory is held this long from order creation (ADR-002). */
 export const HOLD_HOURS = 24;
@@ -107,6 +116,42 @@ export interface SubmitPaymentInput {
  * audit row — so the row lock on ticket_types is held for microseconds and
  * a failure anywhere leaves no orphaned hold.
  */
+/** B9 page size. */
+export const ORDERS_PAGE_SIZE = 25;
+/** CSV export cap: a single organizer's whole history fits many times over. */
+export const ORDERS_EXPORT_CAP = 10_000;
+
+export type OrdersSearchRow = QueueRow & { matchedField: MatchedField | null };
+
+export interface OrdersSearchResult {
+  rows: OrdersSearchRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
+
+function toSearchFilter(input: OrdersSearchInput): OrdersSearchFilter {
+  const term = input.q ? normaliseSearchTerm(input.q) : null;
+  return {
+    term,
+    status: input.status,
+    eventId: input.event,
+    createdFrom: input.from ? fromZonedTime(`${input.from}T00:00:00`, DHAKA_TZ) : null,
+    createdBefore: input.to ? addDays(fromZonedTime(`${input.to}T00:00:00`, DHAKA_TZ), 1) : null,
+  };
+}
+
+/** Which of the term's interpretations this row satisfied — for the tinted cell. */
+export function matchedField(row: QueueRow, term: OrdersSearchFilter['term']): MatchedField | null {
+  if (!term) return null;
+  if (term.reference && row.order.reference === term.reference) return 'reference';
+  if (term.trxId && row.order.bkashTrxId === term.trxId) return 'trxId';
+  if (term.phone && row.order.buyerPhone === term.phone) return 'phone';
+  if (term.email && row.order.buyerEmail.includes(term.email)) return 'email';
+  return null;
+}
+
 export function createOrdersService({
   orders,
   tickets,
@@ -272,6 +317,41 @@ export function createOrdersService({
     /** "My orders" for a signed-in buyer: proof of the email is the access rule. */
     listForBuyer(email: string): Promise<QueueRow[]> {
       return orders.listByBuyerEmail(email.trim().toLowerCase());
+    },
+
+    /**
+     * B9: one page of the orders list. Dates are Dhaka calendar days — the
+     * "to" day is included whole (exclusive bound = the next midnight).
+     * The page number clamps to the last page so a stale link never shows
+     * an empty table with a total that says otherwise.
+     */
+    async searchOrders(input: OrdersSearchInput): Promise<OrdersSearchResult> {
+      const filter = toSearchFilter(input);
+      const first = await orders.search(filter, {
+        limit: ORDERS_PAGE_SIZE,
+        offset: (input.page - 1) * ORDERS_PAGE_SIZE,
+      });
+      const pages = Math.max(1, Math.ceil(first.total / ORDERS_PAGE_SIZE));
+      const page = Math.min(input.page, pages);
+      const result =
+        page === input.page
+          ? first
+          : await orders.search(filter, {
+              limit: ORDERS_PAGE_SIZE,
+              offset: (page - 1) * ORDERS_PAGE_SIZE,
+            });
+      return {
+        rows: result.rows.map((row) => ({ ...row, matchedField: matchedField(row, filter.term) })),
+        total: result.total,
+        page,
+        pageSize: ORDERS_PAGE_SIZE,
+        pages,
+      };
+    },
+
+    /** The same filter without pagination, for the CSV. Capped; the caller says so in the file. */
+    async exportOrders(input: OrdersSearchInput): Promise<OrdersSearchPage> {
+      return orders.search(toSearchFilter(input), { limit: ORDERS_EXPORT_CAP, offset: 0 });
     },
 
     /**

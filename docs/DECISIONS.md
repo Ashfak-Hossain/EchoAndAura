@@ -824,3 +824,138 @@ accordion where several rows can be open, which is harmless.
 **Revisit when:** the organizer wants to edit copy without a deploy (then
 a `site_pages` table behind the existing rich-text editor), or a second
 language arrives (post-launch Bangla).
+
+---
+
+## ADR-019 — Archive read model, error reference from Next's digest, auth limiter off only in e2e
+
+**Date:** 2026-09-21 · **Status:** Accepted
+
+**Context:** The last Phase 2 screens: A6 `/archive` and the A8 500 page.
+Plus two e2e flake causes found on 20 Sep that made every full run fail
+first time.
+
+**Decision:**
+
+- **Archive = the home page's past rule, uncapped.** `selectArchiveEvents`
+  sits next to `selectHomeEvents` (`src/server/lib/home-events.ts`) with
+  the same membership (started before now, published or archived, never
+  draft — an archived _future_ event was pulled on purpose), so "See all
+  past events" can never show fewer than the strip. One events query, no
+  capacity query: nothing in the archive is on sale.
+- **Error reference is Next's `digest`.** Next attaches a digest to every
+  server error and prints it in the server log, so `ERR-<first 8>` on the
+  page is already greppable — no logging plumbing, no error table. A
+  client-only error has no digest and gets a one-off random reference
+  from lazy `useState` (the React-compiler lint forbids reading refs in
+  render). Three boundaries share one `ErrorPage`: the public group
+  (inside the shell), the admin group (admin wording, "Back to
+  dashboard"), and `global-error.tsx` for a failed root layout.
+- **better-auth's limiter stays on in production and off in e2e.**
+  `rateLimit.enabled` is `NODE_ENV === 'production'` unless
+  `APP_ENV === 'test'`. Its `/sign-in*` rule (3 per 10 s per IP) is real
+  brute-force protection for `/admin/login`; the Playwright build is also
+  a production build but signs in as the admin from six workers at once.
+  The long verification spec gets `test.slow()`.
+
+**Consequences:** In production behind a proxy, better-auth needs the
+client IP header (`advanced.ipAddress.ipAddressHeaders`, e.g.
+`cf-connecting-ip`) or every visitor shares one sign-in bucket — a Phase 6
+deployment item, noted in the RUNBOOK plan. The archive is dynamic like
+the home page.
+
+**Revisit when:** attendance counts land on archive cards (Phase 6
+reports), or a maintenance page is needed (reverse proxy, Phase 6).
+
+---
+
+## ADR-020 — Public design pass to the approved canvas
+
+**Date:** 2026-09-21 · **Status:** Accepted
+
+**Context:** The public site was functionally complete but read as a
+demo: a hero in a card, a grid of six identical cards, three empty trust
+boxes, a one-row footer, an event page with an empty right column. A
+Claude Design canvas (four artboards: home and event at 1440 and 390)
+was approved on 21 Sep and this pass makes the code match it.
+
+**Decision:**
+
+- **Same tokens, more contrast.** Nothing new in `globals.css`: the pass
+  uses the existing palette and type scale but alternates light and
+  charcoal full-bleed bands (hero, trust band, footer) so the page has
+  rhythm. Archivo display sizes go up to 64px on the hero only.
+- **The header's "Get tickets" comes from the home read model.**
+  `src/app/(public)/home/load.ts` wraps `eventsService.getHomePage()` in
+  React `cache()`; the public layout reads the featured event's slug and
+  phase from it and the home page reads the rest — one query per request,
+  no new repository method. The button is omitted (not disabled) when
+  nothing is on sale.
+- **Home caps.** "Also upcoming" renders at most three cards on the home
+  page (the selector still returns six for a future events list); the
+  past strip shows four. `HomeEvent` gained `availableTotal` for the
+  hero's "N left" — computed from the capacity roll-up already fetched.
+- **Event page: the band is the cover.** On desktop the cover is the
+  darkened backdrop behind title/date/venue; on phones it sits above the
+  band. The tickets card is rendered twice (inline on phones, sticky on
+  desktop) with the CTA only in the desktop copy — the phone has the
+  bottom bar. The "deal" row (open type whose sales end soonest) is
+  tinted marigold; there is no Early Bird flag in the data model.
+- **Icons are inline stroke SVGs** (`home/icons.tsx`), no icon font, no
+  emoji. Mobile nav is the shadcn Sheet, like the admin.
+
+**Consequences:** e2e selectors that assumed one occurrence of the venue
+or the cover now target the visible copy (`event-cover` is the desktop
+backdrop, `event-cover-mobile` the phone image; the footer nav is
+`Site pages`, the header nav `Site` with `exact: true`). The dormant
+home state (`NoLiveEvent`) was already charcoal and is unchanged.
+
+**Revisit when:** real cover photos land (the date tile and scrim were
+tuned on placeholders), or an "All events" list page exists to link the
+"Also upcoming" heading to.
+
+---
+
+## ADR-021 — Orders list (B9): normalised search, URL state, CSV as a route handler
+
+**Date:** 2026-09-21 · **Status:** Accepted
+
+**Context:** After verification, an order had no page to be found from.
+Raj needs "which order was this TrxID?", "did this buyer's email bounce?",
+"how many orders did event X take?", and a spreadsheet of the answer.
+
+**Decision:**
+
+- **The search term is normalised exactly like the stored data, then
+  matched by equality.** `normaliseSearchTerm` (`src/lib/validation/
+orders-search.ts`) runs the same rules registration used: reference →
+  `EA-` + upper, trxID → upper, phone → E.164 via `bdMobile`, email →
+  lower. Every interpretation that parses is kept and the repository ORs
+  them (`reference = … OR bkash_trx_id = … OR buyer_phone = … OR
+buyer_email ILIKE %…%`). Identifiers hit indexes; only the email is a
+  substring scan (LIKE wildcards escaped). No trigram or full-text search:
+  a single organizer's table is thousands of rows and the identifiers are
+  exact by nature. The service names which interpretation each row
+  satisfied (`matchedField`) so the UI can tint that cell.
+- **The URL is the state.** A plain GET form; `q`, `status`, `event`,
+  `from`, `to`, `page` are parsed by a lenient schema (bad values fall
+  back to "no filter", never a 400). Back button, bookmarks and the CSV
+  link all carry the same query. Date bounds are Dhaka calendar days,
+  `to` inclusive. Page size 25; an out-of-range page clamps to the last.
+- **CSV export is a route handler** (`/admin/orders/export.csv`), not a
+  server action: a download needs headers and a filename. It calls
+  `requireAdmin()` itself (ADR-017's rule), applies the same filter with
+  a 10 000-row cap, and returns RFC 4180 CSV with a UTF-8 BOM (Excel +
+  Bangla) and CRLF; cells starting with `= + - @` are prefixed with `'`
+  so a buyer's name can never become a spreadsheet formula. Money is a
+  plain decimal column (`formatDecimalBDT`) so it sums.
+- Indexes added on `orders.buyer_email`, `buyer_phone`, `created_at`
+  (migration 0010); `reference` and `bkash_trx_id` were already unique.
+
+**Consequences:** `bdMobile` is now exported from `validation/orders.ts`.
+The verification queue keeps its own unbounded query. `toCsv` is shared
+with the check-in export (next slice). The dashboard's "recent orders"
+(B3) can reuse `searchOrders` with an empty filter.
+
+**Revisit when:** a second organizer or > ~100k orders make the email
+scan slow (then a trigram index), or Raj asks for saved views.

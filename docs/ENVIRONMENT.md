@@ -15,30 +15,31 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 
 ## Quick reference
 
-| Variable                                                                                    | Required          | First needed | Purpose                                                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | ----------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                       | Yes               | Phase 0      | Credentials for the local Postgres container                                                                                                                       |
-| `DATABASE_URL`                                                                              | Yes               | Phase 0      | App's Postgres connection string                                                                                                                                   |
-| `TEST_DATABASE_URL`                                                                         | No                | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`)                                                                                               |
-| `REDIS_URL`                                                                                 | Yes               | Phase 3      | BullMQ: the worker consumes; the app enqueues email jobs after each commit (fails fast and logs if Redis is down — the order stands)                               |
-| `LOG_LEVEL`                                                                                 | No                | Phase 3      | pino level for services and the worker (default `debug` locally, `info` in production)                                                                             |
-| `BETTER_AUTH_SECRET`                                                                        | Yes               | Phase 1      | Signs admin auth sessions                                                                                                                                          |
-| `BETTER_AUTH_URL`                                                                           | Yes               | Phase 1      | Base URL for auth callbacks                                                                                                                                        |
-| `MAILER`                                                                                    | No                | Phase 4      | `ses` or `log` (default: `ses` in production, `log` elsewhere — writes emails to `tmp/emails/`). The worker refuses to start in production with anything but `ses` |
-| `AWS_SES_REGION` / `AWS_SES_ACCESS_KEY_ID` / `AWS_SES_SECRET_ACCESS_KEY`                    | With `MAILER=ses` | Phase 4      | Amazon SES credentials for the worker (IAM user with `ses:SendEmail` only; region `ap-south-1`)                                                                    |
-| `EMAIL_FROM`                                                                                | With `MAILER=ses` | Phase 4      | From address on the verified domain, e.g. `echoandaura <tickets@echoandaura.com>`. Keep the display name ASCII (SESv2 envelope)                                    |
-| `EMAIL_REPLY_TO`                                                                            | No                | Phase 4      | Where buyer replies land, e.g. `hello@echoandaura.com` (Cloudflare Email Routing → the organizer)                                                                  |
-| `ORGANIZER_PHONE`                                                                           | No                | Phase 4      | Organizer phone shown in emails ("Raj 01712 345678"), on /contact and every policy page contact card; hidden when unset                                            |
-| `E2E_EXPOSE_MAGIC_LINK`                                                                     | No (tests)        | Phase 4      | `1` makes the sign-in page show the magic link so Playwright can follow it. Honoured only when `APP_ENV=test`; ignored everywhere else                             |
-| `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes               | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                                                          |
-| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only        | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally                             |
-| `BKASH_RECEIVE_NUMBER`                                                                      | Yes               | Phase 3      | Organizer's bKash number shown to buyers                                                                                                                           |
-| `APP_ENV`                                                                                   | No                | Phase 1      | `local` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`                                                          |
-| `SITE_URL`                                                                                  | Yes (prod)        | Phase 2      | Absolute public origin for canonical + Open Graph URLs (`https://echoandaura.com`); falls back to `BETTER_AUTH_URL` locally                                        |
-| `FACEBOOK_PAGE_URL`                                                                         | No                | Phase 2      | Organizer's Facebook page — "Remind me on Facebook", footer link, contact cards; hidden when unset                                                                 |
-| `BKASH_RECEIVE_NUMBER`                                                                      | No                | Phase 3      | Personal bKash number buyers send money to (order page); "to be announced" when unset. Moves to Settings in Phase 6                                                |
-| `ORGANIZER_CONTACT_EMAIL`                                                                   | No                | Phase 3      | Organizer email shown on order pages ("Stuck? Message the organizer…"), on /contact and every policy page contact card; hidden when unset                          |
-| `APP_TIMEZONE`                                                                              | Yes               | —            | App timezone (`Asia/Dhaka`)                                                                                                                                        |
+| Variable                                                                                    | Required           | First needed | Purpose                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------- | ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                       | Yes                | Phase 0      | Credentials for the local Postgres container                                                                                                                                                                                                  |
+| `DATABASE_URL`                                                                              | Yes                | Phase 0      | App's Postgres connection string                                                                                                                                                                                                              |
+| `TEST_DATABASE_URL`                                                                         | No                 | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`)                                                                                                                                                                          |
+| `REDIS_URL`                                                                                 | Yes                | Phase 3      | BullMQ: the worker consumes; the app enqueues email jobs after each commit (fails fast and logs if Redis is down — the order stands)                                                                                                          |
+| `LOG_LEVEL`                                                                                 | No                 | Phase 3      | pino level for services and the worker (default `debug` locally, `info` in production)                                                                                                                                                        |
+| `BETTER_AUTH_SECRET`                                                                        | Yes                | Phase 1      | Signs admin auth sessions                                                                                                                                                                                                                     |
+| `BETTER_AUTH_URL`                                                                           | Yes                | Phase 1      | Base URL for auth callbacks                                                                                                                                                                                                                   |
+| `MAILER`                                                                                    | No                 | Phase 4      | `ses` or `log` (default: `ses` in production, `log` elsewhere — writes emails to `tmp/emails/`). The worker refuses to start in production with anything but `ses`                                                                            |
+| `AWS_SES_REGION` / `AWS_SES_ACCESS_KEY_ID` / `AWS_SES_SECRET_ACCESS_KEY`                    | With `MAILER=ses`  | Phase 4      | Amazon SES credentials for the worker (IAM user with `ses:SendEmail` only; region `ap-south-1`)                                                                                                                                               |
+| `EMAIL_FROM`                                                                                | With `MAILER=ses`  | Phase 4      | From address on the verified domain, e.g. `echoandaura <tickets@echoandaura.com>`. Keep the display name ASCII (SESv2 envelope)                                                                                                               |
+| `EMAIL_REPLY_TO`                                                                            | No                 | Phase 4      | Where buyer replies land, e.g. `hello@echoandaura.com` (Cloudflare Email Routing → the organizer)                                                                                                                                             |
+| `ORGANIZER_PHONE`                                                                           | No                 | Phase 4      | Organizer phone shown in emails ("Raj 01712 345678"), on /contact and every policy page contact card; hidden when unset                                                                                                                       |
+| `AWS_ACCOUNT_ID`                                                                            | No (`infra:check`) | Docs         | The 12-digit AWS account id, kept out of the public repo; `pnpm infra:check` compares the CLI session against it                                                                                                                              |
+| `E2E_EXPOSE_MAGIC_LINK`                                                                     | No (tests)         | Phase 4      | `1` makes the sign-in page show the magic link so Playwright can follow it. Honoured only when `APP_ENV=test`; ignored everywhere else                                                                                                        |
+| `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes                | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                                                                                                                                     |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only         | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally                                                                                                        |
+| `BKASH_RECEIVE_NUMBER`                                                                      | Yes                | Phase 3      | Organizer's bKash number shown to buyers                                                                                                                                                                                                      |
+| `APP_ENV`                                                                                   | No                 | Phase 1      | `local` \| `test` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`. `test` (set by the Playwright web server) also enables the magic-link seam and disables better-auth's sign-in rate limit |
+| `SITE_URL`                                                                                  | Yes (prod)         | Phase 2      | Absolute public origin for canonical + Open Graph URLs (`https://echoandaura.com`); falls back to `BETTER_AUTH_URL` locally                                                                                                                   |
+| `FACEBOOK_PAGE_URL`                                                                         | No                 | Phase 2      | Organizer's Facebook page — "Remind me on Facebook", footer link, contact cards; hidden when unset                                                                                                                                            |
+| `BKASH_RECEIVE_NUMBER`                                                                      | No                 | Phase 3      | Personal bKash number buyers send money to (order page); "to be announced" when unset. Moves to Settings in Phase 6                                                                                                                           |
+| `ORGANIZER_CONTACT_EMAIL`                                                                   | No                 | Phase 3      | Organizer email shown on order pages ("Stuck? Message the organizer…"), on /contact and every policy page contact card; hidden when unset                                                                                                     |
+| `APP_TIMEZONE`                                                                              | Yes                | —            | App timezone (`Asia/Dhaka`)                                                                                                                                                                                                                   |
 
 ## How to obtain / prepare each
 
@@ -77,6 +78,12 @@ existed, run `pnpm admin:promote <email>` once.
 
 ### Email — Amazon SES on the Cloudflare domain — Phase 4
 
+> The account inventory, exact IAM policy, budgets and runbooks now live in
+> [infra/AWS.md](infra/AWS.md); the authoritative DNS table in
+> [infra/CLOUDFLARE.md](infra/CLOUDFLARE.md); how a message travels from an
+> order to an inbox in [systems/EMAIL.md](systems/EMAIL.md). This section
+> is the first-time setup sequence. `pnpm infra:check` verifies the result.
+
 Emails are sent by the worker (`pnpm worker`) through Amazon SES, behind a
 `Mailer` port. Locally `MAILER=log` writes each email to `tmp/emails/`
 instead of sending. Cost at this volume (~1,500/month) is cents; the first
@@ -84,8 +91,13 @@ instead of sending. Cost at this volume (~1,500/month) is cents; the first
 
 **AWS side (once):**
 
-1. Create an AWS account. Set a **Budget alert at $1** (Billing → Budgets)
-   the same day, so any surprise emails you before it grows.
+1. Create an AWS account. Same day: MFA on root, no root access keys, an
+   IAM admin user with MFA for daily use (never root), and a **zero-spend
+   budget** plus a small monthly budget (Billing → Budgets) so any surprise
+   emails you before it grows. AWS has no hard spending cap; the guard is
+   that the only key on any server is the send-only one below.
+   Production access is a support case: answer AWS's "tell us more" reply
+   with volume, trigger, bounce handling and example subjects, or it stalls.
 2. SES (region **`ap-south-1`**, Mumbai) → _Identities_ → _Create identity_ →
    Domain `echoandaura.com`, Easy DKIM. SES shows **3 CNAME records**.
 3. IAM → _Users_ → create `echoandaura-worker`, access key only, with this
@@ -97,11 +109,22 @@ instead of sending. Cost at this volume (~1,500/month) is cents; the first
        {
          "Effect": "Allow",
          "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-         "Resource": "arn:aws:ses:ap-south-1:<account-id>:identity/echoandaura.com"
+         "Resource": "arn:aws:ses:ap-south-1:<account-id>:identity/*"
        }
      ]
    }
    ```
+   `identity/*`, not the domain alone: while the account is in the sandbox
+   SES also authorises against the _recipient_ identity (every recipient is
+   a verified identity there), and a narrower resource fails with
+   `AccessDeniedException … identity/<recipient>`. The two actions are the
+   safety, not the resource.
+   Do not run the SES "Get started" wizard: it creates
+   `my-first-configuration-set` and makes it the default on every identity,
+   which the policy above does not cover. If it exists, delete it under
+   _Configuration → Configuration sets_ **and** clear it on each identity
+   (`aws sesv2 put-email-identity-configuration-set-attributes --email-identity <id>`
+   with no set name), or sends fail with `NotFoundException: Configuration set … does not exist`.
 4. SES → _Account dashboard_ → **Request production access**. Until it is
    granted the account is in the _sandbox_: only verified addresses can
    receive, and the limit is 1 message/second (the worker sends ≤ 5/s and

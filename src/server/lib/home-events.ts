@@ -15,7 +15,7 @@ export interface HomeSelection<T> {
   past: T[];
 }
 
-export const PAST_EVENTS_LIMIT = 3;
+export const PAST_EVENTS_LIMIT = 4;
 /** "Also upcoming" is a strip, not a directory; the archive lists the rest. */
 export const UPCOMING_EVENTS_LIMIT = 6;
 
@@ -47,4 +47,19 @@ export function selectHomeEvents<T extends HomeEventInput>(
     alsoUpcoming: upcoming.slice(1, 1 + UPCOMING_EVENTS_LIMIT),
     past,
   };
+}
+
+/**
+ * A6 archive: every event that has started, newest first, no cap. Same
+ * membership rule as the home page's past strip (published or archived,
+ * never draft; an archived *future* event was pulled on purpose and is
+ * not "past"), so the strip's "See all" never shows fewer than the strip.
+ */
+export function selectArchiveEvents<T extends HomeEventInput>(
+  events: readonly T[],
+  now: Date,
+): T[] {
+  return events
+    .filter((e) => e.status !== 'draft' && e.startsAt.getTime() < now.getTime())
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
 }
