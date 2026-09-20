@@ -278,8 +278,8 @@ function Card({
     <section
       className={
         tinted
-          ? 'flex flex-col gap-2.5 rounded-xl border border-[#c3d6ec] bg-info-tint p-[18px]'
-          : 'flex flex-col gap-2.5 rounded-xl border border-border bg-card p-[18px]'
+          ? 'flex flex-col gap-2.5 rounded-xl border border-[#c3d6ec] bg-info-tint p-4.5'
+          : 'flex flex-col gap-2.5 rounded-xl border border-border bg-card p-4.5'
       }
     >
       <h2 className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase">
