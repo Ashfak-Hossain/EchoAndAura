@@ -157,7 +157,8 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       return row;
     }),
     insertEvent: vi.fn(async (values: NewOrderEvent, tx) => {
-      expect(tx).toBe(TX);
+      // Status changes always pass their tx; the email worker audits outside one.
+      if (tx !== undefined) expect(tx).toBe(TX);
       const row = {
         id: `oe-${state.events.length + 1}`,
         note: null,

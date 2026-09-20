@@ -57,6 +57,13 @@ export interface OrdersServiceDeps {
   runInTransaction: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
   now?: () => Date;
   reference?: () => string;
+  /**
+   * After-commit hooks — the seams for the C1 / C4 emails. They run outside
+   * every transaction (Invariant 7) and their failure is logged, never
+   * surfaced: an order that could not be *announced* is still an order.
+   */
+  onOrderCreated?: (orderId: string) => Promise<void>;
+  onOrderExpired?: (orderId: string) => Promise<void>;
 }
 
 export interface CreateOrderInput {
@@ -109,7 +116,17 @@ export function createOrdersService({
   runInTransaction,
   now = () => new Date(),
   reference = generateOrderReference,
+  onOrderCreated = async () => {},
+  onOrderExpired = async () => {},
 }: OrdersServiceDeps) {
+  async function afterCommit(hook: () => Promise<void>, what: string, orderId: string) {
+    try {
+      await hook();
+    } catch (err: unknown) {
+      logger.error({ orderId, err }, `orders.service: ${what} hook failed`);
+    }
+  }
+
   return {
     /**
      * @throws EventNotFoundError (unknown slug or draft), RegistrationClosedError,
@@ -164,7 +181,7 @@ export function createOrdersService({
       for (let attempt = 1; ; attempt++) {
         const ref = reference();
         try {
-          return await runInTransaction(async (tx) => {
+          const created = await runInTransaction(async (tx) => {
             const held = await inventory.hold(ticketType.id, input.quantity, tx);
             if (!held) throw new SoldOutError(ticketType.id, input.quantity);
 
@@ -202,6 +219,8 @@ export function createOrdersService({
 
             return order;
           });
+          await afterCommit(() => onOrderCreated(created.id), 'onOrderCreated', created.id);
+          return created;
         } catch (err: unknown) {
           // The transaction rolled back (hold included); a fresh reference
           // is all that is needed. Anything else propagates.
@@ -338,6 +357,7 @@ export function createOrdersService({
               { orderId: hold.id, quantity: hold.quantity },
               'order expired, hold released',
             );
+            await afterCommit(() => onOrderExpired(hold.id), 'onOrderExpired', hold.id);
           }
         } catch (err: unknown) {
           failed++;

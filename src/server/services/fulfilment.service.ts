@@ -45,6 +45,10 @@ export interface FulfilmentDeps {
    * caller: tickets are issued whether or not the email can be queued.
    */
   onTicketsIssued: (orderId: string) => Promise<void>;
+  /** Same contract, for the rejection email (C3). */
+  onOrderRejected?: (orderId: string) => Promise<void>;
+  /** B8 Re-send: enqueue C2 again. Unlike the others, a failure here is the caller's to report. */
+  onTicketsResendRequested?: (orderId: string) => Promise<void>;
   ticketCode?: () => string;
 }
 
@@ -74,6 +78,8 @@ export function createFulfilmentService({
   inventory,
   runInTransaction,
   onTicketsIssued,
+  onOrderRejected = async () => {},
+  onTicketsResendRequested = async () => {},
   ticketCode = generateTicketCode,
 }: FulfilmentDeps) {
   return {
@@ -193,7 +199,7 @@ export function createFulfilmentService({
       if (!isRejectionReason(reason)) throw new InvalidRejectionReasonError(String(reason));
       const cleanNote = note?.trim() || null;
 
-      return runInTransaction(async (tx) => {
+      const rejected = await runInTransaction(async (tx) => {
         const order = await orders.findByIdForUpdate(orderId, tx);
         if (!order) throw new OrderNotFoundError(orderId);
         if (order.status !== 'pending_verification') {
@@ -230,6 +236,34 @@ export function createFulfilmentService({
         );
         return rejected;
       });
+
+      // After commit only (Invariant 7); a failed enqueue never undoes a rejection.
+      try {
+        await onOrderRejected(orderId);
+      } catch (err: unknown) {
+        logger.error({ orderId, err }, 'fulfilment: onOrderRejected failed');
+      }
+      return rejected;
+    },
+
+    /**
+     * B8 "Re-send tickets email". Who asked is recorded *before* the job
+     * exists, so a queue failure leaves a truthful trail and the action can
+     * say so. @throws OrderNotFoundError, OrderStatusConflictError
+     */
+    async resendTicketsEmail(orderId: string, actor: string): Promise<void> {
+      const order = await orders.findById(orderId);
+      if (!order) throw new OrderNotFoundError(orderId);
+      if (order.status !== 'issued') throw new OrderStatusConflictError(orderId, order.status);
+      await orders.insertEvent({
+        orderId,
+        actor,
+        action: 'email.resend_requested',
+        fromStatus: null,
+        toStatus: null,
+        note: 'tickets-issued',
+      });
+      await onTicketsResendRequested(orderId);
     },
   };
 }

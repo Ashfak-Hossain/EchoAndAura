@@ -1,7 +1,8 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { z } from 'zod';
 import { fulfilmentService } from '@/server/container';
 import {
   AttendeeNamesMismatchError,
@@ -64,6 +65,23 @@ export async function rejectOrderAction(
     return { error: toMessage(err) };
   }
   redirect(`/admin/orders/${orderId}?rejected=1`);
+}
+
+/** B8 "Re-send tickets email". Thin: uuid guard → session → service → redirect with the outcome. */
+export async function resendTicketsEmailAction(orderId: string): Promise<void> {
+  if (!z.uuid().safeParse(orderId).success) notFound();
+  const who = await actor();
+  let ok = true;
+  try {
+    await fulfilmentService.resendTicketsEmail(orderId, who);
+  } catch (err: unknown) {
+    logger.error(
+      { orderId, err: err instanceof Error ? { name: err.name, message: err.message } : err },
+      'resend tickets email failed',
+    );
+    ok = false;
+  }
+  redirect(`/admin/orders/${orderId}?resent=${ok ? 1 : 0}`);
 }
 
 function toMessage(err: unknown): string {

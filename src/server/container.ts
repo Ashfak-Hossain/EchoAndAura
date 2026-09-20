@@ -14,7 +14,7 @@ import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
-import { logger } from '@/server/lib/logger';
+import { enqueueEmail } from '@/server/queue/producer';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
@@ -50,19 +50,20 @@ export const ordersService = createOrdersService({
   ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
   runInTransaction: (fn) => db.transaction(fn),
+  // Emails are queued after commit and sent by the worker (Invariant 7).
+  onOrderCreated: (orderId) => enqueueEmail('payment-instructions', orderId),
+  onOrderExpired: (orderId) => enqueueEmail('expired', orderId),
 });
 
-// The only place fulfilment is constructed (Invariant 4). The after-commit
-// hook becomes the ticket-email producer in the email slice; until then it
-// only records that tickets went out.
+// The only place fulfilment is constructed (Invariant 4).
 export const fulfilmentService = createFulfilmentService({
   orders: ordersRepository,
   tickets: ticketsRepository,
   inventory: inventoryService,
   runInTransaction: (fn) => db.transaction(fn),
-  onTicketsIssued: async (orderId) => {
-    logger.info({ orderId }, 'tickets issued (email delivery not wired yet)');
-  },
+  onTicketsIssued: (orderId) => enqueueEmail('tickets-issued', orderId),
+  onOrderRejected: (orderId) => enqueueEmail('rejected', orderId),
+  onTicketsResendRequested: (orderId) => enqueueEmail('tickets-issued', orderId, { resend: true }),
 });
 
 export const ticketsService = createTicketsService({

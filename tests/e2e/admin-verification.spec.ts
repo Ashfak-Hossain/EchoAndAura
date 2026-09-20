@@ -158,6 +158,11 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
     await expect(page.getByText('ticket.renamed')).toBeVisible();
     await expect(page.getByText(/Nusrat Jahan 1 → Farhana Rahman/)).toBeVisible();
 
+    // Re-send tickets email: queued for the worker, and recorded as asked-for.
+    await page.getByRole('button', { name: /re-send tickets email/i }).click();
+    await expect(page.getByRole('status')).toContainText(/queued again/i);
+    await expect(page.getByText('email.resend_requested')).toBeVisible();
+
     // Inventory: 2 sold (no longer held), 1 still held by B → 17 left.
     await page.goto(`/events/${slug}`);
     await expect(page.locator('li:visible').filter({ hasText: 'General' }).first()).toContainText(

@@ -4,3 +4,6 @@ export const ORDERS_QUEUE = 'orders';
 /** Repeating job: expire lapsed 24h holds (ADR-002, ADR-012). */
 export const EXPIRE_HOLDS_JOB = 'expire-holds';
 export const EXPIRE_HOLDS_EVERY_MS = 60_000;
+
+/** Email jobs: `email.<kind>` with payload `{ orderId }` (see email/dispatch.ts). */
+export const EMAIL_JOB_PREFIX = 'email.';

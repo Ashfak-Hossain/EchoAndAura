@@ -17,7 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
-import { approveOrderAction, rejectOrderAction } from './actions';
+import { approveOrderAction, rejectOrderAction, resendTicketsEmailAction } from './actions';
 import { VerificationActions } from './verification-actions';
 
 export const metadata: Metadata = { title: 'Order' };
@@ -25,14 +25,14 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ approved?: string; rejected?: string }>;
+  searchParams: Promise<{ approved?: string; rejected?: string; resent?: string }>;
 }
 
 // B8: three read columns, then the actions bar, then the writeable lists.
 // The page shape never changes between statuses — only which actions exist.
 export default async function AdminOrderPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { approved, rejected } = await searchParams;
+  const { approved, rejected, resent } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
 
   let view;
@@ -84,6 +84,16 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
       {rejected === '1' ? (
         <p role="status" className="rounded-md bg-secondary px-3 py-2 text-sm">
           Order rejected — the held seats are back on sale.
+        </p>
+      ) : null}
+      {resent === '1' ? (
+        <p role="status" className="rounded-md bg-success-tint px-3 py-2 text-sm text-success">
+          Tickets email queued again — it goes out within a minute.
+        </p>
+      ) : null}
+      {resent === '0' ? (
+        <p role="alert" className="rounded-md bg-destructive-tint px-3 py-2 text-sm text-[#8e1e17]">
+          Could not queue the email — the queue may be down. Nothing else changed.
         </p>
       ) : null}
 
@@ -166,6 +176,21 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
         />
       ) : order.status === 'pending_payment' ? (
         <p className="text-sm text-muted-foreground">No trxID yet — nothing to verify.</p>
+      ) : order.status === 'issued' ? (
+        <form
+          action={resendTicketsEmailAction.bind(null, order.id)}
+          className="flex items-center gap-3"
+        >
+          <button
+            type="submit"
+            className="flex h-11 items-center rounded-lg border border-border-strong bg-card px-4 text-[15px] font-semibold hover:bg-secondary"
+          >
+            Re-send tickets email
+          </button>
+          <span className="text-sm text-muted-foreground">
+            To {order.buyerEmail}, with the PDF attached.
+          </span>
+        </form>
       ) : null}
 
       {/* Tickets */}
