@@ -1,31 +1,64 @@
 {
   "permissions": {
+    "defaultMode": "acceptEdits",
     "allow": [
-      "Bash(pnpm:*)",
-      "Bash(git status)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git checkout:*)",
-      "Bash(git branch:*)",
-      "Bash(docker compose:*)",
-      "Read(**)",
-      "Edit(src/**)",
-      "Edit(tests/**)",
-      "Edit(docs/**)",
-      "Edit(scripts/**)"
+      "Bash(pnpm *)",
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(python3 *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git add *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(sed *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(sleep *)",
+      "Bash(curl *)",
+      "Bash(dig *)",
+      "Bash(lsof *)",
+      "Bash(pkill *)",
+      "Bash(aws sts *)",
+      "Bash(aws iam list-*)",
+      "Bash(aws iam get-*)",
+      "Bash(aws sesv2 get-*)",
+      "Bash(aws sesv2 list-*)",
+      "Bash(aws budgets describe-*)"
     ],
     "deny": [
       "Read(.env)",
       "Read(.env.*)",
       "Edit(.env)",
       "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
       "Edit(drizzle/**)",
+      "Write(drizzle/**)",
       "Edit(src/components/ui/**)",
-      "Bash(git push --force:*)",
-      "Bash(rm -rf:*)",
-      "Bash(psql:*)"
+      "Write(src/components/ui/**)",
+      "Bash(cat .env*)",
+      "Bash(cat * .env*)",
+      "Bash(grep * .env*)",
+      "Bash(sed * .env*)",
+      "Bash(head .env*)",
+      "Bash(tail .env*)",
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(git reset --hard*)",
+      "Bash(rm -rf *)",
+      "Bash(psql *)",
+      "Bash(aws iam create-*)",
+      "Bash(aws iam delete-*)",
+      "Bash(aws iam put-*)"
     ]
   },
   "hooks": {
@@ -50,16 +83,16 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pnpm typecheck 2>&1 | tail -20"
-          }
-        ]
-      }
     ]
+    // "Stop": [
+    //   {
+    //     "hooks": [
+    //       {
+    //         "type": "command",
+    //         "command": "pnpm typecheck 2>&1 | tail -20"
+    //       }
+    //     ]
+    //   }
+    // ]
   }
 }
