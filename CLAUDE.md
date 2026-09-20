@@ -13,7 +13,7 @@ style preferences. Violating them causes financial loss or data corruption.
 
 Next.js 16 App Router · React 19 · Node 26 · TypeScript `strict` · Postgres 17 +
 Drizzle 0.45 (postgres-js driver) · Redis 7 + BullMQ · Zod · better-auth (admin
-only) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
+password login; optional passwordless buyer sign-in) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
 Playwright · Docker · Timezone `Asia/Dhaka`
 
 > Latest majors were adopted at scaffold time — see [ADR-003](docs/DECISIONS.md).
@@ -112,8 +112,9 @@ Full system diagram, data flow, and data model overview:
 ## Business rules
 
 - One order contains exactly ONE ticket type, any quantity (max 10 per order)
-- Tickets are named and transferable; the buyer may edit the attendee name
-  until registration closes
+- Registration asks for one name (the buyer's). Every ticket starts with it;
+  tickets are transferable and the attendee name on each ticket can be
+  edited on the ticket page until registration closes
 - Registration opens 20 days before an event and closes 5 days before
 - Early Bird is a separate ticket type with its own sales window, not a
   price-change rule

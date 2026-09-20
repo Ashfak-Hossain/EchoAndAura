@@ -35,8 +35,10 @@ test.describe('admin shell (B2)', () => {
     }
 
     // Environment chip + signed-in email in the header.
-    // The chip reflects APP_ENV (or NODE_ENV: a production build says "production").
-    await expect(page.getByRole('banner').getByText(/^(local|staging|production)$/i)).toBeVisible();
+    // The chip reflects APP_ENV (the Playwright web server sets "test").
+    await expect(
+      page.getByRole('banner').getByText(/^(local|test|staging|production)$/i),
+    ).toBeVisible();
     await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
     await nav.getByRole('link', { name: 'Events' }).click();

@@ -140,8 +140,10 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       expect(tx).toBe(TX);
       if (takenRefs.has(values.reference)) throw new OrderReferenceCollisionError(values.reference);
       takenRefs.add(values.reference);
+      // Distinct, increasing timestamps so "newest first" is testable.
+      const stamp = new Date(NOW.getTime() + ++n);
       const row = {
-        id: `order-${++n}`,
+        id: `order-${n}`,
         discountPaisa: 0,
         status: 'pending_payment',
         attendeeNames: [],
@@ -149,8 +151,8 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         bkashSenderMsisdn: null,
         promoCodeId: null,
         holdExpiresAt: null,
-        createdAt: NOW,
-        updatedAt: NOW,
+        createdAt: stamp,
+        updatedAt: stamp,
         ...values,
       } as OrderRecord;
       state.orders.push(row);
@@ -210,6 +212,15 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
           ticketTypeName: state.types.get(o.ticketTypeId)?.name ?? '',
         })),
     countByStatus: async (status) => state.orders.filter((o) => o.status === status).length,
+    listByBuyerEmail: async (email) =>
+      state.orders
+        .filter((o) => o.buyerEmail === email)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map((o) => ({
+          order: { ...o },
+          eventTitle: seed.events.find((e) => e.id === o.eventId)?.title ?? '',
+          ticketTypeName: state.types.get(o.ticketTypeId)?.name ?? '',
+        })),
     listLapsedHolds: async (at, limit) =>
       state.orders
         .filter((o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < at)

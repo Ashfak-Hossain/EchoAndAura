@@ -59,9 +59,6 @@ async function paidOrder(page: Page, slug: string, name: string, quantity: numbe
   await page.getByLabel('Full name').fill(name);
   await page.getByLabel('Email address').fill('buyer@example.com');
   await page.getByLabel('Mobile number').fill('1712345678');
-  for (let i = 1; i <= quantity; i++) {
-    await page.getByLabel(`Ticket ${i} — attendee name`).fill(`${name} ${i}`);
-  }
   await page.getByLabel(/I agree to the terms/).check();
   await page.getByRole('button', { name: /continue to payment/i }).click();
   await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
@@ -114,7 +111,7 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
     const ticketRows = page.getByTestId('ticket-row');
     await expect(ticketRows).toHaveCount(2);
     await expect(ticketRows.first()).toContainText(/TKT-[A-Z2-9]{8}/);
-    await expect(ticketRows.first()).toContainText('Nusrat Jahan 1');
+    await expect(ticketRows.first()).toContainText('Nusrat Jahan'); // one name per order
     // No Approve/Reject once issued; the audit trail tells the story.
     await expect(page.getByRole('button', { name: /^approve/i })).toHaveCount(0);
     await expect(page.getByText('tickets.issued')).toBeVisible();
@@ -133,7 +130,7 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
       .click();
     await expect(page).toHaveURL(/\/tickets\/TKT-[A-Z2-9]{8}$/);
     const ticketUrl = page.url();
-    await expect(page.getByTestId('attendee-name')).toHaveText('Nusrat Jahan 1');
+    await expect(page.getByTestId('attendee-name')).toHaveText('Nusrat Jahan');
     await expect(page.getByText('ticket 1 of 2')).toBeVisible();
     await page.getByRole('button', { name: /edit name/i }).click();
     await page.getByLabel('Name on this ticket').fill('  Farhana   Rahman ');
@@ -156,7 +153,7 @@ test.describe('verification (B7 → B8) and fulfilment', () => {
     // The rename is in the order's audit trail for Raj.
     await page.goto(orderAdminUrl);
     await expect(page.getByText('ticket.renamed')).toBeVisible();
-    await expect(page.getByText(/Nusrat Jahan 1 → Farhana Rahman/)).toBeVisible();
+    await expect(page.getByText(/Nusrat Jahan → Farhana Rahman/)).toBeVisible();
 
     // Re-send tickets email: queued for the worker, and recorded as asked-for.
     await page.getByRole('button', { name: /re-send tickets email/i }).click();

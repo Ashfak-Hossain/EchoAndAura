@@ -87,7 +87,10 @@ export default async function TicketPage({ params }: Props) {
 
         <div className="flex flex-col items-center gap-3 border-t border-border pt-4">
           <div
-            className={cn('size-44 rounded-lg bg-white p-2 [&_svg]:size-full', cancelled && 'opacity-40')}
+            className={cn(
+              'size-44 rounded-lg bg-white p-2 [&_svg]:size-full',
+              cancelled && 'opacity-40',
+            )}
             aria-hidden="true"
             dangerouslySetInnerHTML={{ __html: qr }}
           />
@@ -136,8 +139,8 @@ export default async function TicketPage({ params }: Props) {
         />
       ) : (
         <p className="text-sm leading-relaxed text-[#4a4640]" data-testid="rename-locked">
-          Names locked{lockedAtText ? ` when registration closed on ${lockedAtText}` : ''}. The
-          door list is already printed — if you need a change, message the organizer
+          Names locked{lockedAtText ? ` when registration closed on ${lockedAtText}` : ''}. The door
+          list is already printed — if you need a change, message the organizer
           {contact ? (
             <>
               {' '}

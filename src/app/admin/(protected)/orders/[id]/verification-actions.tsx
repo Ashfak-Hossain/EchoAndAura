@@ -76,7 +76,9 @@ function ApproveForm({ approve, totalPaisa, trxId, senderMsisdn, quantity, buyer
     <form id={formId} action={formAction} className="flex flex-col gap-2">
       <AlertDialog>
         <AlertDialogTrigger render={<Button type="button" variant="primary" disabled={pending} />}>
-          {pending ? 'Approving…' : (
+          {pending ? (
+            'Approving…'
+          ) : (
             <>
               Approve — <Money paisa={totalPaisa} />
             </>
@@ -89,7 +91,7 @@ function ApproveForm({ approve, totalPaisa, trxId, senderMsisdn, quantity, buyer
               <>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg bg-info-tint px-3.5 py-3 text-sm text-foreground">
                   <dt className="text-muted-foreground">Amount</dt>
-                  <dd className="tabular font-semibold">
+                  <dd className="font-semibold tabular">
                     <Money paisa={totalPaisa} />
                   </dd>
                   <dt className="text-muted-foreground">Transaction ID</dt>
@@ -158,7 +160,13 @@ function RejectForm({ reject, reference, buyerFirstName, quantity, ticketTypeNam
 
           <div className="flex flex-col gap-2">
             <Label htmlFor={noteId}>Note to the buyer · optional</Label>
-            <Textarea id={noteId} name="note" rows={3} maxLength={REJECTION_NOTE_MAX} className="bg-card" />
+            <Textarea
+              id={noteId}
+              name="note"
+              rows={3}
+              maxLength={REJECTION_NOTE_MAX}
+              className="bg-card"
+            />
             <p className="text-sm text-muted-foreground">
               This text is shown on the buyer&apos;s order page and in the email, word for word.
             </p>

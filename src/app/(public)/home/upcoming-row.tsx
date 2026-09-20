@@ -40,7 +40,11 @@ export function UpcomingRow({ events }: { events: HomeEvent[] }) {
                   <span className="text-[15px] font-semibold tabular">
                     {fromPricePaisa !== null ? `from ${formatBDT(fromPricePaisa)}` : ''}
                   </span>
-                  <PhaseChip phase={phase} registrationOpensAt={event.registrationOpensAt} size="sm" />
+                  <PhaseChip
+                    phase={phase}
+                    registrationOpensAt={event.registrationOpensAt}
+                    size="sm"
+                  />
                 </div>
               </div>
             </Link>

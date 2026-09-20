@@ -29,5 +29,18 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
+    // The suite never sends real email, and the sign-in spec needs to follow
+    // the magic link. The exposure flag is gated on APP_ENV (never
+    // 'production' here), because `next start` forces NODE_ENV=production.
+    // BETTER_AUTH_URL is the origin auth redirects to (magic-link verify →
+    // callbackURL); the suite's server lives on this port. SITE_URL (canonical
+    // and OG URLs) is deliberately left as configured — the specs assert it.
+    env: {
+      ...process.env,
+      MAILER: 'log',
+      E2E_EXPOSE_MAGIC_LINK: '1',
+      APP_ENV: 'test',
+      BETTER_AUTH_URL: baseURL,
+    },
   },
 });

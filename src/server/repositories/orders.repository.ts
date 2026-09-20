@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
 import { events, orderEvents, orders, ticketTypes } from '@/db/schema';
@@ -74,6 +74,8 @@ export interface OrdersRepository {
    */
   listVerificationQueue(): Promise<QueueRow[]>;
   countByStatus(status: OrderStatus): Promise<number>;
+  /** "My orders": everything placed with this (lower-cased) email, newest first. */
+  listByBuyerEmail(email: string): Promise<QueueRow[]>;
 }
 
 // Constraint names as generated in drizzle/0000_*.sql.
@@ -162,5 +164,15 @@ export const ordersRepository: OrdersRepository = {
   async countByStatus(status) {
     const [row] = await db.select({ n: count() }).from(orders).where(eq(orders.status, status));
     return row?.n ?? 0;
+  },
+
+  listByBuyerEmail(email) {
+    return db
+      .select({ order: orders, eventTitle: events.title, ticketTypeName: ticketTypes.name })
+      .from(orders)
+      .innerJoin(events, eq(orders.eventId, events.id))
+      .innerJoin(ticketTypes, eq(orders.ticketTypeId, ticketTypes.id))
+      .where(eq(orders.buyerEmail, email))
+      .orderBy(desc(orders.createdAt));
   },
 };

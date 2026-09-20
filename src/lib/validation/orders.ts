@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ORDER_REFERENCE_PATTERN } from '@/server/lib/order-reference';
 import { NAME_MAX, NAME_MIN } from '@/server/lib/attendee-name';
 import { MAX_TICKETS_PER_ORDER, MIN_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 
@@ -46,18 +47,25 @@ export const registrationFormSchema = z
       .pipe(z.email({ error: 'Enter a complete email address.' })),
     // Entered as the ten digits after a fixed +880 prefix; stored E.164.
     buyerPhone: bdMobile,
-    attendeeNames: z.array(personName('a name for every ticket')),
+    // One name per order: every ticket starts with the buyer's name and can
+    // be renamed on its own page. The array form stays for callers that do
+    // pass names (must then be one per ticket).
+    attendeeNames: z.array(personName('a name for every ticket')).optional(),
     terms: z.literal('on', { error: 'Accept the terms to continue.' }),
   })
   .superRefine((v, ctx) => {
-    if (v.attendeeNames.length !== v.quantity) {
+    if (v.attendeeNames && v.attendeeNames.length !== v.quantity) {
       ctx.addIssue({
         code: 'custom',
         path: ['attendeeNames'],
         message: 'Enter a name for every ticket.',
       });
     }
-  });
+  })
+  .transform((v) => ({
+    ...v,
+    attendeeNames: v.attendeeNames ?? Array.from({ length: v.quantity }, () => v.buyerName),
+  }));
 
 export type RegistrationFormInput = z.infer<typeof registrationFormSchema>;
 
@@ -73,9 +81,12 @@ export function registrationFormValues(formData: FormData): Record<string, unkno
     buyerName: str('buyerName'),
     buyerEmail: str('buyerEmail'),
     buyerPhone: str('buyerPhone'),
-    attendeeNames: formData
-      .getAll('attendeeNames')
-      .filter((v): v is string => typeof v === 'string'),
+    attendeeNames: (() => {
+      const names = formData
+        .getAll('attendeeNames')
+        .filter((v): v is string => typeof v === 'string');
+      return names.length > 0 ? names : undefined;
+    })(),
     terms: str('terms'),
   };
 }
@@ -114,3 +125,28 @@ export function paymentFormValues(formData: FormData): Record<string, unknown> {
   };
   return { trxId: str('trxId'), senderPhone: str('senderPhone') };
 }
+
+/** "Find my order": the reference from the bKash field + the phone used at registration. */
+export const findOrderSchema = z.object({
+  reference: z
+    .string({ error: 'Enter your order reference.' })
+    .trim()
+    .toUpperCase()
+    // Accept "EA-7K3M9Q", "EA7K3M9Q", "7K3M9Q" and any case; store form is EA-XXXXXX.
+    .transform((v) => `EA-${v.replace(/^EA-?/, '')}`)
+    .pipe(
+      z.string().regex(ORDER_REFERENCE_PATTERN, {
+        error: 'An order reference looks like EA-7K3M9Q.',
+      }),
+    ),
+  phone: bdMobile,
+});
+
+/** Passwordless sign-in: just the email. */
+export const signInSchema = z.object({
+  email: z
+    .string({ error: 'Enter your email address.' })
+    .trim()
+    .toLowerCase()
+    .pipe(z.email({ error: 'Enter a complete email address.' })),
+});

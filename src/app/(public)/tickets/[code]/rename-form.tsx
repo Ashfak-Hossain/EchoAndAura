@@ -46,7 +46,11 @@ export function RenameForm({ action, currentName, lockedAtText }: Props) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-3 rounded-xl border border-border-strong bg-card p-4" noValidate>
+    <form
+      action={formAction}
+      className="flex flex-col gap-3 rounded-xl border border-border-strong bg-card p-4"
+      noValidate
+    >
       <div className="flex flex-col gap-2">
         <Label htmlFor="attendeeName">Name on this ticket</Label>
         <Input
@@ -73,11 +77,18 @@ export function RenameForm({ action, currentName, lockedAtText }: Props) {
         <Button type="submit" size="sm" disabled={pending}>
           {pending ? 'Saving…' : 'Save name'}
         </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={() => setOpenedAfter(undefined)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => setOpenedAfter(undefined)}
+        >
           Cancel
         </Button>
       </div>
-      <p className="text-[13px] text-muted-foreground">The code never changes when you rename a ticket.</p>
+      <p className="text-[13px] text-muted-foreground">
+        The code never changes when you rename a ticket.
+      </p>
     </form>
   );
 }

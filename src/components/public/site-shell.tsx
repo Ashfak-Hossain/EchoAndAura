@@ -7,7 +7,14 @@ import { facebookPageUrl } from '@/lib/env.public';
  * nav links only for routes that exist (Archive/FAQ/Contact join with their
  * slices). Footer: legal links arrive with the static-pages slice.
  */
-export function SiteShell({ children }: { children: ReactNode }) {
+export function SiteShell({
+  children,
+  session,
+}: {
+  children: ReactNode;
+  /** Buyer session, when signed in; the admin never uses the public chrome. */
+  session?: { email: string } | null;
+}) {
   const facebook = facebookPageUrl();
   return (
     <div className="flex min-h-screen flex-col">
@@ -19,6 +26,15 @@ export function SiteShell({ children }: { children: ReactNode }) {
           <Link href="/" className="hover:underline">
             Events
           </Link>
+          {session ? (
+            <Link href="/account" className="hover:underline">
+              My orders
+            </Link>
+          ) : (
+            <Link href="/account/sign-in" className="hover:underline">
+              Sign in
+            </Link>
+          )}
           {facebook ? (
             <a
               href={facebook}
@@ -35,6 +51,9 @@ export function SiteShell({ children }: { children: ReactNode }) {
       <footer className="border-t border-border px-4 py-8 text-sm text-muted-foreground lg:px-12">
         <div className="mx-auto flex max-w-290 flex-wrap items-center justify-between gap-3">
           <span>© {new Date().getFullYear()} echoandaura</span>
+          <Link href="/orders/find" className="hover:underline">
+            Find my order
+          </Link>
           {facebook ? (
             <a href={facebook} target="_blank" rel="noreferrer" className="hover:underline">
               Facebook

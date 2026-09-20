@@ -1,6 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { fulfilmentService } from '@/server/container';
@@ -13,18 +12,16 @@ import {
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
-import { auth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/session';
 import { rejectFormSchema } from '@/lib/validation/verification';
 
 export interface VerificationActionState {
   error?: string;
 }
 
-/** The acting admin, for the audit row. The layout already guaranteed a session. */
+/** The acting admin, for the audit row. Role-checked here, not just by the layout. */
 async function actor(): Promise<string> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect('/admin/login');
-  return session.user.email;
+  return (await requireAdmin()).email;
 }
 
 /**

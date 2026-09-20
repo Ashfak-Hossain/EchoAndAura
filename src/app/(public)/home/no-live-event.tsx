@@ -22,14 +22,14 @@ export function NoLiveEvent({ facebookUrl }: { facebookUrl: string | null }) {
           >
             Small rooms, real sound, four acts a night.
           </h1>
-          <p className="max-w-[52ch] text-[15px] leading-relaxed text-[#c9c3b7] text-pretty lg:text-[17px]">
+          <p className="max-w-[52ch] text-[15px] leading-relaxed text-pretty text-[#c9c3b7] lg:text-[17px]">
             echoandaura puts on a handful of shows a year in Dhaka and Chattogram. Tickets are
             named, paid by bKash, and checked by a person before they are issued.
           </p>
         </div>
         <div className="flex flex-col gap-3 rounded-xl border border-[#33302a] bg-[#26231f] p-5">
           <p className="text-[17px] font-semibold">Next event announced soon</p>
-          <p className="text-sm leading-relaxed text-[#c9c3b7] text-pretty">
+          <p className="text-sm leading-relaxed text-pretty text-[#c9c3b7]">
             Tickets go on sale 20 days before the date. Facebook is where it goes up first.
           </p>
           {facebookUrl ? (

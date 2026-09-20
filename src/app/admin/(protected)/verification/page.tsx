@@ -46,9 +46,7 @@ export default async function VerificationQueuePage() {
       <PageHeader
         title="Verification"
         subtitle={
-          queue.length === 0
-            ? 'Nothing waiting'
-            : `${queue.length} waiting · oldest ${oldest}`
+          queue.length === 0 ? 'Nothing waiting' : `${queue.length} waiting · oldest ${oldest}`
         }
       />
 
@@ -91,7 +89,7 @@ export default async function VerificationQueuePage() {
                           {order.reference}
                         </Link>
                         <div className="text-[13px]">{order.buyerName}</div>
-                        <div className="tabular text-[13px] text-muted-foreground">
+                        <div className="text-[13px] text-muted-foreground tabular">
                           {order.buyerPhone}
                         </div>
                       </TableCell>
@@ -107,7 +105,9 @@ export default async function VerificationQueuePage() {
                       <TableCell className="font-mono">{order.bkashTrxId}</TableCell>
                       <TableCell className="tabular">{order.bkashSenderMsisdn}</TableCell>
                       <TableCell className="tabular">{formatRelative(submittedAt, now)}</TableCell>
-                      <TableCell className={cn('tabular', hold.urgent && 'font-semibold text-destructive')}>
+                      <TableCell
+                        className={cn('tabular', hold.urgent && 'font-semibold text-destructive')}
+                      >
                         {hold.text}
                       </TableCell>
                     </TableRow>
@@ -129,7 +129,12 @@ export default async function VerificationQueuePage() {
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="font-mono font-semibold">{order.reference}</span>
-                      <span className={cn('tabular text-[13px]', hold.urgent ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+                      <span
+                        className={cn(
+                          'text-[13px] tabular',
+                          hold.urgent ? 'font-semibold text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
                         Hold ends {hold.text}
                       </span>
                     </div>
@@ -140,8 +145,8 @@ export default async function VerificationQueuePage() {
                         {ticketTypeName} × {order.quantity}
                       </span>
                     </div>
-                    <div className="tabular font-mono text-[15px]">{order.bkashTrxId}</div>
-                    <div className="tabular text-[13px] text-muted-foreground">
+                    <div className="font-mono text-[15px] tabular">{order.bkashTrxId}</div>
+                    <div className="text-[13px] text-muted-foreground tabular">
                       Sent from {order.bkashSenderMsisdn} · {formatRelative(submittedAt, now)}
                     </div>
                     <div className="text-[13px] text-muted-foreground">{eventTitle}</div>

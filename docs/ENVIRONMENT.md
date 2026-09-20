@@ -29,6 +29,7 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 | `EMAIL_FROM`                                                                                | With `MAILER=ses` | Phase 4      | From address on the verified domain, e.g. `echoandaura <tickets@echoandaura.com>`. Keep the display name ASCII (SESv2 envelope)                                    |
 | `EMAIL_REPLY_TO`                                                                            | No                | Phase 4      | Where buyer replies land, e.g. `hello@echoandaura.com` (Cloudflare Email Routing → the organizer)                                                                  |
 | `ORGANIZER_PHONE`                                                                           | No                | Phase 4      | Organizer phone shown in emails ("Raj 01712 345678"); hidden when unset                                                                                            |
+| `E2E_EXPOSE_MAGIC_LINK`                                                                     | No (tests)        | Phase 4      | `1` makes the sign-in page show the magic link so Playwright can follow it. Honoured only when `APP_ENV=test`; ignored everywhere else                             |
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes               | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                                                          |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only        | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally                             |
 | `BKASH_RECEIVE_NUMBER`                                                                      | Yes               | Phase 3      | Organizer's bKash number shown to buyers                                                                                                                           |
@@ -57,6 +58,13 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 - **Production:** managed Redis or the VPS container.
 
 ### better-auth
+
+Two kinds of user share better-auth: the **admin** (password login at
+`/admin/login`, role `admin`) and **buyers** (passwordless: `/account/sign-in`
+emails a 15-minute link through the worker; the first sign-in creates the
+account, role `buyer`). `users.role` decides who gets past the admin layout.
+`pnpm admin:create` sets the role; for an admin created before the role column
+existed, run `pnpm admin:promote <email>` once.
 
 - `BETTER_AUTH_SECRET`: generate a 32-byte random secret —
   `openssl rand -base64 32`. Keep it stable; rotating it invalidates all sessions.

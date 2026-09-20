@@ -7,6 +7,7 @@ import { EventNotFoundError } from '@/server/lib/errors';
 import { eventPhase, ticketAvailability } from '@/server/lib/event-phase';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { ButtonLink } from '@/components/button-link';
+import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
 import { PhaseNotice } from '../phase-notice';
 import { registerAction } from './actions';
@@ -38,6 +39,7 @@ export default async function RegisterPage({ params }: Props) {
   const { slug } = await params;
   const { event, ticketTypes } = await load(slug);
   const now = new Date();
+  const session = await getPublicSession();
 
   const availableTotal = ticketTypes.reduce(
     (n, t) => n + Math.max(0, t.quantityTotal - t.quantitySold - t.quantityReserved),
@@ -94,11 +96,15 @@ export default async function RegisterPage({ params }: Props) {
           registrationClosesAt={
             event.registrationClosesAt ? formatDhakaLong(event.registrationClosesAt) : null
           }
+          prefill={session?.role === 'buyer' ? { name: session.name, email: session.email } : null}
         />
       ) : (
         <div className="flex flex-col gap-4">
           {phase === 'past' ? (
-            <p role="status" className="rounded-xl border border-border bg-secondary px-4 py-3.5 text-[15px]">
+            <p
+              role="status"
+              className="rounded-xl border border-border bg-secondary px-4 py-3.5 text-[15px]"
+            >
               This event has already happened.
             </p>
           ) : (

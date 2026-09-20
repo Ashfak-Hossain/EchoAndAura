@@ -12,6 +12,7 @@ import {
 import { ticketTypeFormSchema } from '@/lib/validation/ticket-types';
 import { editorPath } from '../editor-path';
 import type { TicketTypeFormValues } from './ticket-type-form';
+import { requireAdmin } from '@/lib/session';
 
 export interface TicketTypeFormState {
   error?: string;
@@ -42,6 +43,7 @@ export async function createTicketTypeAction(
   _prev: TicketTypeFormState,
   formData: FormData,
 ): Promise<TicketTypeFormState> {
+  await requireAdmin();
   const values = submittedValues(formData);
   const parsed = ticketTypeFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -67,6 +69,7 @@ export async function updateTicketTypeAction(
   _prev: TicketTypeFormState,
   formData: FormData,
 ): Promise<TicketTypeFormState> {
+  await requireAdmin();
   const values = submittedValues(formData);
   const parsed = ticketTypeFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -91,6 +94,7 @@ export async function deleteTicketTypeAction(
   eventId: string,
   ticketTypeId: string,
 ): Promise<TicketTypeFormState> {
+  await requireAdmin();
   try {
     await ticketTypesService.deleteTicketType(ticketTypeId);
   } catch (err: unknown) {

@@ -259,6 +259,22 @@ export function createOrdersService({
     },
 
     /**
+     * "Find my order" without an account: the reference plus the phone used
+     * at registration (E.164, normalised at the boundary). Null on any
+     * mismatch — the page says one generic thing either way.
+     */
+    async findByReferenceAndPhone(reference: string, phone: string): Promise<OrderRecord | null> {
+      const order = await orders.findByReference(reference.trim().toUpperCase());
+      if (!order || order.buyerPhone !== phone) return null;
+      return order;
+    },
+
+    /** "My orders" for a signed-in buyer: proof of the email is the access rule. */
+    listForBuyer(email: string): Promise<QueueRow[]> {
+      return orders.listByBuyerEmail(email.trim().toLowerCase());
+    },
+
+    /**
      * The buyer reports a bKash payment. First submission moves the order to
      * `pending_verification`; a later one only corrects the trxID/number
      * (design A4 "Edit transaction ID"). Uniqueness of the trxID is the

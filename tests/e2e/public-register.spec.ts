@@ -72,9 +72,6 @@ test.describe('registration (A3 → A4)', () => {
     await page.getByLabel('Full name').fill('Nusrat Jahan');
     await page.getByLabel('Email address').fill('Nusrat.Jahan@example.com');
     await page.getByLabel('Mobile number').fill('1712345678');
-    await page.getByLabel('Ticket 1 is for me').check();
-    await expect(page.getByLabel('Ticket 1 — attendee name')).toHaveValue('Nusrat Jahan');
-    await page.getByLabel('Ticket 2 — attendee name').fill('Tanvir Alam');
     await page.getByLabel(/I agree to the terms/).check();
     await page.getByRole('button', { name: /continue to payment/i }).click();
 
@@ -138,7 +135,6 @@ test.describe('registration (A3 → A4)', () => {
       await p.getByLabel('Full name').fill(name);
       await p.getByLabel('Email address').fill('buyer@example.com');
       await p.getByLabel('Mobile number').fill('1712345678');
-      await p.getByLabel('Ticket 1 — attendee name').fill(name);
       await p.getByLabel(/I agree to the terms/).check();
       await p.getByRole('button', { name: /continue to payment/i }).click();
     };
@@ -170,7 +166,6 @@ test.describe('registration (A3 → A4)', () => {
       await page.getByLabel('Full name').fill(name);
       await page.getByLabel('Email address').fill('buyer@example.com');
       await page.getByLabel('Mobile number').fill('1712345678');
-      await page.getByLabel('Ticket 1 — attendee name').fill(name);
       await page.getByLabel(/I agree to the terms/).check();
       await page.getByRole('button', { name: /continue to payment/i }).click();
       await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);

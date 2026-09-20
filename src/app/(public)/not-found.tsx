@@ -10,9 +10,14 @@ export default function PublicNotFound() {
         The link may be old, or the event isn&apos;t public yet. Upcoming events are on the home
         page.
       </p>
-      <ButtonLink href="/" variant="secondary">
-        See upcoming events
-      </ButtonLink>
+      <div className="flex flex-wrap justify-center gap-2">
+        <ButtonLink href="/" variant="secondary">
+          See upcoming events
+        </ButtonLink>
+        <ButtonLink href="/orders/find" variant="ghost">
+          Find my order
+        </ButtonLink>
+      </div>
     </main>
   );
 }

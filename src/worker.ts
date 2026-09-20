@@ -19,7 +19,14 @@ import { MailerPermanentError, MailerThrottledError } from '@/server/email/maile
 import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
 import { createRedisConnection } from '@/server/queue/connection';
-import { EXPIRE_HOLDS_EVERY_MS, EXPIRE_HOLDS_JOB, ORDERS_QUEUE } from '@/server/queue/names';
+import { renderSignInEmail } from '@/server/email/templates/sign-in';
+import { MAGIC_LINK_TTL_SECONDS } from '@/server/auth/magic-link';
+import {
+  EXPIRE_HOLDS_EVERY_MS,
+  EXPIRE_HOLDS_JOB,
+  ORDERS_QUEUE,
+  SIGN_IN_JOB,
+} from '@/server/queue/names';
 import { closeProducer } from '@/server/queue/producer';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
@@ -32,21 +39,24 @@ import {
 
 // Redis contents are external input: parse, never cast.
 const emailJobData = z.object({ orderId: z.uuid() });
+const signInJobData = z.object({ to: z.email(), url: z.url() });
 
 async function main(): Promise<void> {
   const connection = createRedisConnection();
   const queue = new Queue(ORDERS_QUEUE, { connection });
+  const mailer = selectMailer();
+  const env = {
+    siteUrl: siteUrl(),
+    bkashNumber: bkashReceiveNumber(),
+    contactEmail: organizerContactEmail(),
+    contactPhone: organizerPhone(),
+  };
   const dispatcher = createEmailDispatcher({
     orders: ordersService,
     ordersRepo: ordersRepository,
     ticketTypes: ticketTypesRepository,
-    mailer: selectMailer(),
-    env: {
-      siteUrl: siteUrl(),
-      bkashNumber: bkashReceiveNumber(),
-      contactEmail: organizerContactEmail(),
-      contactPhone: organizerPhone(),
-    },
+    mailer,
+    env,
   });
 
   await queue.upsertJobScheduler(
@@ -66,6 +76,32 @@ async function main(): Promise<void> {
         // the run visible in the queue's failed list too.
         if (failed > 0) throw new Error(`expire-holds: ${failed} order(s) could not be expired`);
         return { expired };
+      }
+
+      if (job.name === SIGN_IN_JOB) {
+        const parsed = signInJobData.safeParse(job.data);
+        if (!parsed.success) throw new UnrecoverableError(`bad job data: ${parsed.error.message}`);
+        const rendered = await renderSignInEmail({
+          url: parsed.data.url,
+          siteUrl: env.siteUrl,
+          contactEmail: env.contactEmail,
+          contactPhone: env.contactPhone,
+          ttlMinutes: Math.round(MAGIC_LINK_TTL_SECONDS / 60),
+        });
+        try {
+          const { messageId } = await mailer.send({
+            to: parsed.data.to,
+            subject: rendered.subject,
+            html: rendered.html,
+            text: rendered.text,
+            replyTo: env.contactEmail ?? undefined,
+          });
+          logger.info({ messageId }, 'sign-in email sent');
+          return { messageId };
+        } catch (err: unknown) {
+          if (err instanceof MailerPermanentError) throw new UnrecoverableError(err.message);
+          throw err;
+        }
       }
 
       const kind = emailKindOf(job.name);

@@ -7,3 +7,6 @@ export const EXPIRE_HOLDS_EVERY_MS = 60_000;
 
 /** Email jobs: `email.<kind>` with payload `{ orderId }` (see email/dispatch.ts). */
 export const EMAIL_JOB_PREFIX = 'email.';
+
+/** Magic-link sign-in email: payload `{ to, url }`. Not under `email.` — it has no order. */
+export const SIGN_IN_JOB = 'auth.sign-in';

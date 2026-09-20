@@ -24,6 +24,7 @@
     "db:studio": "dotenv -e .env -- drizzle-kit studio",
     "db:seed": "dotenv -e .env -- tsx scripts/seed.ts",
     "admin:create": "dotenv -e .env -- tsx scripts/create-admin.ts",
+    "admin:promote": "dotenv -e .env -- tsx scripts/promote-admin.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "dependencies": {

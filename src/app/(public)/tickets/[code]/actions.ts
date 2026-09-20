@@ -51,12 +51,16 @@ function toMessage(err: unknown): string {
       ? `Names locked when registration closed on ${formatDhakaLong(err.lockedAt)} (Dhaka). The door list is already printed — if you need a change, message the organizer.`
       : 'Names are locked for this event. Message the organizer if you need a change.';
   }
-  if (err instanceof TicketCancelledError) return 'This ticket was cancelled and cannot be renamed.';
+  if (err instanceof TicketCancelledError)
+    return 'This ticket was cancelled and cannot be renamed.';
   if (err instanceof TicketRenameConflictError) {
     return 'This ticket changed while you were editing — reload the page and try again.';
   }
   if (err instanceof InvalidAttendeeNameError) return err.message;
   if (err instanceof TicketNotFoundError) return 'This ticket no longer exists.';
-  logger.error({ err: err instanceof Error ? { name: err.name, message: err.message } : err }, 'rename action: unexpected error');
+  logger.error(
+    { err: err instanceof Error ? { name: err.name, message: err.message } : err },
+    'rename action: unexpected error',
+  );
   return 'We could not save the name. Please try again in a moment.';
 }

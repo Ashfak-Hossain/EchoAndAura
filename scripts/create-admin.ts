@@ -8,7 +8,9 @@
  *   pnpm admin:create <email> <password> [name]
  */
 import { betterAuth } from 'better-auth';
-import { queryClient } from '@/db/client';
+import { eq } from 'drizzle-orm';
+import { db, queryClient } from '@/db/client';
+import { users } from '@/db/schema';
 import { buildAuthOptions } from '@/lib/auth-options';
 import { loginSchema } from '@/lib/validation/auth';
 
@@ -28,6 +30,8 @@ async function main(): Promise<void> {
     const { user } = await seedAuth.api.signUpEmail({
       body: { email: parsed.data.email, password: parsed.data.password, name },
     });
+    // The role is never accepted from a sign-up body (input: false); set it here.
+    await db.update(users).set({ role: 'admin' }).where(eq(users.id, user.id));
     console.log(`Created admin ${user.email} (${user.id})`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

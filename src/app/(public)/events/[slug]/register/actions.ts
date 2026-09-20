@@ -80,7 +80,10 @@ function toBanner(err: unknown): NonNullable<RegistrationFormState['banner']> {
     };
   }
   if (err instanceof InvalidQuantityError) {
-    return { title: 'Choose between 1 and 10 tickets', body: 'One ticket type per order, up to 10.' };
+    return {
+      title: 'Choose between 1 and 10 tickets',
+      body: 'One ticket type per order, up to 10.',
+    };
   }
   // Infrastructure failure — never disguise it as the buyer's mistake.
   console.error('register action: unexpected error', err);

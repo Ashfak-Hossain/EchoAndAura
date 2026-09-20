@@ -1,25 +1,23 @@
 import type { ReactNode } from 'react';
-import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { ordersService } from '@/server/container';
 import { AdminShell } from '@/components/admin/admin-shell';
-import { auth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/session';
 import { signOutAction } from './actions';
 
 /**
  * Authoritative guard for everything under /admin (except /admin/login, which
- * sits outside this route group). This is a real DB-backed session check;
- * src/proxy.ts only does a fast optimistic cookie check before it.
+ * sits outside this route group). This is a real DB-backed session + role
+ * check; src/proxy.ts only does a fast optimistic cookie check before it,
+ * and every admin server action repeats `requireAdmin()` for itself.
  */
 export default async function AdminProtectedLayout({ children }: { children: ReactNode }) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect('/admin/login');
+  const session = await requireAdmin();
   // The one live badge the design allows (B2): what is waiting for a person.
   const verification = await ordersService.countPendingVerification();
 
   return (
     <AdminShell
-      email={session.user.email}
+      email={session.email}
       counts={{ verification }}
       signOutQuiet={
         <form action={signOutAction}>

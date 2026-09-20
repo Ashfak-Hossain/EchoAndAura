@@ -6,6 +6,7 @@ import { eventsService } from '@/server/container';
 import { EventNotFoundError, EventSlugTakenError } from '@/server/lib/errors';
 import { eventFormSchema } from '@/lib/validation/events';
 import type { EventFormValues } from './event-form';
+import { requireAdmin } from '@/lib/session';
 
 export interface EventFormState {
   error?: string;
@@ -36,6 +37,7 @@ export async function createEventAction(
   _prev: EventFormState,
   formData: FormData,
 ): Promise<EventFormState> {
+  await requireAdmin();
   const values = submittedValues(formData);
   const parsed = eventFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -61,6 +63,7 @@ export async function updateEventAction(
   _prev: EventFormState,
   formData: FormData,
 ): Promise<EventFormState> {
+  await requireAdmin();
   const values = submittedValues(formData);
   const parsed = eventFormSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
