@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
-import { cache } from 'react';
-import { eventsService } from '@/server/container';
 import { facebookPageUrl } from '@/lib/env.public';
 import { buildHomeMetadata, siteUrl } from '@/lib/seo';
 import { Hero } from './home/hero';
+import { loadHome } from './home/load';
 import { NoLiveEvent } from './home/no-live-event';
 import { PastStrip } from './home/past-strip';
 import { TrustPoints } from './home/trust-points';
@@ -13,9 +12,6 @@ import { UpcomingRow } from './home/upcoming-row';
 // home page at build time with whatever the database held then. It must
 // reflect publishes and phase changes on every request.
 export const dynamic = 'force-dynamic';
-
-// generateMetadata and the page both need it; one query per request.
-const loadHome = cache(() => eventsService.getHomePage());
 
 export async function generateMetadata(): Promise<Metadata> {
   const { featured } = await loadHome();
@@ -43,11 +39,17 @@ export default async function HomePage() {
     <div className="flex flex-1 flex-col">
       {home.featured ? <Hero featured={home.featured} /> : <NoLiveEvent facebookUrl={facebook} />}
 
-      <div className="mx-auto flex w-full max-w-290 flex-col gap-10 px-4 py-8 lg:gap-14 lg:px-12 lg:py-12">
-        <UpcomingRow events={home.alsoUpcoming} />
-        <TrustPoints />
-        <PastStrip events={home.past} />
-      </div>
+      {home.alsoUpcoming.length > 0 ? (
+        <div className="mx-auto w-full max-w-360 px-4 py-8 lg:px-16 lg:py-16">
+          <UpcomingRow events={home.alsoUpcoming} />
+        </div>
+      ) : null}
+      <TrustPoints />
+      {home.past.length > 0 ? (
+        <div className="mx-auto w-full max-w-360 px-4 py-8 lg:px-16 lg:py-16">
+          <PastStrip events={home.past} />
+        </div>
+      ) : null}
     </div>
   );
 }

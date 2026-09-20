@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** A1 section label: mono, tracked, uppercase — the canvas 2 eyebrow style. */
+/** Home section title (redesign 2026-09-21): Archivo display-30 with an optional aside link. */
 export function SectionHeading({
   id,
   children,
@@ -14,7 +14,7 @@ export function SectionHeading({
     <div className="flex items-baseline justify-between gap-4">
       <h2
         id={id}
-        className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase"
+        className="font-heading text-[24px] leading-tight font-semibold tracking-[-0.01em] lg:text-[30px]"
       >
         {children}
       </h2>

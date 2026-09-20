@@ -71,6 +71,8 @@ export interface HomeEvent {
   phase: EventPhase;
   /** Lowest ticket price in paisa; null when no ticket types exist. */
   fromPricePaisa: number | null;
+  /** Tickets still available across every type (the hero's "112 left"). */
+  availableTotal: number;
   coverUrl: string | null;
 }
 
@@ -144,6 +146,7 @@ export function createEventsService(
           event,
           phase: eventPhase({ event, availableTotal, now: at }),
           fromPricePaisa: cap?.fromPricePaisa ?? null,
+          availableTotal,
           coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
         };
       };

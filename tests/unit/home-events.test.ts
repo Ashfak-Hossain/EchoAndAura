@@ -77,7 +77,9 @@ describe('selectHomeEvents', () => {
     );
     const sel = selectHomeEvents(many, NOW);
     expect(sel.past).toHaveLength(PAST_EVENTS_LIMIT);
-    expect(sel.past.map((e) => e.id)).toEqual(['p0', 'p1', 'p2']);
+    expect(sel.past.map((e) => e.id)).toEqual(
+      Array.from({ length: PAST_EVENTS_LIMIT }, (_, i) => `p${i}`),
+    );
   });
 });
 

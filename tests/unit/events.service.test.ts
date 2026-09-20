@@ -584,6 +584,7 @@ describe('eventsService.getHomePage', () => {
     expect(home.featured?.event.id).toBe('soon');
     expect(home.featured?.phase).toBe('open');
     expect(home.featured?.fromPricePaisa).toBe(80_000);
+    expect(home.featured?.availableTotal).toBe(50);
     expect(home.featured?.coverUrl).toBe('https://cdn.test/events/soon/cover-x.png');
 
     expect(home.alsoUpcoming.map((h) => h.event.id)).toEqual(['later']);

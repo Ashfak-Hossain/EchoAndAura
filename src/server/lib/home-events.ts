@@ -15,7 +15,7 @@ export interface HomeSelection<T> {
   past: T[];
 }
 
-export const PAST_EVENTS_LIMIT = 3;
+export const PAST_EVENTS_LIMIT = 4;
 /** "Also upcoming" is a strip, not a directory; the archive lists the rest. */
 export const UPCOMING_EVENTS_LIMIT = 6;
 

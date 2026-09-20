@@ -21,7 +21,7 @@ test.describe('static pages (A7)', () => {
     }
     await page.goto('/');
     const footer = page.getByRole('navigation', { name: 'Site pages' });
-    for (const label of ['About', 'FAQ', 'Terms', 'Privacy', 'Refund policy', 'Contact']) {
+    for (const label of ['About', 'FAQ', 'Terms of sale', 'Privacy', 'Refund policy', 'Contact']) {
       await expect(footer.getByRole('link', { name: label, exact: true })).toBeVisible();
     }
   });
@@ -40,6 +40,8 @@ test.describe('static pages (A7)', () => {
 
     await page.goto('/faq#someone-else');
     await expect(page.locator('details#someone-else')).toHaveAttribute('open', '');
-    await expect(page.locator('details#someone-else')).toContainText(/change it on the ticket page/i);
+    await expect(page.locator('details#someone-else')).toContainText(
+      /change it on the ticket page/i,
+    );
   });
 });
