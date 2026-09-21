@@ -10,6 +10,7 @@ import {
   Text,
 } from '@react-email/components';
 import type { ReactNode } from 'react';
+import type { EmailSender } from './view';
 
 /**
  * Canvas 4: 600 px, single column, system fonts only (Archivo does not
@@ -74,23 +75,19 @@ export const styles = {
 
 export interface LayoutProps {
   preview: string;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  siteUrl: string;
+  sender: EmailSender;
   children: ReactNode;
   /** One sentence after the address line. */
   footerNote?: string;
 }
 
-export function EmailLayout({
-  preview,
-  contactEmail,
-  contactPhone,
-  siteUrl,
-  children,
-  footerNote,
-}: LayoutProps) {
-  const contact = [contactPhone ? `Raj ${contactPhone}` : null, contactEmail]
+export function EmailLayout({ preview, sender, children, footerNote }: LayoutProps) {
+  const { siteUrl, contactEmail, contactPhone, organizerName, organizerAddress } = sender;
+  const contact = [
+    contactPhone ? `${organizerName} ${contactPhone}` : null,
+    contactEmail,
+    organizerAddress,
+  ]
     .filter(Boolean)
     .join(' · ');
   return (

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ContactCard, Prose, StaticPage } from '@/components/public/static-page';
 import { HOLD_HOURS, LAST_UPDATED, REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import { siteUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 
 export const metadata: Metadata = {
   title: 'Terms',
@@ -15,7 +16,8 @@ export const metadata: Metadata = {
  * Plain-language terms for a single-organizer site; not a lawyer's
  * document, and the organizer should have it read before launch.
  */
-export default function TermsPage() {
+export default async function TermsPage() {
+  const settings = await getSiteSettings();
   return (
     <StaticPage eyebrow="Terms" title="Terms of sale" lastUpdated={LAST_UPDATED.terms}>
       <Prose>
@@ -100,7 +102,7 @@ export default function TermsPage() {
           the top of this page changes when the wording does.
         </p>
       </Prose>
-      <ContactCard title="Questions about these terms?" />
+      <ContactCard title="Questions about these terms?" settings={settings} />
     </StaticPage>
   );
 }

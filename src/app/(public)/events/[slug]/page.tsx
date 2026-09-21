@@ -8,8 +8,8 @@ import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { ticketAvailability } from '@/server/lib/event-phase';
 import { formatBDT } from '@/server/lib/money';
 import { RichText } from '@/components/rich-text';
-import { REGISTRATION_CLOSES_DAYS_BEFORE, VERIFICATION_SLA } from '@/content/site';
-import { facebookPageUrl } from '@/lib/env.public';
+import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
+import { getSiteSettings } from '@/lib/settings';
 import { buildEventMetadata, siteUrl } from '@/lib/seo';
 import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -60,7 +60,8 @@ export default async function PublicEventPage({ params }: Props) {
   const phase = eventPhase({ event, availableTotal, now });
   const coverUrl = eventsService.coverImageUrl(event);
   const pageUrl = `${siteUrl()}/events/${event.slug}`;
-  const facebook = facebookPageUrl();
+  const settings = await getSiteSettings();
+  const facebook = settings.facebookPageUrl;
   const past = phase === 'past';
 
   const dateLine = `${formatDhakaLong(event.startsAt)} (Dhaka)`;
@@ -269,7 +270,10 @@ export default async function PublicEventPage({ params }: Props) {
                   Tickets are named. You can change the name on a ticket until registration closes,{' '}
                   {REGISTRATION_CLOSES_DAYS_BEFORE} days before the show.
                 </li>
-                <li>Pay by bKash after registering; a person checks it, {VERIFICATION_SLA}.</li>
+                <li>
+                  Pay by bKash after registering; a person checks it, {settings.verificationPromise}
+                  .
+                </li>
                 <li>No refunds through the app — see the refund policy for cancellations.</li>
               </ul>
             </section>

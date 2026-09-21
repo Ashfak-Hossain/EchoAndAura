@@ -13,8 +13,8 @@
  */
 import { Queue, UnrecoverableError, Worker } from 'bullmq';
 import { z } from 'zod';
-import { ordersService } from '@/server/container';
-import { createEmailDispatcher, EmailSkippedError } from '@/server/email/dispatch';
+import { ordersService, settingsService } from '@/server/container';
+import { createEmailDispatcher, EmailSkippedError, emailSender } from '@/server/email/dispatch';
 import { MailerPermanentError, MailerThrottledError } from '@/server/email/mailer';
 import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
@@ -30,12 +30,7 @@ import {
 import { closeProducer } from '@/server/queue/producer';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
-import {
-  bkashReceiveNumber,
-  organizerContactEmail,
-  organizerPhone,
-  siteUrl,
-} from '@/lib/env.public';
+import { siteUrl } from '@/lib/env.public';
 
 // Redis contents are external input: parse, never cast.
 const emailJobData = z.object({ orderId: z.uuid() });
@@ -45,12 +40,7 @@ async function main(): Promise<void> {
   const connection = createRedisConnection();
   const queue = new Queue(ORDERS_QUEUE, { connection });
   const mailer = selectMailer();
-  const env = {
-    siteUrl: siteUrl(),
-    bkashNumber: bkashReceiveNumber(),
-    contactEmail: organizerContactEmail(),
-    contactPhone: organizerPhone(),
-  };
+  const env = { siteUrl: siteUrl(), settings: () => settingsService.get() };
   const dispatcher = createEmailDispatcher({
     orders: ordersService,
     ordersRepo: ordersRepository,
@@ -81,11 +71,10 @@ async function main(): Promise<void> {
       if (job.name === SIGN_IN_JOB) {
         const parsed = signInJobData.safeParse(job.data);
         if (!parsed.success) throw new UnrecoverableError(`bad job data: ${parsed.error.message}`);
+        const settings = await env.settings();
         const rendered = await renderSignInEmail({
           url: parsed.data.url,
-          siteUrl: env.siteUrl,
-          contactEmail: env.contactEmail,
-          contactPhone: env.contactPhone,
+          ...emailSender(env.siteUrl, settings),
           ttlMinutes: Math.round(MAGIC_LINK_TTL_SECONDS / 60),
         });
         try {
@@ -94,7 +83,7 @@ async function main(): Promise<void> {
             subject: rendered.subject,
             html: rendered.html,
             text: rendered.text,
-            replyTo: env.contactEmail ?? undefined,
+            replyTo: settings.supportEmail ?? undefined,
           });
           logger.info({ messageId }, 'sign-in email sent');
           return { messageId };

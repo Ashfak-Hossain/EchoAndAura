@@ -33,6 +33,9 @@ export const orderStatus = pgEnum('order_status', [
 
 export const promoType = pgEnum('promo_type', ['percentage', 'fixed']);
 export const ticketStatus = pgEnum('ticket_status', ['issued', 'cancelled']);
+// Personal accounts receive by "Send Money" and have limits; a merchant
+// account receives by "Payment". The buyer-facing wording follows it.
+export const bkashAccountType = pgEnum('bkash_account_type', ['personal', 'merchant']);
 
 // ---------------------------------------------------------------------------
 // Events
@@ -343,6 +346,35 @@ export const accounts = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('accounts_user_id_idx').on(t.userId)],
+);
+
+// ---------------------------------------------------------------------------
+// Settings — the one row the organizer edits (B14). A column per field, all
+// nullable: NULL means "use the fallback" (the env value or the site.ts
+// constant), so a fresh database needs no seed. `id` is pinned to 1.
+// ---------------------------------------------------------------------------
+
+export const settings = pgTable(
+  'settings',
+  {
+    id: integer('id').primaryKey(),
+    // Displayed as typed, "01712 345678" — what buyers copy into bKash.
+    bkashReceiveNumber: text('bkash_receive_number'),
+    bkashAccountName: text('bkash_account_name'),
+    bkashAccountType: bkashAccountType('bkash_account_type').notNull().default('personal'),
+    supportEmail: text('support_email'),
+    supportPhone: text('support_phone'),
+    facebookPageUrl: text('facebook_page_url'),
+    // "usually within 4 hours" — quoted on the payment page and in C1.
+    verificationPromise: text('verification_promise'),
+    organizerName: text('organizer_name'),
+    // Printed on tickets and in email footers.
+    organizerAddress: text('organizer_address'),
+    // Who saved it last (admin email) — the only history there is.
+    updatedBy: text('updated_by'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('settings_single_row', sql`${t.id} = 1`)],
 );
 
 export const verifications = pgTable(

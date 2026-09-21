@@ -27,7 +27,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   { label: 'Orders', href: '/admin/orders', prefix: true },
   { label: 'Promo codes', href: '/admin/promo-codes', disabled: true },
   { label: 'Reports', href: '/admin/reports', disabled: true },
-  { label: 'Settings', href: '/admin/settings', disabled: true },
+  { label: 'Settings', href: '/admin/settings' },
 ];
 
 export function isNavItemActive(item: NavItem, pathname: string): boolean {

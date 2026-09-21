@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { FaqAccordion } from '@/components/public/faq-accordion';
 import { ContactCard, StaticPage } from '@/components/public/static-page';
-import { FAQ_ITEMS } from '@/content/faq';
+import { faqItems } from '@/content/faq';
 import { siteUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 
 export const metadata: Metadata = {
   title: 'FAQ',
@@ -10,11 +11,12 @@ export const metadata: Metadata = {
   alternates: { canonical: `${siteUrl()}/faq` },
 };
 
-export default function FaqPage() {
+export default async function FaqPage() {
+  const settings = await getSiteSettings();
   return (
     <StaticPage eyebrow="FAQ" title="Questions people ask" wide>
-      <FaqAccordion items={FAQ_ITEMS} />
-      <ContactCard />
+      <FaqAccordion items={faqItems(settings.verificationPromise)} />
+      <ContactCard settings={settings} />
     </StaticPage>
   );
 }

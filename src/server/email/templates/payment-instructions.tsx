@@ -2,7 +2,7 @@ import { Link, Text } from '@react-email/components';
 import { formatBDT } from '@/server/lib/money';
 import { formatDhakaLong } from '@/lib/time';
 import { EmailLayout, Hr, Row, styles } from './layout';
-import { type EmailView, SLA_TEXT, firstName } from './view';
+import { type EmailView, firstName } from './view';
 
 /** C1 — sent on order creation. The amount and the deadline must survive a 2-second read. */
 export function subject(v: EmailView): string {
@@ -18,9 +18,7 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
   return (
     <EmailLayout
       preview={`Send ${amount} by bKash and paste the transaction ID. Held 24 hours.`}
-      contactEmail={v.contactEmail}
-      contactPhone={v.contactPhone}
-      siteUrl={v.siteUrl}
+      sender={v}
       footerNote="You are getting this because you registered for an event. No refunds in the app."
     >
       <Text style={styles.h1}>Your tickets are held for 24 hours</Text>
@@ -49,11 +47,18 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
       <Hr style={styles.hr} />
       <Text style={{ ...styles.p, fontWeight: 700 }}>How to pay with bKash</Text>
       <Text style={styles.p}>
-        1. Open bKash and choose <strong>Send Money</strong>.
+        1. Open bKash and choose{' '}
+        <strong>{v.bkashAccountType === 'merchant' ? 'Payment' : 'Send Money'}</strong>.
       </Text>
       <Text style={styles.p}>
         2. Send <strong>{amount}</strong> to{' '}
-        <strong>{v.bkashNumber ?? 'the number on your order page'}</strong> — a personal account.
+        <strong>{v.bkashNumber ?? 'the number on your order page'}</strong>
+        {v.bkashAccountName
+          ? ` (${v.bkashAccountName})`
+          : v.bkashAccountType === 'merchant'
+            ? ' — a merchant account'
+            : ' — a personal account'}
+        .
       </Text>
       <Text style={styles.p}>
         3. Put <span style={styles.mono}>{v.order.reference}</span> in the reference field.
@@ -66,8 +71,8 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.small}>
         Find the TrxID in the bKash app: History → tap the transaction → TrxID. It is ten letters
-        and numbers. A person checks every payment, {SLA_TEXT}. Stuck? Reply to this email
-        {v.contactPhone ? ` or message Raj on ${v.contactPhone}` : ''}.
+        and numbers. A person checks every payment, {v.verificationPromise}. Stuck? Reply to this
+        email{v.contactPhone ? ` or message ${v.organizerName} on ${v.contactPhone}` : ''}.
       </Text>
     </EmailLayout>
   );

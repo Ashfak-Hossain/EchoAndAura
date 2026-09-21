@@ -1,20 +1,21 @@
 import Link from 'next/link';
 import type { FaqItem } from '@/components/public/faq-accordion';
-import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE, VERIFICATION_SLA } from './site';
+import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
 
 /**
  * A7 FAQ copy. Order matters: the questions people actually ask, most
  * common first. Ids are the shareable anchors (`/faq#wrong-trxid`) — treat
- * them as permanent once published.
+ * them as permanent once published. A function of the verification promise
+ * (B14 settings) so the FAQ quotes what the organizer actually promised.
  */
-export const FAQ_ITEMS: FaqItem[] = [
+export const faqItems = (verificationPromise: string): FaqItem[] => [
   {
     id: 'when-do-tickets-arrive',
     question: 'How long until my tickets arrive?',
     answer: (
       <p>
-        A person checks your bKash transaction against the statement — {VERIFICATION_SLA}. When it
-        matches, the tickets are emailed straight away and your order page updates itself. If
+        A person checks your bKash transaction against the statement — {verificationPromise}. When
+        it matches, the tickets are emailed straight away and your order page updates itself. If
         something is wrong you get an email explaining what to do.
       </p>
     ),

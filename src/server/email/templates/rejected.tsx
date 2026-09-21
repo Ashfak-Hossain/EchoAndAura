@@ -15,12 +15,7 @@ export function RejectedEmail({ v }: { v: EmailView }) {
     : (v.order.rejectionReason ?? 'No reason recorded');
   const registerUrl = `${v.siteUrl}/events/${v.event.slug}`;
   return (
-    <EmailLayout
-      preview="No tickets were issued and nothing was charged by us."
-      contactEmail={v.contactEmail}
-      contactPhone={v.contactPhone}
-      siteUrl={v.siteUrl}
-    >
+    <EmailLayout preview="No tickets were issued and nothing was charged by us." sender={v}>
       <Text style={styles.h1}>We couldn&apos;t match your payment</Text>
       <Text style={styles.p}>
         Hello {firstName(v.order.buyerName)}. We checked order{' '}
@@ -59,8 +54,10 @@ export function RejectedEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.small}>
         Talk to a person: reply to this email
-        {v.contactPhone ? ` or message Raj on ${v.contactPhone} (bKash, WhatsApp)` : ''} and you
-        will hear back within a day.
+        {v.contactPhone
+          ? ` or message ${v.organizerName} on ${v.contactPhone} (bKash, WhatsApp)`
+          : ''}{' '}
+        and you will hear back within a day.
       </Text>
     </EmailLayout>
   );

@@ -1,6 +1,5 @@
 import type { EventRecord } from '@/server/repositories/events.repository';
-import { ORGANIZER_NAME } from '@/content/site';
-import { organizerPhone } from '@/lib/env.public';
+import type { SiteSettings } from '@/server/services/settings.service';
 import { formatDhaka, formatDhakaLong } from '@/lib/time';
 import type { CheckInRowData } from './columns';
 
@@ -14,6 +13,8 @@ interface Props {
   query: string;
   /** When the rows were read (the page render), not when the dialog opened. */
   asOf: Date;
+  /** Footer: organizer name and phone (B14 settings). */
+  settings: Pick<SiteSettings, 'organizerName' | 'supportPhone'>;
 }
 
 /**
@@ -26,8 +27,8 @@ interface Props {
  * The Print button is disabled under a search, but ⌘P is not, so a partial
  * list labels itself: an unlabelled subset looks like the whole door list.
  */
-export function CheckInPrintSheet({ event, rows, total, query, asOf }: Props) {
-  const phone = organizerPhone();
+export function CheckInPrintSheet({ event, rows, total, query, asOf, settings }: Props) {
+  const phone = settings.supportPhone;
   return (
     <section
       data-testid="check-in-print-sheet"
@@ -98,7 +99,7 @@ export function CheckInPrintSheet({ event, rows, total, query, asOf }: Props) {
           the day if in doubt.
         </p>
         <p className="shrink-0">
-          echoandaura · {ORGANIZER_NAME}
+          echoandaura · {settings.organizerName}
           {phone ? ` · ${phone}` : ''}
         </p>
       </footer>

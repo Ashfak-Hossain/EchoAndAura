@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react';
-import { REGISTRATION_CLOSES_DAYS_BEFORE, VERIFICATION_SLA } from '@/content/site';
+import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import { CheckIcon, MailIcon, PhoneIcon } from './icons';
 
 /**
  * A1 "Why book with echoandaura" (redesign 2026-09-21): a charcoal band
  * between the light sections — the three things a first-time buyer on a
  * manual-bKash site needs to hear, as titled cards with real icons. The
- * SLA and the rename cut-off come from src/content/site.ts so the promise
- * here matches the policy pages.
+ * verification promise comes from the settings (B14) and the rename cut-off
+ * from src/content/site.ts, so the promise here matches the policy pages.
  */
-const POINTS: { icon: ReactNode; title: string; text: string }[] = [
+const points = (
+  verificationPromise: string,
+): { icon: ReactNode; title: string; text: string }[] => [
   {
     icon: <MailIcon />,
     title: 'Named tickets, by email',
@@ -23,11 +25,11 @@ const POINTS: { icon: ReactNode; title: string; text: string }[] = [
   {
     icon: <CheckIcon />,
     title: 'Checked by a person',
-    text: `Each payment is matched against the bKash statement — ${VERIFICATION_SLA} — then the tickets go out.`,
+    text: `Each payment is matched against the bKash statement — ${verificationPromise} — then the tickets go out.`,
   },
 ];
 
-export function TrustPoints() {
+export function TrustPoints({ verificationPromise }: { verificationPromise: string }) {
   return (
     <section aria-labelledby="trust-heading" className="bg-foreground text-background">
       <div className="mx-auto flex w-full max-w-360 flex-col gap-6 px-4 py-10 lg:gap-10 lg:px-16 lg:py-16">
@@ -43,7 +45,7 @@ export function TrustPoints() {
           </h2>
         </div>
         <ul className="flex flex-col gap-3 lg:grid lg:grid-cols-3 lg:gap-8">
-          {POINTS.map((p) => (
+          {points(verificationPromise).map((p) => (
             <li
               key={p.title}
               className="flex gap-3.5 rounded-xl border border-[#33302a] bg-[#26231f] p-4.5 lg:flex-col lg:gap-3.5 lg:p-7"

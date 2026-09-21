@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { facebookPageUrl, organizerContactEmail } from '@/lib/env.public';
+import type { SiteSettings } from '@/server/services/settings.service';
 import { BrandMark } from './brand-mark';
 import { MobileNav, type NavLink } from './mobile-nav';
 
@@ -41,15 +41,18 @@ export function SiteShell({
   children,
   session,
   cta,
+  settings,
 }: {
   children: ReactNode;
   /** Buyer session, when signed in; the admin never uses the public chrome. */
   session?: { email: string } | null;
   /** The live event's slug when registration is open; drives the header button. */
   cta?: { slug: string } | null;
+  /** Footer links: Facebook page and support email (B14 settings). */
+  settings: Pick<SiteSettings, 'facebookPageUrl' | 'supportEmail'>;
 }) {
-  const facebook = facebookPageUrl();
-  const contactEmail = organizerContactEmail();
+  const facebook = settings.facebookPageUrl;
+  const contactEmail = settings.supportEmail;
   const accountLink = session
     ? { href: '/account', label: 'My orders' }
     : { href: '/account/sign-in', label: 'Sign in' };

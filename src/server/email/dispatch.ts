@@ -6,7 +6,8 @@ import type { TicketTypesRepository } from '@/server/repositories/ticket-types.r
 import type { OrdersService } from '@/server/services/orders.service';
 import type { Mailer, OutgoingEmail } from './mailer';
 import { type EmailKind, renderEmail } from './templates/render';
-import { type EmailView } from './templates/view';
+import type { EmailSender, EmailView } from './templates/view';
+import type { SiteSettings } from '@/server/services/settings.service';
 
 /**
  * Runs in the worker: turns "send the <kind> email for order X" into a
@@ -15,9 +16,22 @@ import { type EmailView } from './templates/view';
  */
 export interface DispatchEnv {
   siteUrl: string;
-  bkashNumber: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
+  /**
+   * Read per job, not at boot: the organizer edits these on B14 and the
+   * next email must carry the new number without a worker restart.
+   */
+  settings: () => Promise<SiteSettings>;
+}
+
+/** The footer facts every email carries, from the settings row. */
+export function emailSender(siteUrl: string, s: SiteSettings): EmailSender {
+  return {
+    siteUrl,
+    contactEmail: s.supportEmail,
+    contactPhone: s.supportPhone,
+    organizerName: s.organizerName,
+    organizerAddress: s.organizerAddress,
+  };
 }
 
 export interface EmailDispatcherDeps {
@@ -143,15 +157,17 @@ export function createEmailDispatcher({
         ? Math.max(0, fresh.quantityTotal - fresh.quantitySold - fresh.quantityReserved)
         : 0;
 
+      const settings = await env.settings();
       const v: EmailView = {
         order,
         event,
         ticketType,
         tickets,
-        siteUrl: env.siteUrl,
-        bkashNumber: env.bkashNumber,
-        contactEmail: env.contactEmail,
-        contactPhone: env.contactPhone,
+        ...emailSender(env.siteUrl, settings),
+        bkashNumber: settings.bkashReceiveNumber,
+        bkashAccountName: settings.bkashAccountName,
+        bkashAccountType: settings.bkashAccountType,
+        verificationPromise: settings.verificationPromise,
         availableNow,
         at: marker?.createdAt ?? now(),
       };
@@ -162,7 +178,7 @@ export function createEmailDispatcher({
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
-        replyTo: env.contactEmail ?? undefined,
+        replyTo: settings.supportEmail ?? undefined,
       };
       if (kind === 'tickets-issued') {
         message.attachments = [

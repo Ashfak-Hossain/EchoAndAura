@@ -2,13 +2,11 @@ import { Link, Text } from '@react-email/components';
 import { render } from '@react-email/components';
 import { createElement } from 'react';
 import { EmailLayout, styles } from './layout';
+import type { EmailSender } from './view';
 
 /** C6 — the magic link. Short, one button, states the 15-minute expiry. */
-export interface SignInEmailInput {
+export interface SignInEmailInput extends EmailSender {
   url: string;
-  siteUrl: string;
-  contactEmail: string | null;
-  contactPhone: string | null;
   ttlMinutes: number;
 }
 
@@ -18,9 +16,7 @@ export function SignInEmail({ v }: { v: SignInEmailInput }) {
   return (
     <EmailLayout
       preview="Your sign-in link — it works once and expires soon."
-      contactEmail={v.contactEmail}
-      contactPhone={v.contactPhone}
-      siteUrl={v.siteUrl}
+      sender={v}
       footerNote="If you did not ask for this, ignore it — nobody can sign in without this email."
     >
       <Text style={styles.h1}>Sign in to echoandaura</Text>

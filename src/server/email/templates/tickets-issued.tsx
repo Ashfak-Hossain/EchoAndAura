@@ -28,12 +28,7 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
     ? `${formatDhakaLong(v.event.registrationClosesAt)} (Dhaka)`
     : null;
   return (
-    <EmailLayout
-      preview="Payment confirmed. Show the name and code at the door."
-      contactEmail={v.contactEmail}
-      contactPhone={v.contactPhone}
-      siteUrl={v.siteUrl}
-    >
+    <EmailLayout preview="Payment confirmed. Show the name and code at the door." sender={v}>
       <Text style={styles.h1}>You&apos;re in — here are your tickets</Text>
       <Text style={styles.p}>
         Payment confirmed on {formatDhakaLong(v.at)} (Dhaka) for order{' '}

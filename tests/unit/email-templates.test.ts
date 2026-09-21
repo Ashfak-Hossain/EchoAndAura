@@ -69,6 +69,11 @@ function view(over: Partial<EmailView> = {}): EmailView {
     bkashNumber: '01712 345678',
     contactEmail: 'hello@echoandaura.com',
     contactPhone: '01712 345678',
+    bkashAccountName: null,
+    bkashAccountType: 'personal',
+    verificationPromise: 'usually within 4 hours',
+    organizerName: 'Raj',
+    organizerAddress: null,
     availableNow: 124,
     at: T0,
     ...over,
@@ -103,6 +108,35 @@ describe('email templates', () => {
       expect(joined(r.html)).toContain(s);
       expect(r.text).toContain(s);
     }
+    // Personal account: "Send Money", the organizer's name and promise from the settings.
+    expect(joined(r.html)).toContain('Send Money');
+    expect(joined(r.html)).toContain('a personal account');
+    expect(joined(r.html)).toContain('usually within 4 hours');
+    expect(joined(r.html)).toContain('message Raj on 01712 345678');
+    expect(joined(r.html)).toContain('Raj 01712 345678');
+  });
+
+  // B14: the bKash wording and the sender follow the settings, not the code.
+  it('C1 says "Payment" for a merchant account and names the account and organizer', async () => {
+    const r = await renderEmail(
+      'payment-instructions',
+      view({
+        order: { ...view().order, status: 'pending_payment' },
+        bkashAccountType: 'merchant',
+        bkashAccountName: 'Echo Events Ltd',
+        organizerName: 'Rajibul',
+        organizerAddress: 'House 42, Banani, Dhaka',
+        verificationPromise: 'within the hour',
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('choose <strong>Payment</strong>');
+    expect(html).not.toContain('Send Money');
+    expect(html).toContain('(Echo Events Ltd)');
+    expect(html).toContain('within the hour');
+    expect(html).toContain('message Rajibul on 01712 345678');
+    expect(html).toContain('House 42, Banani, Dhaka');
+    expect(html).not.toContain('Raj ');
   });
 
   it('C2 lists every ticket with its code, name (Bengali intact), position and link', async () => {

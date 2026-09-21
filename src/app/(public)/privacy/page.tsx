@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ContactCard, Prose, StaticPage } from '@/components/public/static-page';
 import { LAST_UPDATED } from '@/content/site';
 import { siteUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 
 export const metadata: Metadata = {
   title: 'Privacy',
@@ -11,7 +12,8 @@ export const metadata: Metadata = {
 };
 
 /** A7 — written to be true of this codebase; update it when the data model changes. */
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const settings = await getSiteSettings();
   return (
     <StaticPage eyebrow="Privacy" title="Privacy policy" lastUpdated={LAST_UPDATED.privacy}>
       <Prose>
@@ -88,7 +90,7 @@ export default function PrivacyPage() {
           below. Quote your order reference if you have one.
         </p>
       </Prose>
-      <ContactCard title="Questions about your data?" />
+      <ContactCard title="Questions about your data?" settings={settings} />
     </StaticPage>
   );
 }

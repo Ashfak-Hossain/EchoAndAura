@@ -13,6 +13,7 @@ import { StatusChip } from '@/components/status-chip';
 import { formatDhakaLong } from '@/lib/time';
 import { formatSort } from '@/lib/table-sort';
 import { cn } from '@/lib/utils';
+import { getSiteSettings } from '@/lib/settings';
 import { checkInQuerySchema } from '@/lib/validation/check-in';
 import { CheckInPrintSheet } from './check-in-print-sheet';
 import { CheckInToolbar } from './check-in-toolbar';
@@ -37,6 +38,7 @@ export default async function CheckInPage({ params, searchParams }: Props) {
   const input = checkInQuerySchema.parse({ q: first(raw.q), sort: first(raw.sort) });
 
   let list;
+  const settings = getSiteSettings();
   try {
     list = await ticketsService.checkInList(id, input);
   } catch (err: unknown) {
@@ -174,6 +176,7 @@ export default async function CheckInPage({ params, searchParams }: Props) {
         total={total}
         query={input.q}
         asOf={new Date()}
+        settings={await settings}
       />
     </div>
   );

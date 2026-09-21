@@ -1,6 +1,6 @@
 import { ticketQrSvg } from '@/server/lib/qr';
 import { qrSvgToPath, renderTicketPdf } from '@/server/pdf/ticket-pdf';
-import { organizerContactEmail } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 import { siteUrl } from '@/lib/seo';
 import { loadTicket } from '../load';
 
@@ -49,6 +49,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
     }),
   );
 
+  const { supportEmail } = await getSiteSettings();
   const pdf = await withRenderSlot(() =>
     renderTicketPdf({
       eventTitle: view.event.title,
@@ -59,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ code: s
       orderReference: view.order.reference,
       registrationClosesAt: view.event.registrationClosesAt,
       issuedAt: view.ticket.createdAt,
-      contactEmail: organizerContactEmail(),
+      contactEmail: supportEmail,
       siteHost: new URL(siteUrl()).host,
       tickets,
     }),

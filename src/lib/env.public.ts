@@ -1,6 +1,12 @@
 /**
  * Optional public-site settings read from the environment. Each returns null
  * when unset so the UI can simply omit the element.
+ *
+ * Since B14 the four organizer values below (Facebook page, bKash number,
+ * contact email, phone) are only FALLBACKS for a fresh database: pages read
+ * the effective value through `getSiteSettings()` / `settingsService.get()`,
+ * which prefers what the organizer saved at /admin/settings. `siteUrl` stays
+ * env-only — it is deployment, not organizer, configuration.
  */
 
 /** The organizer's Facebook page — "Remind me on Facebook", footer link. */
@@ -10,9 +16,9 @@ export function facebookPageUrl(env: NodeJS.ProcessEnv = process.env): string | 
 }
 
 /**
- * The personal bKash number buyers send money to (A4 payment steps). Lives
- * in the environment until Settings (B14, Phase 6) gives Raj a screen for
- * it. Displayed as typed — keep it in the "01712 345678" form.
+ * The bKash number buyers send money to (A4 payment steps) — the fallback
+ * until the organizer saves one on B14. Displayed as typed — keep it in the
+ * "01712 345678" form.
  */
 export function bkashReceiveNumber(env: NodeJS.ProcessEnv = process.env): string | null {
   const raw = env.BKASH_RECEIVE_NUMBER?.trim();

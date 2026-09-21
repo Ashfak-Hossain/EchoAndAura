@@ -11,6 +11,7 @@ import { db } from '@/db/client';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
+import { settingsRepository } from '@/server/repositories/settings.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
@@ -18,6 +19,7 @@ import { enqueueEmail } from '@/server/queue/producer';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createSettingsService } from '@/server/services/settings.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
@@ -42,6 +44,7 @@ export const storage: ObjectStorage = {
 
 export const eventsService = createEventsService(eventsRepository, ticketTypesRepository, storage);
 export const ticketTypesService = createTicketTypesService(ticketTypesRepository);
+export const settingsService = createSettingsService(settingsRepository);
 export const inventoryService = createInventoryService(inventoryRepository);
 export const ordersService = createOrdersService({
   orders: ordersRepository,

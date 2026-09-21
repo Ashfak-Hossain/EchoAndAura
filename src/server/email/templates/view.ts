@@ -3,23 +3,33 @@ import type { OrderRecord } from '@/server/repositories/orders.repository';
 import type { TicketTypeRecord } from '@/server/repositories/ticket-types.repository';
 import type { TicketRecord } from '@/server/repositories/tickets.repository';
 
-/** Everything a template may read: the order view plus environment facts. */
-export interface EmailView {
+/** What the footer of every email says about who sent it (B14 settings). */
+export interface EmailSender {
+  siteUrl: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  /** "Raj" — how the organizer is named in the copy. */
+  organizerName: string;
+  organizerAddress: string | null;
+}
+
+/** Everything a template may read: the order view plus the site settings. */
+export interface EmailView extends EmailSender {
   order: OrderRecord;
   event: EventRecord;
   ticketType: TicketTypeRecord;
   tickets: TicketRecord[];
-  siteUrl: string;
   bkashNumber: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
+  bkashAccountName: string | null;
+  /** "Send Money" (personal) vs "Payment" (merchant) in the payment steps. */
+  bkashAccountType: 'personal' | 'merchant';
+  /** "usually within 4 hours" */
+  verificationPromise: string;
   /** Tickets still available for this type, for C3/C4's "still available". */
   availableNow: number;
   /** When the relevant thing happened (approval, rejection, expiry), for the copy. */
   at: Date;
 }
-
-export const SLA_TEXT = 'usually within 4 hours';
 
 export function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? fullName;

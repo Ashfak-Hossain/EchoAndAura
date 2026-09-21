@@ -2,22 +2,29 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { FaqAccordion } from '@/components/public/faq-accordion';
-import { ContactCard } from '@/components/public/static-page';
-import { FAQ_ITEMS } from '@/content/faq';
+import { ContactCard, type ContactSettings } from '@/components/public/static-page';
+import { faqItems } from '@/content/faq';
 
-const env = (v: Record<string, string>) => v as unknown as NodeJS.ProcessEnv;
+const contact = (over: Partial<ContactSettings> = {}): ContactSettings => ({
+  supportEmail: null,
+  supportPhone: null,
+  facebookPageUrl: null,
+  organizerName: 'Raj',
+  ...over,
+});
 
 describe('ContactCard', () => {
   it('renders nothing when no channel is configured', () => {
-    expect(renderToStaticMarkup(createElement(ContactCard, { env: env({}) }))).toBe('');
+    expect(renderToStaticMarkup(createElement(ContactCard, { settings: contact() }))).toBe('');
   });
 
   it('shows only the channels that are set, phone as a tel: link without spaces', () => {
     const html = renderToStaticMarkup(
       createElement(ContactCard, {
-        env: env({ ORGANIZER_CONTACT_EMAIL: 'hello@example.com', ORGANIZER_PHONE: '01712 345678' }),
+        settings: contact({ supportEmail: 'hello@example.com', supportPhone: '01712 345678' }),
       }),
     );
+    expect(html).toContain('Message Raj');
     expect(html).toContain('href="mailto:hello@example.com"');
     expect(html).toContain('href="tel:01712345678"');
     expect(html).toContain('01712 345678');
@@ -43,7 +50,7 @@ describe('FaqAccordion', () => {
   });
 
   it('ships the FAQ with unique, URL-safe ids — they are shareable anchors', () => {
-    const ids = FAQ_ITEMS.map((i) => i.id);
+    const ids = faqItems('usually within 4 hours').map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^[a-z0-9-]+$/);
     // Linked from the contact page and the order flow: must keep existing.

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { facebookPageUrl, organizerContactEmail, organizerPhone } from '@/lib/env.public';
 import { formatInTimeZone } from 'date-fns-tz';
-import { ORGANIZER_NAME, REPLY_PROMISE } from '@/content/site';
+import type { SiteSettings } from '@/server/services/settings.service';
+import { REPLY_PROMISE } from '@/content/site';
 import { DHAKA_TZ } from '@/lib/time';
 
 /**
@@ -55,21 +55,25 @@ export function Prose({ children }: { children: ReactNode }) {
   return <article className="rich-text text-[16px] text-[#2b2925]">{children}</article>;
 }
 
+/** The part of the settings the contact card reads. */
+export type ContactSettings = Pick<
+  SiteSettings,
+  'supportEmail' | 'supportPhone' | 'facebookPageUrl' | 'organizerName'
+>;
+
 /**
  * Contact card closing every policy page: the organizer's channels from the
- * environment, each omitted when unset (the convention in env.public.ts).
- * Renders nothing when no channel is configured, rather than an empty box.
+ * site settings (B14), each omitted when unset. Renders nothing when no
+ * channel is configured, rather than an empty box.
  */
 export function ContactCard({
   title = 'Still stuck?',
-  env = process.env,
+  settings,
 }: {
   title?: string;
-  env?: NodeJS.ProcessEnv;
+  settings: ContactSettings;
 }) {
-  const email = organizerContactEmail(env);
-  const phone = organizerPhone(env);
-  const facebook = facebookPageUrl(env);
+  const { supportEmail: email, supportPhone: phone, facebookPageUrl: facebook } = settings;
   if (!email && !phone && !facebook) return null;
   return (
     <aside
@@ -78,7 +82,8 @@ export function ContactCard({
     >
       <p className="font-heading text-lg font-semibold">{title}</p>
       <p className="text-sm text-muted-foreground">
-        Message {ORGANIZER_NAME} — {REPLY_PROMISE}. Quote your order reference if you have one.
+        Message {settings.organizerName} — {REPLY_PROMISE}. Quote your order reference if you have
+        one.
       </p>
       <ul className="flex flex-col gap-1.5 text-[15px]">
         {email ? (

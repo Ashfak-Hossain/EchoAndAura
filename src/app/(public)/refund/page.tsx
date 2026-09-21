@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ContactCard, Prose, StaticPage } from '@/components/public/static-page';
 import { HOLD_HOURS, LAST_UPDATED, REFUND_WORKING_DAYS } from '@/content/site';
 import { siteUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 
 export const metadata: Metadata = {
   title: 'Refund policy',
@@ -15,7 +16,8 @@ export const metadata: Metadata = {
  * handled outside the app". Draft copy from the design frame; the promises
  * in it (turnaround, cancellation) are the organizer's to confirm.
  */
-export default function RefundPolicyPage() {
+export default async function RefundPolicyPage() {
+  const settings = await getSiteSettings();
   return (
     <StaticPage eyebrow="Refunds" title="Refund policy" lastUpdated={LAST_UPDATED.refund}>
       <Prose>
@@ -65,7 +67,7 @@ export default function RefundPolicyPage() {
           deducted from a refund.
         </p>
       </Prose>
-      <ContactCard title="Need a refund?" />
+      <ContactCard title="Need a refund?" settings={settings} />
     </StaticPage>
   );
 }

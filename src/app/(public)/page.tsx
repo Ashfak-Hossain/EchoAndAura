@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { facebookPageUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 import { buildHomeMetadata, siteUrl } from '@/lib/seo';
 import { Hero } from './home/hero';
 import { loadHome } from './home/load';
@@ -32,8 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
 // everything below keeps the same order at every width — one column of
 // sections, never a directory.
 export default async function HomePage() {
-  const home = await loadHome();
-  const facebook = facebookPageUrl();
+  const [home, settings] = await Promise.all([loadHome(), getSiteSettings()]);
+  const facebook = settings.facebookPageUrl;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -44,7 +44,7 @@ export default async function HomePage() {
           <UpcomingRow events={home.alsoUpcoming} />
         </div>
       ) : null}
-      <TrustPoints />
+      <TrustPoints verificationPromise={settings.verificationPromise} />
       {home.past.length > 0 ? (
         <div className="mx-auto w-full max-w-360 px-4 py-8 lg:px-16 lg:py-16">
           <PastStrip events={home.past} />

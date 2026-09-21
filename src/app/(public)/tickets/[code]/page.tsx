@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { ticketQrSvg } from '@/server/lib/qr';
 import { StatusChip } from '@/components/status-chip';
-import { organizerContactEmail } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 import { formatDhakaLong } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { CopyField } from '../../orders/[id]/copy-field';
@@ -33,7 +33,7 @@ export default async function TicketPage({ params }: Props) {
   const { ticket, event, ticketType, order, position, canRename, renameLockedAt } = view;
   const cancelled = ticket.status === 'cancelled';
   const qr = await ticketQrSvg(ticket.code);
-  const contact = organizerContactEmail();
+  const contact = (await getSiteSettings()).supportEmail;
   const lockedAtText = renameLockedAt ? `${formatDhakaLong(renameLockedAt)} (Dhaka)` : null;
 
   return (

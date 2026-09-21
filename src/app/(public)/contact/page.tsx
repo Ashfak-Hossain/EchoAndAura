@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ContactCard, Prose, StaticPage } from '@/components/public/static-page';
-import { ORGANIZER_NAME, REPLY_PROMISE, VERIFICATION_SLA } from '@/content/site';
-import { facebookPageUrl, organizerContactEmail, organizerPhone, siteUrl } from '@/lib/env.public';
+import { REPLY_PROMISE } from '@/content/site';
+import { siteUrl } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 
 export const metadata: Metadata = {
   title: 'Contact',
@@ -14,16 +15,19 @@ export const metadata: Metadata = {
  * A7 — the contact card is the page. Channels come from the environment;
  * when none is configured yet the page says so instead of showing a blank.
  */
-export default function ContactPage() {
-  const configured = Boolean(organizerContactEmail() || organizerPhone() || facebookPageUrl());
+export default async function ContactPage() {
+  const settings = await getSiteSettings();
+  const configured = Boolean(
+    settings.supportEmail || settings.supportPhone || settings.facebookPageUrl,
+  );
   return (
     <StaticPage
       eyebrow="Contact"
       title="Message the organizer"
-      lead={`${ORGANIZER_NAME} runs everything and ${REPLY_PROMISE}.`}
+      lead={`${settings.organizerName} runs everything and ${REPLY_PROMISE}.`}
     >
       {configured ? (
-        <ContactCard title="Ways to reach us" />
+        <ContactCard title="Ways to reach us" settings={settings} />
       ) : (
         <p className="rounded-xl border border-dashed border-border-strong p-5 text-sm text-muted-foreground">
           Contact details are being set up. For now, reply to any email you have received from us.
@@ -33,8 +37,8 @@ export default function ContactPage() {
         <h2>Before you write</h2>
         <ul>
           <li>
-            <strong>Waiting for tickets?</strong> Payments are checked {VERIFICATION_SLA}. Your
-            order page updates itself — no need to ask.
+            <strong>Waiting for tickets?</strong> Payments are checked{' '}
+            {settings.verificationPromise}. Your order page updates itself — no need to ask.
           </li>
           <li>
             <strong>Lost the order page?</strong> <Link href="/orders/find">Find my order</Link>{' '}
