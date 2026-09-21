@@ -122,6 +122,19 @@ describe('email templates', () => {
     expect(r.text).toContain('TKT-4H8ZP2XQ');
   });
 
+  // A re-send after an admin cancel: the dead ticket is gone, the subject
+  // counts what is left, and the survivor keeps its place in the order.
+  it('C2 re-sent after a cancel omits the cancelled ticket and counts live ones', async () => {
+    const v = view();
+    v.tickets[0]!.status = 'cancelled';
+    const r = await renderEmail('tickets-issued', v);
+    expect(r.subject).toBe('Your ticket for Echo & Aura Live — Dhaka');
+    expect(joined(r.html)).not.toContain('TKT-4H8ZP2XQ');
+    expect(joined(r.html)).toContain('TKT-9WQ2LM5D');
+    expect(joined(r.html)).toContain('Ticket 2 of 2');
+    expect(r.text).not.toContain('TKT-4H8ZP2XQ');
+  });
+
   it('C3 quotes the reason label and the note word for word', async () => {
     const r = await renderEmail(
       'rejected',

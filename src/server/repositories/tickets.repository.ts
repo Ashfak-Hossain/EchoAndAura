@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
 import { orders, ticketTypes, tickets } from '@/db/schema';
@@ -7,10 +7,9 @@ import { isUniqueViolation } from '@/server/lib/pg-errors';
 
 /**
  * The only module that touches Drizzle for `tickets`. Rows are created by
- * fulfilment (Invariant 4) inside the approve transaction; nothing here
- * changes a ticket's status (cancel arrives with Phase 6, as a conditional
- * UPDATE like every other status write). The attendee name is the one
- * buyer-editable column.
+ * fulfilment (Invariant 4) inside the approve transaction; the one status
+ * write, `cancel`, is a conditional UPDATE like every other status write.
+ * The attendee name is the one buyer-editable column.
  */
 
 export type TicketRecord = typeof tickets.$inferSelect;
@@ -32,6 +31,19 @@ export interface TicketsRepository {
   insertMany(rows: NewTicket[], tx?: DbExecutor): Promise<TicketRecord[]>;
   listByOrder(orderId: string): Promise<TicketRecord[]>;
   findByCode(code: string): Promise<TicketRecord | null>;
+  /** Same row, locked for the rest of `tx` (SELECT … FOR UPDATE). */
+  findByIdForUpdate(id: string, tx: DbExecutor): Promise<TicketRecord | null>;
+  /**
+   * THE ticket status write: `issued → cancelled` only while still
+   * `issued`. Null when it is not — the caller lost a race and must not
+   * release a seat for it.
+   */
+  cancel(id: string, tx?: DbExecutor): Promise<TicketRecord | null>;
+  /**
+   * Live tickets left on the order — zero means the order itself is over.
+   * Transaction-only: it must see the cancel that just happened in `tx`.
+   */
+  countIssuedByOrder(orderId: string, tx: DbExecutor): Promise<number>;
   /**
    * B11: every ticket of one event, all statuses, by attendee name then
    * code. Unbounded on purpose — a door list is capped by the event's
@@ -79,6 +91,28 @@ export const ticketsRepository: TicketsRepository = {
   async findByCode(code) {
     const [row] = await db.select().from(tickets).where(eq(tickets.code, code)).limit(1);
     return row ?? null;
+  },
+
+  async findByIdForUpdate(id, tx) {
+    const [row] = await tx.select().from(tickets).where(eq(tickets.id, id)).for('update');
+    return row ?? null;
+  },
+
+  async cancel(id, tx = db) {
+    const [row] = await tx
+      .update(tickets)
+      .set({ status: 'cancelled', updatedAt: sql`now()` })
+      .where(and(eq(tickets.id, id), eq(tickets.status, 'issued')))
+      .returning();
+    return row ?? null;
+  },
+
+  async countIssuedByOrder(orderId, tx) {
+    const [row] = await tx
+      .select({ n: count() })
+      .from(tickets)
+      .where(and(eq(tickets.orderId, orderId), eq(tickets.status, 'issued')));
+    return row?.n ?? 0;
   },
 
   listForEvent(eventId) {

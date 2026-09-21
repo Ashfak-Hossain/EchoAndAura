@@ -186,6 +186,11 @@ export function createTicketsService({
       if (!window.open) throw new RenameLockedError(window.lockedAt);
 
       return runInTransaction(async (tx) => {
+        // Lock the order first — the same order cancelTicket and approve
+        // take — so a rename and an admin cancel on the same order serialise
+        // instead of deadlocking on the ticket row + the audit row's FK.
+        const locked = await orders.findByIdForUpdate(ticket.orderId, tx);
+        if (!locked) throw new Error(`ticket ${code}: order ${ticket.orderId} missing`);
         // Compare-and-swap on status AND the old name: a cancel or another
         // rename landing in between wins, and the audit row never lies.
         const updated = await tickets.updateAttendeeName(ticket.id, ticket.attendeeName, name, tx);

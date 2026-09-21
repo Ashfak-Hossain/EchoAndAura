@@ -135,6 +135,12 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       t.quantityReserved -= qty;
       t.quantitySold += qty;
     }),
+    releaseSold: vi.fn(async (id, qty, tx) => {
+      expect(tx).toBe(TX);
+      const t = state.types.get(id);
+      if (!t || t.quantitySold < qty) throw new InventoryStateError(id, 'releaseSold');
+      t.quantitySold -= qty;
+    }),
   };
 
   const orders: OrdersRepository = {
@@ -318,6 +324,24 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
     findByCode: async (code) => {
       const row = state.tickets.find((t) => t.code === code);
       return row ? { ...row } : null;
+    },
+    findByIdForUpdate: async (id, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      return row ? { ...row } : null;
+    },
+    // Conditional like the real UPDATE … WHERE status = 'issued'.
+    cancel: vi.fn(async (id, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || row.status !== 'issued') return null;
+      row.status = 'cancelled';
+      row.updatedAt = NOW;
+      return { ...row };
+    }),
+    countIssuedByOrder: async (orderId, tx) => {
+      expect(tx).toBe(TX);
+      return state.tickets.filter((t) => t.orderId === orderId && t.status === 'issued').length;
     },
     listForEvent: async (eventId) =>
       state.tickets

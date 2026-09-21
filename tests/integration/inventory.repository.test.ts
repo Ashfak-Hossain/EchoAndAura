@@ -115,6 +115,24 @@ describe('inventory repository', () => {
     expect(await counters()).toEqual({ sold: 0, held: 2 });
   });
 
+  // A cancelled ticket comes out of SOLD, not HELD: the two counters never mix.
+  it('releaseSold puts a sold seat back on sale and refuses to go below zero', async () => {
+    await repo.reserve(ticketTypeId, 3);
+    await repo.convertToSold(ticketTypeId, 3);
+    await repo.releaseSold(ticketTypeId, 1);
+    expect(await counters()).toEqual({ sold: 2, held: 0 });
+    // The seat is available again.
+    expect(await repo.reserve(ticketTypeId, STOCK - 2)).toBe(true);
+    await repo.release(ticketTypeId, STOCK - 2);
+
+    await expect(repo.releaseSold(ticketTypeId, 3)).rejects.toBeInstanceOf(InventoryStateError);
+    await expect(repo.releaseSold(randomUUID(), 1)).rejects.toBeInstanceOf(InventoryStateError);
+    for (const q of [0, -1, 1.5]) {
+      await expect(repo.releaseSold(ticketTypeId, q)).rejects.toBeInstanceOf(InvalidQuantityError);
+    }
+    expect(await counters()).toEqual({ sold: 2, held: 0 });
+  });
+
   // What order creation relies on: hold + insert order in one transaction,
   // so a failure after the hold leaves no orphaned reservation.
   it('a reserve inside a transaction rolls back with it', async () => {

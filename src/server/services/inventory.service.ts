@@ -51,6 +51,17 @@ export function createInventoryService(repo: InventoryRepository) {
       assertQuantity(quantity);
       await repo.convertToSold(ticketTypeId, quantity, tx);
     },
+
+    /**
+     * A sold seat goes back on sale (ticket cancelled after issue). Not
+     * `release`: that counter is what unpaid orders hold. Only
+     * fulfilment.service.ts may call this. @throws InvalidQuantityError,
+     * InventoryStateError
+     */
+    async releaseSold(ticketTypeId: string, quantity: number, tx?: DbExecutor): Promise<void> {
+      assertQuantity(quantity);
+      await repo.releaseSold(ticketTypeId, quantity, tx);
+    },
   };
 }
 

@@ -27,6 +27,10 @@ function fakeRepo(total = 20) {
       state.held -= qty;
       state.sold += qty;
     }),
+    releaseSold: vi.fn(async (id, qty) => {
+      if (state.sold < qty) throw new InventoryStateError(id, 'releaseSold');
+      state.sold -= qty;
+    }),
   };
   return { repo, state };
 }
@@ -60,10 +64,12 @@ describe('inventoryService', () => {
       await expect(svc.hold(TT, q)).rejects.toBeInstanceOf(InvalidQuantityError);
       await expect(svc.release(TT, q)).rejects.toBeInstanceOf(InvalidQuantityError);
       await expect(svc.convertToSold(TT, q)).rejects.toBeInstanceOf(InvalidQuantityError);
+      await expect(svc.releaseSold(TT, q)).rejects.toBeInstanceOf(InvalidQuantityError);
     }
     expect(repo.reserve).not.toHaveBeenCalled();
     expect(repo.release).not.toHaveBeenCalled();
     expect(repo.convertToSold).not.toHaveBeenCalled();
+    expect(repo.releaseSold).not.toHaveBeenCalled();
   });
 
   it('release and convertToSold move counters and surface state errors untouched', async () => {
@@ -76,6 +82,12 @@ describe('inventoryService', () => {
 
     await expect(svc.release(TT, 1)).rejects.toBeInstanceOf(InventoryStateError);
     await expect(svc.convertToSold(TT, 1)).rejects.toBeInstanceOf(InventoryStateError);
+
+    // A cancelled ticket leaves SOLD (never HELD) and cannot go below zero.
+    await svc.releaseSold(TT, 2);
+    expect(state).toEqual({ total: 20, sold: 1, held: 0 });
+    await expect(svc.releaseSold(TT, 2)).rejects.toBeInstanceOf(InventoryStateError);
+    expect(state.sold).toBe(1);
   });
 
   it('passes the caller transaction through to every repository call', async () => {
@@ -85,8 +97,10 @@ describe('inventoryService', () => {
     await svc.hold(TT, 2, tx);
     await svc.release(TT, 1, tx);
     await svc.convertToSold(TT, 1, tx);
+    await svc.releaseSold(TT, 1, tx);
     expect(repo.reserve).toHaveBeenCalledWith(TT, 2, tx);
     expect(repo.release).toHaveBeenCalledWith(TT, 1, tx);
     expect(repo.convertToSold).toHaveBeenCalledWith(TT, 1, tx);
+    expect(repo.releaseSold).toHaveBeenCalledWith(TT, 1, tx);
   });
 });

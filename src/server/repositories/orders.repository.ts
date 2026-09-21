@@ -168,7 +168,12 @@ export const ordersRepository: OrdersRepository = {
   },
 
   async findByIdForUpdate(id, tx) {
-    const [row] = await tx.select().from(orders).where(eq(orders.id, id)).for('update');
+    // NO KEY UPDATE, not UPDATE: it still excludes every other order writer
+    // (they all take this lock), but does not conflict with the KEY SHARE a
+    // child-row INSERT takes on the order through its FK — a buyer's rename
+    // writing its order_events row while an admin cancels a sibling ticket
+    // would otherwise deadlock (found in review). Nobody updates the key.
+    const [row] = await tx.select().from(orders).where(eq(orders.id, id)).for('no key update');
     return row ?? null;
   },
 

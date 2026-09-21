@@ -103,9 +103,13 @@ export class InvalidQuantityError extends DomainError {
 export class InventoryStateError extends DomainError {
   constructor(
     public readonly ticketTypeId: string,
-    public readonly operation: 'release' | 'convertToSold',
+    public readonly operation: 'release' | 'convertToSold' | 'releaseSold',
   ) {
-    super(`Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is held`);
+    super(
+      `Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is ${
+        operation === 'releaseSold' ? 'sold' : 'held'
+      }`,
+    );
   }
 }
 
@@ -228,13 +232,14 @@ export class TrxIdChangedError extends DomainError {
   }
 }
 
+/** `ref` is whatever the caller looked the ticket up by: a code, or an id on the admin side. */
 export class TicketNotFoundError extends DomainError {
-  constructor(public readonly code: string) {
-    super(`Ticket ${code} not found`);
+  constructor(public readonly ref: string) {
+    super(`Ticket ${ref} not found`);
   }
 }
 
-/** A cancelled ticket cannot be renamed — it will not be admitted anyway. */
+/** A cancelled ticket cannot be renamed or cancelled again — it will not be admitted anyway. */
 export class TicketCancelledError extends DomainError {
   constructor(public readonly code: string) {
     super(`Ticket ${code} is cancelled`);

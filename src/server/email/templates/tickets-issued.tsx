@@ -5,8 +5,13 @@ import { EmailLayout, Hr, styles } from './layout';
 import type { EmailView } from './view';
 
 /** C2 — sent on approval. One card per ticket with the code large: this is the email people screenshot. */
+/** Live tickets only: a re-send after an admin cancel must not count a dead one. */
+function liveTickets(v: EmailView) {
+  return v.tickets.filter((t) => t.status === 'issued');
+}
+
 export function subject(v: EmailView): string {
-  const n = v.tickets.length;
+  const n = liveTickets(v).length;
   return `Your ${n === 1 ? 'ticket' : `${n} tickets`} for ${v.event.title}`;
 }
 
@@ -15,8 +20,9 @@ export function attachmentName(v: EmailView): string {
 }
 
 export function TicketsIssuedEmail({ v }: { v: EmailView }) {
-  // A re-send after an admin cancel must not hand out a dead ticket.
-  const live = v.tickets.filter((t) => t.status === 'issued');
+  const live = liveTickets(v);
+  // "2 of 3" is the ticket's fixed place in the order (ADR-015), the same
+  // on the PDF and the ticket page — it does not renumber after a cancel.
   const n = v.tickets.length;
   const closes = v.event.registrationClosesAt
     ? `${formatDhakaLong(v.event.registrationClosesAt)} (Dhaka)`

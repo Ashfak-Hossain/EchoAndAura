@@ -17,7 +17,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
-import { approveOrderAction, rejectOrderAction, resendTicketsEmailAction } from './actions';
+import {
+  approveOrderAction,
+  cancelTicketAction,
+  rejectOrderAction,
+  resendTicketsEmailAction,
+} from './actions';
+import { CancelTicketButton } from './cancel-ticket-button';
 import { VerificationActions } from './verification-actions';
 
 export const metadata: Metadata = { title: 'Order' };
@@ -25,14 +31,20 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ approved?: string; rejected?: string; resent?: string }>;
+  searchParams: Promise<{
+    approved?: string;
+    rejected?: string;
+    resent?: string;
+    cancelled?: string;
+    order?: string;
+  }>;
 }
 
 // B8: three read columns, then the actions bar, then the writeable lists.
 // The page shape never changes between statuses — only which actions exist.
 export default async function AdminOrderPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { approved, rejected, resent } = await searchParams;
+  const { approved, rejected, resent, cancelled, order: orderFlag } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
 
   let view;
@@ -44,6 +56,10 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
   }
   const { order, event, ticketType, events, tickets } = view;
   const now = new Date();
+  const liveTickets = tickets.filter((t) => t.status === 'issued');
+  const cancelledTickets = tickets.length - liveTickets.length;
+  // Per-ticket Cancel exists only while the order itself is live.
+  const canCancel = order.status === 'issued';
   const submitted = [...events]
     .reverse()
     .find((e) => e.action === 'payment.submitted' || e.action === 'payment.updated');
@@ -94,6 +110,13 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
       {resent === '0' ? (
         <p role="alert" className="rounded-md bg-destructive-tint px-3 py-2 text-sm text-[#8e1e17]">
           Could not queue the email — the queue may be down. Nothing else changed.
+        </p>
+      ) : null}
+      {cancelled ? (
+        <p role="status" className="rounded-md bg-secondary px-3 py-2 text-sm">
+          Ticket <span className="font-mono">{cancelled}</span> cancelled — one seat is back on
+          sale.
+          {orderFlag === 'cancelled' ? ' No live tickets remain, so the order is cancelled.' : ''}
         </p>
       ) : null}
 
@@ -176,6 +199,10 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
         />
       ) : order.status === 'pending_payment' ? (
         <p className="text-sm text-muted-foreground">No trxID yet — nothing to verify.</p>
+      ) : order.status === 'cancelled' ? (
+        <p className="text-sm text-muted-foreground" data-testid="order-readonly">
+          This order is cancelled — read-only. The audit trail below says who and why.
+        </p>
       ) : order.status === 'issued' ? (
         <form
           action={resendTicketsEmailAction.bind(null, order.id)}
@@ -198,7 +225,12 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
         <h2 className="text-lg">
           Tickets{' '}
           <span className="text-sm font-normal text-muted-foreground">
-            · {tickets.length === 0 ? 'issued on approval' : `${tickets.length} issued`}
+            ·{' '}
+            {tickets.length === 0
+              ? 'issued on approval'
+              : cancelledTickets === 0
+                ? `${tickets.length} issued`
+                : `${liveTickets.length} issued · ${cancelledTickets} cancelled`}
           </span>
         </h2>
         {tickets.length > 0 ? (
@@ -209,6 +241,11 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                   <TableHead>Code</TableHead>
                   <TableHead>Attendee</TableHead>
                   <TableHead>Status</TableHead>
+                  {canCancel ? (
+                    <TableHead className="w-24">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -228,6 +265,18 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                     <TableCell>
                       <StatusChip kind="ticket" status={t.status} />
                     </TableCell>
+                    {canCancel ? (
+                      <TableCell className="text-right">
+                        {t.status === 'issued' ? (
+                          <CancelTicketButton
+                            code={t.code}
+                            attendeeName={t.attendeeName}
+                            last={liveTickets.length === 1}
+                            cancel={cancelTicketAction.bind(null, order.id, t.id)}
+                          />
+                        ) : null}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>

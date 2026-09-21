@@ -70,7 +70,15 @@ export function StatusTotals({
             label={ORDER_STATUS_LABELS[s].label}
             count={t.count}
             money={t.totalPaisa}
-            moneyNote={held ? 'held' : s === 'paid' || s === 'issued' ? 'received' : 'not taken'}
+            moneyNote={
+              held
+                ? 'held'
+                : s === 'paid' || s === 'issued'
+                  ? 'received'
+                  : s === 'cancelled'
+                    ? 'returned outside'
+                    : 'not taken'
+            }
             className={TONE[s]}
             testId={`status-tile-${s}`}
           />

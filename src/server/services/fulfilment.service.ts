@@ -4,7 +4,9 @@ import {
   InvalidRejectionReasonError,
   OrderNotFoundError,
   OrderStatusConflictError,
+  TicketCancelledError,
   TicketCodeCollisionError,
+  TicketNotFoundError,
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
@@ -70,6 +72,22 @@ export interface RejectInput {
   reason: RejectionReason;
   /** Shown to the buyer word for word. */
   note?: string;
+}
+
+export interface CancelTicketInput {
+  /** The order the page showed the ticket on — a mismatch is refused. */
+  orderId: string;
+  /** The admin's identity for the audit row (their email). */
+  actor: string;
+  /** Why — free text, kept in the audit trail (already trimmed and bounded at the boundary). */
+  reason: string;
+}
+
+export interface CancelTicketResult {
+  ticket: TicketRecord;
+  order: OrderRecord;
+  /** True when this was the order's last live ticket and the order is now `cancelled`. */
+  orderCancelled: boolean;
 }
 
 export function createFulfilmentService({
@@ -244,6 +262,78 @@ export function createFulfilmentService({
         logger.error({ orderId, err }, 'fulfilment: onOrderRejected failed');
       }
       return rejected;
+    },
+
+    /**
+     * B8 "Cancel ticket": one seat goes back on sale; money is returned
+     * outside the app. One transaction — lock the order, then the ticket
+     * (the same order approve takes, so two admins cancelling siblings
+     * cannot deadlock) → conditional `issued → cancelled` on the ticket →
+     * ONLY THEN `inventory.releaseSold(1)`, so a lost race can never free a
+     * seat twice → audit row with the reason (Invariant 6). When it was the
+     * order's last live ticket the order follows (`issued → cancelled`, its
+     * one legal exit) with its own audit row. Nothing here is network
+     * (Invariant 7): there is no cancellation email — the admin is already
+     * talking to the buyer.
+     * @throws TicketNotFoundError (also when the ticket is not on `orderId`),
+     *   TicketCancelledError (already cancelled, including a concurrent
+     *   cancel that won), OrderNotFoundError, OrderStatusConflictError (order
+     *   not `issued`), InventoryStateError
+     */
+    async cancelTicket(
+      ticketId: string,
+      { orderId, actor, reason }: CancelTicketInput,
+    ): Promise<CancelTicketResult> {
+      return runInTransaction(async (tx) => {
+        // Lock the order first: it is the aggregate, and approve locks it too.
+        const order = await orders.findByIdForUpdate(orderId, tx);
+        if (!order) throw new OrderNotFoundError(orderId);
+        if (order.status !== 'issued') throw new OrderStatusConflictError(orderId, order.status);
+
+        const ticket = await tickets.findByIdForUpdate(ticketId, tx);
+        // A ticket on some other order is "not found" here, never touched.
+        if (!ticket || ticket.orderId !== orderId) throw new TicketNotFoundError(ticketId);
+        if (ticket.status === 'cancelled') throw new TicketCancelledError(ticket.code);
+
+        const cancelled = await tickets.cancel(ticketId, tx);
+        if (!cancelled) throw new TicketCancelledError(ticket.code);
+
+        // After the conditional flip, in the same tx: the seat was SOLD, so
+        // it leaves quantity_sold — `release` would free someone else's hold.
+        await inventory.releaseSold(ticket.ticketTypeId, 1, tx);
+
+        await orders.insertEvent(
+          {
+            orderId,
+            actor,
+            action: 'ticket.cancelled',
+            fromStatus: null,
+            toStatus: null,
+            note: `${ticket.code} (${ticket.attendeeName}): ${reason}`,
+          },
+          tx,
+        );
+
+        const live = await tickets.countIssuedByOrder(orderId, tx);
+        if (live > 0) return { ticket: cancelled, order, orderCancelled: false };
+
+        // Last live ticket gone: the order is over. Same tx, same audit trail.
+        assertOrderTransition(order.status, 'cancelled');
+        const done = await orders.transition(orderId, { from: ['issued'], to: 'cancelled' }, tx);
+        if (!done) throw new OrderStatusConflictError(orderId, order.status);
+        await orders.insertEvent(
+          {
+            orderId,
+            actor,
+            action: 'order.cancelled',
+            fromStatus: 'issued',
+            toStatus: 'cancelled',
+            note: `all ${order.quantity} tickets cancelled`,
+          },
+          tx,
+        );
+        return { ticket: cancelled, order: done, orderCancelled: true };
+      });
     },
 
     /**
