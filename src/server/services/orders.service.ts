@@ -15,7 +15,7 @@ import {
 import { eventPhase } from '@/server/lib/event-phase';
 import { logger } from '@/server/lib/logger';
 import { generateOrderReference } from '@/server/lib/order-reference';
-import { assertOrderTransition, type OrderStatus } from '@/server/lib/order-status';
+import { assertOrderTransition, REVENUE_STATUSES } from '@/server/lib/order-status';
 import { computeOrderTotals } from '@/server/lib/pricing';
 import { ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
@@ -132,8 +132,8 @@ export interface OrdersSearchResult {
   pages: number;
 }
 
-/** Statuses whose money has actually arrived and been kept. */
-export const REVENUE_STATUSES: readonly OrderStatus[] = ['paid', 'issued'];
+/** Re-exported: the definition lives with the state machine (order-status.ts). */
+export { REVENUE_STATUSES };
 
 export interface OrderTotals {
   /** Every status with at least one order under the current filter (status ignored). */

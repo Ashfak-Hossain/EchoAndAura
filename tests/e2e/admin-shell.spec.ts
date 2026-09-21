@@ -35,13 +35,17 @@ test.describe('admin shell (B2)', () => {
       'href',
       '/admin/orders',
     );
-    // Settings is live since B14.
+    // Settings (B14) and Reports (B12) are live.
     await expect(nav.getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/admin/settings',
     );
+    await expect(nav.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+      'href',
+      '/admin/reports',
+    );
     // Unbuilt sections are visible but not links — no dead ends.
-    for (const label of ['Promo codes', 'Reports']) {
+    for (const label of ['Promo codes']) {
       await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
       await expect(nav.locator('[aria-disabled="true"]', { hasText: label })).toBeVisible();
     }

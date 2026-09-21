@@ -20,6 +20,11 @@ export function toDhakaInput(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, "yyyy-MM-dd'T'HH:mm");
 }
 
+/** The Dhaka calendar day of an instant, as `yyyy-MM-dd` (B12 buckets; 18:00Z is already tomorrow). */
+export function dhakaDay(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, 'yyyy-MM-dd');
+}
+
 /** Human display, e.g. "1 Oct 2026, 19:00". */
 export function formatDhaka(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, HH:mm');

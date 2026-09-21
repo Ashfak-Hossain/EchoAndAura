@@ -99,3 +99,19 @@ export function formatDecimalBDT(paisa: number): string {
   const paisaPart = paisa % PAISA_PER_TAKA;
   return `${takaPart}.${paisaPart.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Integer paisa per unit for display (B12 "average ticket price"): the one
+ * place a division touches money. Rounded to a whole paisa, 0 when there
+ * is nothing to divide by. Never feed the result back into a total.
+ */
+export function averagePaisa(paisa: number, count: number): number {
+  assertValidPaisa(paisa);
+  if (!Number.isInteger(count) || count < 0) {
+    throw new RangeError(`count must be a non-negative integer, got ${count}`);
+  }
+  if (count === 0) return 0;
+  const result = Math.round(paisa / count);
+  assertValidPaisa(result);
+  return result;
+}

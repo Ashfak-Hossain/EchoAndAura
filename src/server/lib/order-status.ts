@@ -49,3 +49,11 @@ export function assertOrderTransition(from: OrderStatus, to: OrderStatus): void 
 export function holdsInventory(status: OrderStatus): boolean {
   return status === 'pending_payment' || status === 'pending_verification';
 }
+
+/**
+ * Statuses whose money has actually arrived and been kept — the one
+ * definition of "revenue" (B9 status strip, B12 reports). Pending money is
+ * held, not earned; rejected/expired never arrived; a cancelled order was
+ * refunded outside the app (ADR-024), so it drops out.
+ */
+export const REVENUE_STATUSES: readonly OrderStatus[] = ['paid', 'issued'];

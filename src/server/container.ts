@@ -11,6 +11,7 @@ import { db } from '@/db/client';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
+import { reportsRepository } from '@/server/repositories/reports.repository';
 import { settingsRepository } from '@/server/repositories/settings.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
@@ -19,6 +20,7 @@ import { enqueueEmail } from '@/server/queue/producer';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createReportsService } from '@/server/services/reports.service';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
@@ -75,4 +77,12 @@ export const ticketsService = createTicketsService({
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
   runInTransaction: (fn) => db.transaction(fn),
+});
+
+// B12: read-only aggregates over the same repositories.
+export const reportsService = createReportsService({
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
+  orders: ordersRepository,
+  reports: reportsRepository,
 });

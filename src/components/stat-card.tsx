@@ -21,7 +21,7 @@ export function StatCard({ label, value, detail, detailTone = 'muted', urgent, c
   return (
     <div
       className={cn(
-        'flex flex-col gap-2.5 rounded-xl border p-[18px]',
+        'flex flex-col gap-2.5 rounded-xl border p-4.5',
         urgent
           ? 'border-[#e8c48a] bg-warning-tint text-[#7a4600]'
           : 'border-border bg-card shadow-sm',

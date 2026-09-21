@@ -219,7 +219,8 @@
   }
 }
 
-/* Print (B11 check-in list): A4, black on white, the sheet only. */
+/* Print: A4, black on white (B11 check-in sheet); the B12 report keeps its
+   bar and tint colours because they are the data. */
 @media print {
   @page {
     size: A4;
@@ -229,5 +230,10 @@
   body {
     background: #fff;
     color: #000;
+  }
+  .print-colors,
+  .print-colors * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }

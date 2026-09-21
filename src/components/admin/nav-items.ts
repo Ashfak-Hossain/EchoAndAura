@@ -26,7 +26,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   { label: 'Verification', href: '/admin/verification', prefix: true, badge: 'verification' },
   { label: 'Orders', href: '/admin/orders', prefix: true },
   { label: 'Promo codes', href: '/admin/promo-codes', disabled: true },
-  { label: 'Reports', href: '/admin/reports', disabled: true },
+  { label: 'Reports', href: '/admin/reports' },
   { label: 'Settings', href: '/admin/settings' },
 ];
 

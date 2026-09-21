@@ -7,6 +7,7 @@ import { ticketsService } from '@/server/container';
 import { CHECK_IN_DEFAULT_SORT, sortCheckInRows } from '@/server/lib/check-in';
 import { EventNotFoundError } from '@/server/lib/errors';
 import { DataTable } from '@/components/admin/data-table';
+import { PrintButton } from '@/components/admin/print-button';
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
 import { StatusChip } from '@/components/status-chip';
@@ -18,7 +19,6 @@ import { checkInQuerySchema } from '@/lib/validation/check-in';
 import { CheckInPrintSheet } from './check-in-print-sheet';
 import { CheckInToolbar } from './check-in-toolbar';
 import { checkInColumns, type CheckInRowData } from './columns';
-import { PrintButton } from './print-button';
 
 export const metadata: Metadata = { title: 'Check-in list' };
 export const dynamic = 'force-dynamic';
@@ -122,6 +122,7 @@ export default async function CheckInPage({ params, searchParams }: Props) {
               )}
               {/* Never print a filtered list: a partial sheet looks like the whole door list. */}
               <PrintButton
+                label="Print list"
                 disabled={rows.length === 0 || Boolean(input.q)}
                 title={input.q ? 'Clear the search to print the full list' : undefined}
               />
