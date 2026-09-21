@@ -130,7 +130,8 @@ export default async function ReportsPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <div className="print:hidden">
+      {/* Sticks under the shell header so the event/range are always one tap away on a long page. */}
+      <div className="sticky top-0 z-10 -mx-4 bg-background/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6 print:hidden">
         <ReportToolbar
           events={events.map((e) => ({ id: e.id, title: e.title }))}
           eventId={event.id}

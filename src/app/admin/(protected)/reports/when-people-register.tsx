@@ -1,6 +1,6 @@
 import { WEEKDAY_LABELS } from '@/server/lib/sales-report';
 import type { SalesReport } from '@/server/services/reports.service';
-import { cn } from '@/lib/utils';
+import { HistogramChart, type HistogramDatum } from './charts';
 import { formatCount, ReportCard } from './report-card';
 
 /**
@@ -28,18 +28,25 @@ export function WhenPeopleRegister({ report }: { report: SalesReport }) {
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr] print:grid-cols-[3fr_2fr]">
         <Histogram
           title="By hour of day"
-          values={h.byHour}
           peak={h.peakHour}
-          label={(i) => `${pad(i)}:00`}
-          tick={(i) => (i % 6 === 0 || i === 23 ? `${pad(i)}` : '')}
-          minWidth="360px"
+          data={h.byHour.map((v, i) => ({
+            key: String(i),
+            tick: i % 6 === 0 || i === 23 ? pad(i) : '',
+            label: `${pad(i)}:00 – ${pad((i + 1) % 24)}:00 Dhaka`,
+            value: v,
+            peak: i === h.peakHour,
+          }))}
         />
         <Histogram
           title="By weekday"
-          values={h.byWeekday}
           peak={h.peakWeekday}
-          label={(i) => WEEKDAY_LABELS[i] ?? ''}
-          tick={(i) => WEEKDAY_LABELS[i] ?? ''}
+          data={h.byWeekday.map((v, i) => ({
+            key: String(i),
+            tick: WEEKDAY_LABELS[i] ?? '',
+            label: WEEKDAY_LABELS[i] ?? '',
+            value: v,
+            peak: i === h.peakWeekday,
+          }))}
         />
       </div>
       <p className="text-[13px] text-muted-foreground">
@@ -55,63 +62,26 @@ function pad(n: number): string {
 
 function Histogram({
   title,
-  values,
+  data,
   peak,
-  label,
-  tick,
-  minWidth,
 }: {
   title: string;
-  values: number[];
+  data: HistogramDatum[];
   peak: number | null;
-  label: (i: number) => string;
-  tick: (i: number) => string;
-  /** Twenty-four bars need room for their labels: scroll inside the card on phones. */
-  minWidth?: string;
 }) {
-  const max = Math.max(1, ...values);
+  const top = peak === null ? null : data[peak];
   return (
     <figure className="flex min-w-0 flex-col gap-1.5">
       <figcaption className="text-[13px] font-medium">{title}</figcaption>
-      <div className="overflow-x-auto">
-        <div
-          role="img"
-          aria-label={
-            peak === null
-              ? `${title}: no registrations yet.`
-              : `${title}: busiest ${label(peak)} with ${values[peak]} ${values[peak] === 1 ? 'order' : 'orders'}.`
-          }
-          className="flex h-24 items-end gap-[3px] border-b border-border"
-          style={{ minWidth }}
-        >
-          {values.map((v, i) => (
-            <div
-              key={i}
-              className="flex h-full min-w-0 flex-1 flex-col justify-end"
-              title={`${label(i)} · ${v} ${v === 1 ? 'order' : 'orders'}`}
-            >
-              <div
-                className={cn(
-                  'w-full rounded-t-[2px]',
-                  i === peak ? 'bg-marigold' : 'bg-foreground',
-                  v === 0 && 'opacity-25',
-                )}
-                style={{ height: v === 0 ? '2px' : `${Math.max(4, (v / max) * 100)}%` }}
-              />
-            </div>
-          ))}
-        </div>
-        <div
-          className="flex gap-[3px] text-[11px] text-muted-foreground tabular"
-          style={{ minWidth }}
-          aria-hidden="true"
-        >
-          {values.map((_, i) => (
-            <div key={i} className="min-w-0 flex-1 truncate text-center">
-              {tick(i)}
-            </div>
-          ))}
-        </div>
+      <div
+        role="img"
+        aria-label={
+          top
+            ? `${title}: busiest ${top.label} with ${top.value} ${top.value === 1 ? 'order' : 'orders'}.`
+            : `${title}: no registrations yet.`
+        }
+      >
+        <HistogramChart data={data} unit={['order', 'orders']} />
       </div>
     </figure>
   );

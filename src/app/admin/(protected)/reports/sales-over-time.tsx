@@ -1,7 +1,7 @@
 import { formatBDT } from '@/server/lib/money';
 import type { SalesReport } from '@/server/services/reports.service';
 import { dhakaDay } from '@/lib/time';
-import { cn } from '@/lib/utils';
+import { CumulativeChart, DailyBarsChart } from './charts';
 import { formatCount, ReportCard } from './report-card';
 
 /**
@@ -68,64 +68,19 @@ export function SalesOverTime({ report }: { report: SalesReport }) {
 }
 
 function DailyBars({ report }: { report: SalesReport }) {
-  const { daily } = report;
-  const { points, peak, maxTickets } = daily;
-  const n = points.length;
-  // Dense windows ("All time") get thinner bars and scroll inside the card.
-  const minWidth = n > 45 ? `${n * 9}px` : undefined;
-  const labelEvery = n <= 14 ? 1 : n <= 31 ? 7 : n <= 92 ? 14 : 30;
-
+  const { points, peak } = report.daily;
   return (
     <figure className="flex min-w-0 flex-col gap-2">
       <figcaption className="text-[13px] font-medium">Daily</figcaption>
-      <div className="overflow-x-auto">
-        <div
-          role="img"
-          aria-label={
-            peak
-              ? `Tickets verified per day. Peak ${peak.label}: ${peak.tickets} tickets.`
-              : 'Tickets verified per day: none in this period.'
-          }
-          className="flex h-40 items-end gap-0.75 border-b border-border"
-          style={{ minWidth }}
-        >
-          {points.map((p) => (
-            <div
-              key={p.day}
-              className="flex h-full min-w-0 flex-1 flex-col justify-end"
-              title={`${p.label} · ${p.tickets} ${p.tickets === 1 ? 'ticket' : 'tickets'} · ${formatBDT(p.paisa)}`}
-              data-testid={p.isToday ? 'bar-today' : undefined}
-              data-tickets={p.tickets}
-            >
-              <div
-                className={cn(
-                  'w-full rounded-t-[3px]',
-                  p.isToday ? 'bg-marigold' : 'bg-foreground',
-                  p.tickets === 0 && 'opacity-25',
-                )}
-                style={{
-                  height:
-                    p.tickets === 0 ? '2px' : `${Math.max(3, (p.tickets / maxTickets) * 100)}%`,
-                }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-0.75" style={{ minWidth }} aria-hidden="true">
-          {points.map((p, i) => {
-            // Ends always labelled; interior ticks keep clear of both ends so labels never overlap.
-            const clear = i >= labelEvery / 2 && n - 1 - i >= labelEvery / 2;
-            const show = i === 0 || i === n - 1 || (i % labelEvery === 0 && clear);
-            return (
-              <div
-                key={p.day}
-                className="min-w-0 flex-1 pt-1 text-[11px] whitespace-nowrap text-muted-foreground tabular"
-              >
-                {show ? (p.isToday ? 'today' : p.label.slice(4)) : ''}
-              </div>
-            );
-          })}
-        </div>
+      <div
+        role="img"
+        aria-label={
+          peak
+            ? `Tickets verified per day. Peak ${peak.label}: ${peak.tickets} tickets.`
+            : 'Tickets verified per day: none in this period.'
+        }
+      >
+        <DailyBarsChart points={points} />
       </div>
       <p className="text-[13px] text-muted-foreground">
         {peak
@@ -135,10 +90,6 @@ function DailyBars({ report }: { report: SalesReport }) {
     </figure>
   );
 }
-
-const W = 600;
-const H = 180;
-const PAD = { top: 12, right: 8, bottom: 22, left: 36 };
 
 function CumulativeLine({
   points,
@@ -154,116 +105,23 @@ function CumulativeLine({
   closesDay: string | null;
   eventDay: string;
 }) {
-  const n = points.length;
   const end = points.at(-1)?.cumulative ?? 0;
-  const yMax = Math.max(capacity, end, 1);
-  const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
-  const x = (i: number) => PAD.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-  const y = (v: number) => PAD.top + innerH - (v / yMax) * innerH;
-
-  const line = points.map((p, i) => `${x(i).toFixed(1)},${y(p.cumulative).toFixed(1)}`).join(' ');
-  const area = `M${x(0).toFixed(1)},${y(0).toFixed(1)} L${line.replaceAll(' ', ' L')} L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} Z`;
-  const capY = y(capacity);
-  const index = (day: string) => points.findIndex((p) => p.day === day);
-  const markers = [
-    closesDay ? { day: closesDay, label: 'reg. closes' } : null,
-    { day: eventDay, label: 'event' },
-  ]
-    .filter((m): m is { day: string; label: string } => m !== null)
-    .map((m) => ({ ...m, i: index(m.day) }))
-    .filter((m) => m.i >= 0);
-  const first = points[0];
   const last = points.at(-1);
+  const inWindow = (day: string) => points.some((p) => p.day === day);
+  const markers = [
+    closesDay && inWindow(closesDay) ? { label: 'reg. closes', day: closesDay } : null,
+    inWindow(eventDay) ? { label: 'event', day: eventDay } : null,
+  ].filter((m): m is { label: string; day: string } => m !== null);
 
   return (
     <figure className="flex min-w-0 flex-col gap-2">
       <figcaption className="text-[13px] font-medium">Cumulative</figcaption>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
+      <div
         role="img"
         aria-label={`Tickets verified to date: ${points[0]?.cumulative ?? 0} at the start of the period, ${end} at the end${capacity > 0 ? `, of ${capacity} seats` : ''}.`}
-        className="h-auto w-full"
       >
-        {capacity > 0 ? (
-          <>
-            <line
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={capY}
-              y2={capY}
-              stroke="#a8a29a"
-              strokeDasharray="4 4"
-            />
-            <text x={PAD.left - 6} y={capY + 4} textAnchor="end" fontSize="11" fill="#5c574c">
-              {formatCount(capacity)}
-            </text>
-          </>
-        ) : null}
-        <text x={PAD.left - 6} y={y(0) + 4} textAnchor="end" fontSize="11" fill="#5c574c">
-          0
-        </text>
-        {n > 0 ? (
-          <>
-            <path d={area} fill="#1c1a17" fillOpacity="0.08" />
-            <polyline
-              points={line}
-              fill="none"
-              stroke="#1c1a17"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-            {last ? (
-              <>
-                <circle cx={x(n - 1)} cy={y(end)} r="4" fill="#eda43c" stroke="#1c1a17" />
-                <text
-                  x={Math.min(x(n - 1), W - PAD.right - 30)}
-                  y={y(end) - 8}
-                  textAnchor="end"
-                  fontSize="12"
-                  fontWeight="600"
-                  fill="#1c1a17"
-                >
-                  {formatCount(end)}
-                </text>
-              </>
-            ) : null}
-          </>
-        ) : null}
-        {markers.map((m) => (
-          <g key={m.label}>
-            <line
-              x1={x(m.i)}
-              x2={x(m.i)}
-              y1={PAD.top}
-              y2={PAD.top + innerH}
-              stroke="#eda43c"
-              strokeWidth="1.5"
-              strokeDasharray="3 3"
-            />
-            <text
-              x={x(m.i) + 4}
-              y={PAD.top + 10}
-              fontSize="10"
-              fill="#8a5209"
-              textAnchor={m.i > n / 2 ? 'end' : 'start'}
-              dx={m.i > n / 2 ? -8 : 0}
-            >
-              {m.label}
-            </text>
-          </g>
-        ))}
-        {first ? (
-          <text x={PAD.left} y={H - 6} fontSize="11" fill="#5c574c">
-            {first.label}
-          </text>
-        ) : null}
-        {last ? (
-          <text x={W - PAD.right} y={H - 6} fontSize="11" fill="#5c574c" textAnchor="end">
-            {last.isToday ? 'today' : last.label}
-          </text>
-        ) : null}
-      </svg>
+        <CumulativeChart points={points} capacity={capacity} markers={markers} />
+      </div>
       <p className="text-[13px] text-muted-foreground">
         {capacity > 0
           ? `${formatCount(end)} ${end === 1 ? 'ticket' : 'tickets'} verified by ${last?.isToday ? 'today' : (last?.label ?? 'now')}${

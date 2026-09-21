@@ -1266,6 +1266,13 @@ payment.approved` (medians via `percentile_cont`). No `paid_at` column:
   discount line renders only when the sum is > 0), refund amounts (the
   app does not know them), any projection of final sales.
 
+- **Charts are Recharts via shadcn's `Chart`** (B12.1, after the plain-div
+  first cut): SVG (prints, scales, keeps the `sr-only` tables), themed
+  hover tooltips, and it sits on the stack we already have — not Chart.js
+  (canvas, imperative, its own theming). `recharts` is pinned exactly;
+  `components/ui/chart.tsx` is CLI-generated and never hand-edited. The
+  chart components only draw; every figure is still computed on the server.
+
 **Consequences:** ~8 aggregate queries per page load over one event's
 orders — trivial at this scale, and the existing `event_id` / `order_id`
 indexes cover them. The dashboard's placeholder "Orders today / Revenue

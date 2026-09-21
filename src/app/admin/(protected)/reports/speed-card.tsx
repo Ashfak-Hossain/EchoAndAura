@@ -1,6 +1,7 @@
 import { formatBDT } from '@/server/lib/money';
 import { formatDuration } from '@/server/lib/sales-report';
 import type { SalesReport } from '@/server/services/reports.service';
+import { HistogramChart } from './charts';
 import { formatCount, ReportCard } from './report-card';
 
 /**
@@ -11,7 +12,6 @@ import { formatCount, ReportCard } from './report-card';
  */
 export function SpeedCard({ report }: { report: SalesReport }) {
   const { timings, orderSize, revenue } = report;
-  const max = Math.max(1, ...orderSize.histogram);
 
   return (
     <ReportCard title="Speed & size" subtitle="Medians from the audit trail" testId="speed">
@@ -62,31 +62,17 @@ export function SpeedCard({ report }: { report: SalesReport }) {
                   .filter(Boolean)
                   .join(', ')}.`
           }
-          className="flex h-16 items-end gap-1.5"
         >
-          {orderSize.histogram.map((n, i) => (
-            <div
-              key={i}
-              className="flex h-full flex-1 flex-col justify-end"
-              title={`${n} ${n === 1 ? 'order' : 'orders'} of ${i + 1} ${i === 0 ? 'ticket' : 'tickets'}`}
-            >
-              <div
-                className={
-                  n > 0
-                    ? 'w-full rounded-t-[3px] bg-foreground'
-                    : 'w-full rounded-t-[3px] bg-[#edeae3]'
-                }
-                style={{ height: n > 0 ? `${Math.max(6, (n / max) * 100)}%` : '3px' }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-1.5 text-[11px] text-muted-foreground tabular" aria-hidden="true">
-          {orderSize.histogram.map((_, i) => (
-            <div key={i} className="flex-1 text-center">
-              {i + 1}
-            </div>
-          ))}
+          <HistogramChart
+            className="h-20 w-full"
+            unit={['order', 'orders']}
+            data={orderSize.histogram.map((n, i) => ({
+              key: String(i + 1),
+              tick: String(i + 1),
+              label: `${i + 1} ${i === 0 ? 'ticket' : 'tickets'} per order`,
+              value: n,
+            }))}
+          />
         </div>
       </figure>
     </ReportCard>

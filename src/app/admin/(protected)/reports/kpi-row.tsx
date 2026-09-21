@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { dhakaDaysUntil, inDays, type Delta } from '@/server/lib/sales-report';
 import type { SalesReport } from '@/server/services/reports.service';
 import { formatBDT } from '@/server/lib/money';
-import { Money } from '@/components/money';
+import { CountUp } from '@/components/admin/count-up';
 import { StatCard } from '@/components/stat-card';
 import { cn } from '@/lib/utils';
 import { formatCount, formatSigned } from './report-card';
@@ -31,7 +31,7 @@ export function KpiRow({ report }: { report: SalesReport }) {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="kpi-row">
       <StatCard
         label="Tickets sold"
-        value={<span data-testid="kpi-sold">{formatCount(seats.sold)}</span>}
+        value={<CountUp value={seats.sold} className="tabular" data-testid="kpi-sold" />}
         detail={
           <Detail
             text={`of ${formatCount(seats.total)} · ${seats.soldPct}%`}
@@ -42,7 +42,7 @@ export function KpiRow({ report }: { report: SalesReport }) {
       />
       <StatCard
         label="Revenue"
-        value={<Money paisa={revenue.paisa} />}
+        value={<CountUp value={revenue.paisa} money className="tabular" />}
         detail={
           <Detail
             text={`verified only · ${formatCount(revenue.orders)} ${revenue.orders === 1 ? 'order' : 'orders'}`}
@@ -54,7 +54,7 @@ export function KpiRow({ report }: { report: SalesReport }) {
       />
       <StatCard
         label="Pending"
-        value={<Money paisa={pending.paisa} />}
+        value={<CountUp value={pending.paisa} money className="tabular" />}
         urgent={pending.toVerify > 0}
         detail={
           pending.orders === 0 ? (
@@ -77,7 +77,7 @@ export function KpiRow({ report }: { report: SalesReport }) {
       />
       <StatCard
         label="Seats left"
-        value={<span data-testid="kpi-left">{formatCount(seats.left)}</span>}
+        value={<CountUp value={seats.left} className="tabular" data-testid="kpi-left" />}
         detail={seatsDetail}
         detailTone={soldOut ? 'success' : 'muted'}
       />

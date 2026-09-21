@@ -124,7 +124,10 @@ test.describe('sales report (B12)', () => {
     // Today's bar is the marigold one and carries the sale.
     const today = page.getByTestId('bar-today');
     await expect(today).toHaveAttribute('data-tickets', '2');
-    await expect(today.locator('div')).toHaveClass(/bg-marigold/);
+    await expect(today).toHaveAttribute('fill', '#eda43c');
+    // Hovering a bar answers with the day's numbers.
+    await today.hover();
+    await expect(page.getByTestId('sales-over-time')).toContainText('2 tickets৳2,400.00');
     await expect(page.getByTestId('sales-over-time')).toContainText(
       /Peak was .* — 2 tickets, ৳2,400\.00/,
     );
