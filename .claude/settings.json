@@ -84,15 +84,5 @@
         ]
       }
     ]
-    // "Stop": [
-    //   {
-    //     "hooks": [
-    //       {
-    //         "type": "command",
-    //         "command": "pnpm typecheck 2>&1 | tail -20"
-    //       }
-    //     ]
-    //   }
-    // ]
   }
 }
