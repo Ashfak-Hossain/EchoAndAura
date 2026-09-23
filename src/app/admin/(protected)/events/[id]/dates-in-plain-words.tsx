@@ -12,7 +12,7 @@ function Strong({ children }: { children: React.ReactNode }) {
 
 export function DatesInPlainWords({ event }: { event: EventRecord }) {
   return (
-    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-[18px]">
+    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4.5">
       <h3 className="text-[15px] font-semibold">Dates in plain words</h3>
       <p className="text-sm leading-relaxed text-[#4a4640]">
         {event.registrationOpensAt ? (
