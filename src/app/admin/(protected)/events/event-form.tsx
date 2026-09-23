@@ -13,6 +13,8 @@ export interface EventFormValues {
   slug: string;
   description: string;
   venue: string;
+  venueHidden: boolean;
+  venueArea: string;
   startsAt: string;
   endsAt: string;
   registrationOpensAt: string;
@@ -24,6 +26,8 @@ const empty: EventFormValues = {
   slug: '',
   description: '',
   venue: '',
+  venueHidden: false,
+  venueArea: '',
   startsAt: '',
   endsAt: '',
   registrationOpensAt: '',
@@ -87,9 +91,35 @@ export function EventForm({ action, defaultValues = empty, submitLabel, saved, p
             />
           </Field>
 
-          <Field label="Venue" htmlFor="venue">
-            <Input id="venue" name="venue" defaultValue={values.venue} />
-          </Field>
+          {/* The area field shows only while "private" is ticked — pure CSS, so
+              the checkbox stays uncontrolled and survives React's form reset. */}
+          <div className="group flex flex-col gap-3">
+            <Field label="Venue" htmlFor="venue">
+              <Input id="venue" name="venue" defaultValue={values.venue} />
+            </Field>
+            <label className="flex items-start gap-2.5 text-[15px]">
+              <input
+                type="checkbox"
+                id="venueHidden"
+                name="venueHidden"
+                defaultChecked={values.venueHidden}
+                className="mt-1 size-4 shrink-0 accent-foreground"
+              />
+              <span>
+                Keep the venue private — only ticket holders get it (tickets email, ticket page,
+                PDF).
+              </span>
+            </label>
+            <div className="hidden pl-6.5 group-has-[#venueHidden:checked]:block">
+              <Field
+                label="Public area (optional)"
+                htmlFor="venueArea"
+                hint="Shown instead of the venue, with “Exact venue is sent with your tickets”. e.g. Tejgaon, Dhaka"
+              >
+                <Input id="venueArea" name="venueArea" defaultValue={values.venueArea} />
+              </Field>
+            </div>
+          </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
             <Field label="Starts at (Dhaka time)" htmlFor="startsAt">

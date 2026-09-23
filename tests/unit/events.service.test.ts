@@ -35,6 +35,8 @@ function fakeRepo(seed: EventRecord[] = []) {
     title: values.title,
     description: values.description ?? null,
     venue: values.venue ?? null,
+    venueHidden: values.venueHidden ?? false,
+    venueArea: values.venueArea ?? null,
     startsAt: values.startsAt,
     endsAt: values.endsAt ?? null,
     registrationOpensAt: values.registrationOpensAt ?? null,
@@ -629,5 +631,71 @@ describe('eventsService.getHomePage', () => {
     expect(archive[0]?.coverUrl).toBe('https://cdn.test/events/summer/cover-x.png');
     expect(archive[1]?.coverUrl).toBeNull();
     expect(tt.capacityByEvent).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-029: a private venue never leaves the server through a public read model.
+describe('eventsService — private venue', () => {
+  const secret = 'Warehouse 7, Tejgaon I/A';
+  const privateEvent = (id: string, startsAt: Date): EventRecord =>
+    ({
+      id,
+      slug: id,
+      title: id,
+      description: null,
+      venue: secret,
+      venueHidden: true,
+      venueArea: 'Tejgaon, Dhaka',
+      startsAt,
+      endsAt: null,
+      registrationOpensAt: new Date('2026-01-01T00:00:00Z'),
+      registrationClosesAt: new Date(startsAt.getTime() - 86_400_000),
+      status: 'published',
+      imageKey: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    }) as EventRecord;
+
+  it('every public read strips it; the admin read keeps it', async () => {
+    const { repo } = fakeRepo([
+      privateEvent('soon', new Date('2026-10-01T13:00:00Z')),
+      privateEvent('gone', new Date('2026-03-01T13:00:00Z')),
+    ]);
+    const tt: TicketTypesRepository = { ...fakeTicketTypes(), capacityByEvent: async () => [] };
+    const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
+
+    const pub = await svc.getPublicEvent('soon');
+    const home = await svc.getHomePage();
+    const archive = await svc.getArchivePage();
+    for (const e of [pub.event, home.featured!.event, ...home.past.map((h) => h.event)]) {
+      expect(e.venue).toBeNull();
+      expect(e).toMatchObject({ venueHidden: true, venueArea: 'Tejgaon, Dhaka' });
+    }
+    expect(archive.map((a) => a.event.venue)).toEqual([null]);
+    expect(JSON.stringify({ pub, home, archive })).not.toContain('Warehouse 7');
+
+    expect((await svc.getEvent('soon')).venue).toBe(secret);
+  });
+
+  it('stores the area only while the venue is private', async () => {
+    const { repo } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const hidden = await svc.createEvent({
+      title: 'Hidden',
+      startsAt,
+      venue: secret,
+      venueHidden: true,
+      venueArea: 'Tejgaon, Dhaka',
+    });
+    expect(hidden).toMatchObject({ venueHidden: true, venueArea: 'Tejgaon, Dhaka' });
+
+    const shown = await svc.updateEvent(hidden.id, {
+      title: 'Hidden',
+      startsAt,
+      venue: secret,
+      venueHidden: false,
+      venueArea: 'Tejgaon, Dhaka',
+    });
+    expect(shown).toMatchObject({ venue: secret, venueHidden: false, venueArea: null });
   });
 });

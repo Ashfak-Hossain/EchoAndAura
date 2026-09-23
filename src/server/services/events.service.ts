@@ -31,6 +31,7 @@ import type {
   TicketTypesRepository,
 } from '@/server/repositories/ticket-types.repository';
 import type { ObjectStorage, UploadTarget } from '@/server/storage/object-storage';
+import { forPublic } from '@/server/lib/venue';
 
 /**
  * Event business rules. Built by a factory that receives its repositories,
@@ -56,6 +57,9 @@ export interface CreateEventInput {
   slug?: string;
   description?: string;
   venue?: string;
+  /** Private venue: public pages show `venueArea` and a note instead (ADR-029). */
+  venueHidden?: boolean;
+  venueArea?: string;
   startsAt: Date;
   endsAt?: Date;
   /** Either registration bound left undefined falls back to the 20/5-day rule. */
@@ -121,7 +125,8 @@ export function createEventsService(
     ): Promise<{ event: EventRecord; ticketTypes: TicketTypeRecord[] }> {
       const event = await repo.findBySlug(slug);
       if (!event || event.status === 'draft') throw new EventNotFoundError(slug);
-      return { event, ticketTypes: await ticketTypes.listByEvent(event.id) };
+      // Public read model: a private venue never leaves the server (ADR-029).
+      return { event: forPublic(event), ticketTypes: await ticketTypes.listByEvent(event.id) };
     },
 
     /**
@@ -130,7 +135,7 @@ export function createEventsService(
      * a query per event.
      */
     async getHomePage(at: Date = now()): Promise<HomeSelection<HomeEvent>> {
-      const visible = await repo.listByStatus(['published', 'archived']);
+      const visible = (await repo.listByStatus(['published', 'archived'])).map(forPublic);
       const picked = selectHomeEvents(visible, at);
       const shown = [picked.featured, ...picked.alsoUpcoming, ...picked.past].filter(
         (e): e is EventRecord => e !== null,
@@ -163,7 +168,7 @@ export function createEventsService(
      * first. One events query; no capacity query, nothing here is on sale.
      */
     async getArchivePage(at: Date = now()): Promise<ArchiveEvent[]> {
-      const visible = await repo.listByStatus(['published', 'archived']);
+      const visible = (await repo.listByStatus(['published', 'archived'])).map(forPublic);
       return selectArchiveEvents(visible, at).map((event) => ({
         event,
         coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
@@ -177,7 +182,7 @@ export function createEventsService(
         title: input.title,
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
-        venue: input.venue ?? null,
+        ...venueFields(input),
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,
@@ -197,7 +202,7 @@ export function createEventsService(
         title: input.title,
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
-        venue: input.venue ?? null,
+        ...venueFields(input),
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,
@@ -308,3 +313,13 @@ export function createEventsService(
 }
 
 export type EventsService = ReturnType<typeof createEventsService>;
+
+/** The area only means something while the venue is private; a public venue stores none. */
+function venueFields(input: CreateEventInput) {
+  const venueHidden = input.venueHidden ?? false;
+  return {
+    venue: input.venue ?? null,
+    venueHidden,
+    venueArea: venueHidden ? (input.venueArea ?? null) : null,
+  };
+}

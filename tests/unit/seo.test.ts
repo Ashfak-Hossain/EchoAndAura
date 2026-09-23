@@ -12,6 +12,8 @@ const event = {
   title: 'Echo & Aura Live — Dhaka',
   description: 'Four acts, one night, no support slots.',
   venue: 'ICCB Hall 4, Dhaka',
+  venueHidden: false,
+  venueArea: null,
   startsAt: new Date('2026-10-01T13:00:00Z'),
 };
 const cover = 'https://cdn.example.com/events/1/cover-abc.jpg';
@@ -53,6 +55,27 @@ describe('buildEventMetadata', () => {
     );
     expect((m.openGraph as { images?: unknown[] }).images).toEqual([]);
     expect((m.twitter as { card?: string }).card).toBe('summary');
+  });
+
+  // ADR-029: the share text names the public area, never a private venue —
+  // even if a caller forgot to pass the event through forPublic.
+  it('a private venue is never in the share text; the public area is', () => {
+    const m = buildEventMetadata({
+      event: {
+        ...event,
+        description: null,
+        venue: 'Warehouse 7, Tejgaon I/A',
+        venueHidden: true,
+        venueArea: 'Tejgaon, Dhaka',
+      },
+      coverUrl: null,
+      fromPricePaisa: 80_000,
+      siteUrl: site,
+    });
+    expect(m.description).toBe(
+      'Thu 1 Oct 2026, 19:00 (Dhaka) · Tejgaon, Dhaka · tickets from ৳800.00',
+    );
+    expect(JSON.stringify(m)).not.toContain('Warehouse 7');
   });
 
   it('flattens a rich-text description to plain text', () => {

@@ -25,7 +25,7 @@ async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket typ
 async function publishedEvent(page: Page, title: string) {
   await page.goto('/admin/events/new');
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Venue').fill('ICCB Hall 4, Dhaka');
+  await page.getByLabel('Venue', { exact: true }).fill('ICCB Hall 4, Dhaka');
   await page.getByLabel(/^Starts at/).fill('2030-10-01T19:00');
   await page.getByLabel(/^Registration opens/).fill('2026-01-01T10:00');
   await page.getByRole('button', { name: /create event/i }).click();

@@ -18,6 +18,8 @@ const event: EventRecord = {
   title: 'Echo & Aura Live',
   description: null,
   venue: null,
+  venueHidden: false,
+  venueArea: null,
   startsAt: new Date('2026-10-01T13:00:00Z'),
   endsAt: null,
   registrationOpensAt: new Date('2026-09-11T04:00:00Z'),

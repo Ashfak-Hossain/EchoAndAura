@@ -171,6 +171,26 @@ describe('email templates', () => {
     expect(r.text).not.toContain('TKT-4H8ZP2XQ');
   });
 
+  // ADR-029: ticket holders get the private venue in full, with a nudge not to spread it.
+  it('C2 names a private venue in full and asks not to share it', async () => {
+    const base = view();
+    const r = await renderEmail(
+      'tickets-issued',
+      view({
+        event: {
+          ...base.event,
+          venue: 'Warehouse 7, Tejgaon I/A',
+          venueHidden: true,
+          venueArea: 'Tejgaon, Dhaka',
+        },
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('Warehouse 7, Tejgaon I/A');
+    expect(html).toContain('please don&#x27;t share it widely');
+    expect(r.text).toContain('Warehouse 7, Tejgaon I/A');
+  });
+
   // B13: a comp was never paid for, and its reason is internal.
   it('C2 for a comp says complimentary, never "paid", and never shows the reason', async () => {
     const base = view();

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
+import { publicVenue } from '@/server/lib/venue';
 import type { ArchiveEvent } from '@/server/services/events.service';
 import { DHAKA_TZ, formatDhakaLong } from '@/lib/time';
 
@@ -57,7 +58,10 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
                   </span>
                   <span className="text-[12px] leading-snug text-muted-foreground tabular lg:text-[13px]">
                     {formatDhakaLong(event.startsAt)}
-                    {event.venue ? <span className="block">{event.venue}</span> : null}
+                    {/* Past: the area alone — "sent with your tickets" is over. */}
+                    {publicVenue(event).text ? (
+                      <span className="block">{publicVenue(event).text}</span>
+                    ) : null}
                   </span>
                 </Link>
               </li>

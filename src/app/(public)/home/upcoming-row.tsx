@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatBDT } from '@/server/lib/money';
+import { publicVenueLine } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import { formatDhakaLong } from '@/lib/time';
 import { DateBlock } from './date-block';
@@ -40,7 +41,9 @@ export function UpcomingRow({ events: all }: { events: HomeEvent[] }) {
                 </h3>
                 <p className="text-sm leading-snug text-[#4a4640] tabular">
                   {formatDhakaLong(event.startsAt)} (Dhaka)
-                  {event.venue ? <span className="block">{event.venue}</span> : null}
+                  {publicVenueLine(event) ? (
+                    <span className="block">{publicVenueLine(event)}</span>
+                  ) : null}
                 </p>
                 <div className="mt-auto flex items-center justify-between gap-3 pt-2">
                   <span className="text-[15px] font-semibold tabular">

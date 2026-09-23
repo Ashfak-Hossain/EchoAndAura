@@ -12,6 +12,8 @@ export interface EventRow {
   /** Formatted on the server (Dhaka). */
   startsLabel: string;
   status: EventStatus;
+  /** ADR-029: the venue is kept off public pages. */
+  venueHidden: boolean;
   sold: number;
   total: number;
   /** "8 min ago" — formatted on the server. */
@@ -33,6 +35,7 @@ export const eventColumns: DataTableColumn<EventRow>[] = col.columns([
         {row.original.title}
         <span className="font-mono text-xs font-normal text-muted-foreground">
           /{row.original.slug}
+          {row.original.venueHidden ? <span className="font-sans"> · private venue</span> : null}
         </span>
       </Link>
     ),

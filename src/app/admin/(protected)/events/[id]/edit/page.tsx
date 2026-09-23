@@ -61,6 +61,8 @@ export default async function EditEventPage({ params, searchParams }: Props) {
     // Legacy plain-text rows become paragraphs so the editor shows them as is.
     description: descriptionToHtml(event.description) ?? '',
     venue: event.venue ?? '',
+    venueHidden: event.venueHidden,
+    venueArea: event.venueArea ?? '',
     startsAt: toDhakaInput(event.startsAt),
     endsAt: event.endsAt ? toDhakaInput(event.endsAt) : '',
     registrationOpensAt: event.registrationOpensAt ? toDhakaInput(event.registrationOpensAt) : '',

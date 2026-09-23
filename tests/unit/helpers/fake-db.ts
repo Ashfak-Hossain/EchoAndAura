@@ -39,6 +39,8 @@ export function event(over: Partial<EventRecord> = {}): EventRecord {
     title: 'Live — Dhaka',
     description: null,
     venue: null,
+    venueHidden: false,
+    venueArea: null,
     startsAt: new Date('2026-10-01T13:00:00Z'),
     endsAt: null,
     registrationOpensAt: new Date('2026-09-11T13:00:00Z'),

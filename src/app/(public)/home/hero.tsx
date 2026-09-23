@@ -1,5 +1,6 @@
 import { differenceInCalendarDays } from 'date-fns';
 import { formatBDT } from '@/server/lib/money';
+import { publicVenueLine } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import { ButtonLink } from '@/components/button-link';
 import { HOME_TAGLINE } from '@/lib/seo';
@@ -101,10 +102,10 @@ export function Hero({ featured }: { featured: HomeEvent }) {
               <CalendarIcon className="shrink-0" />
               {formatDhakaLong(event.startsAt)} (Dhaka)
             </p>
-            {event.venue ? (
+            {publicVenueLine(event) ? (
               <p className="flex items-center gap-2.5">
                 <PinIcon className="shrink-0" />
-                {event.venue}
+                {publicVenueLine(event)}
               </p>
             ) : null}
           </div>

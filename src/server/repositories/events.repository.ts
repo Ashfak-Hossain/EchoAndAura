@@ -20,6 +20,8 @@ export type EventPatch = Partial<
     | 'slug'
     | 'description'
     | 'venue'
+    | 'venueHidden'
+    | 'venueArea'
     | 'startsAt'
     | 'endsAt'
     | 'registrationOpensAt'

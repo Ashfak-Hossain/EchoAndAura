@@ -6,6 +6,7 @@ import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';
 import { eventPhase, ticketAvailability } from '@/server/lib/event-phase';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
+import { publicVenueLine } from '@/server/lib/venue';
 import { ButtonLink } from '@/components/button-link';
 import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
@@ -85,7 +86,7 @@ export default async function RegisterPage({ params }: Props) {
         </h1>
         <p className="text-[15px] text-[#4a4640] tabular">
           {formatDhakaLong(event.startsAt)} (Dhaka)
-          {event.venue ? ` · ${event.venue}` : ''}
+          {publicVenueLine(event) ? ` · ${publicVenueLine(event)}` : ''}
         </p>
       </header>
 

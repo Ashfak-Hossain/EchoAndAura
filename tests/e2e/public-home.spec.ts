@@ -58,7 +58,7 @@ test.describe('home page (A1)', () => {
 
     await page.goto('/admin/events/new');
     await page.getByLabel('Title', { exact: true }).fill(title);
-    await page.getByLabel('Venue').fill('Gulshan Society Hall');
+    await page.getByLabel('Venue', { exact: true }).fill('Gulshan Society Hall');
     await page.getByLabel(/^Starts at/).fill(dhakaInput(startsAt));
     await page.getByLabel(/^Registration opens/).fill('2026-01-01T10:00');
     await page.getByLabel(/^Registration closes/).fill(dhakaInput(closesAt));

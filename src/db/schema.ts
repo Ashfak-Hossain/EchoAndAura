@@ -41,30 +41,43 @@ export const bkashAccountType = pgEnum('bkash_account_type', ['personal', 'merch
 // Events
 // ---------------------------------------------------------------------------
 
-export const events = pgTable('events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  slug: text('slug').notNull().unique(),
-  title: text('title').notNull(),
-  description: text('description'),
-  venue: text('venue'),
-  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
-  endsAt: timestamp('ends_at', { withTimezone: true }),
-  // Business rule: registration opens 20 days before, closes 5 days before the
-  // event. Stored explicitly so a specific event can override the default.
-  registrationOpensAt: timestamp('registration_opens_at', {
-    withTimezone: true,
-  }),
-  registrationClosesAt: timestamp('registration_closes_at', {
-    withTimezone: true,
-  }),
-  status: eventStatus('status').notNull().default('draft'),
-  // Object-storage key of the cover image (e.g. events/<id>/cover-x.jpg), not
-  // a URL: the public URL is derived at render time, so moving buckets or
-  // changing the public domain never touches rows.
-  imageKey: text('image_key'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    slug: text('slug').notNull().unique(),
+    title: text('title').notNull(),
+    description: text('description'),
+    venue: text('venue'),
+    // Private venue: public pages never get `venue` (events.service strips it)
+    // and show the optional `venue_area` hint instead; ticket holders get the
+    // venue on their tickets, PDF, calendar file and tickets email.
+    venueHidden: boolean('venue_hidden').notNull().default(false),
+    venueArea: text('venue_area'),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    // Business rule: registration opens 20 days before, closes 5 days before the
+    // event. Stored explicitly so a specific event can override the default.
+    registrationOpensAt: timestamp('registration_opens_at', {
+      withTimezone: true,
+    }),
+    registrationClosesAt: timestamp('registration_closes_at', {
+      withTimezone: true,
+    }),
+    status: eventStatus('status').notNull().default('draft'),
+    // Object-storage key of the cover image (e.g. events/<id>/cover-x.jpg), not
+    // a URL: the public URL is derived at render time, so moving buckets or
+    // changing the public domain never touches rows.
+    imageKey: text('image_key'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // A private venue that does not exist would make "sent with your
+    // tickets" a lie: ticket holders must get one.
+    check('events_hidden_venue_set', sql`NOT ${t.venueHidden} OR ${t.venue} IS NOT NULL`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Ticket types

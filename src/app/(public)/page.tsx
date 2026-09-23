@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { publicVenue } from '@/server/lib/venue';
 import { getSiteSettings } from '@/lib/settings';
 import { buildHomeMetadata, siteUrl } from '@/lib/seo';
 import { Hero } from './home/hero';
@@ -20,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
       ? {
           title: featured.event.title,
           startsAt: featured.event.startsAt,
-          venue: featured.event.venue,
+          venue: publicVenue(featured.event).text,
           coverUrl: featured.coverUrl,
         }
       : null,

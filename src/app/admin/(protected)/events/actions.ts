@@ -25,6 +25,8 @@ function submittedValues(formData: FormData): EventFormValues {
     slug: str('slug'),
     description: str('description'),
     venue: str('venue'),
+    venueHidden: formData.get('venueHidden') === 'on',
+    venueArea: str('venueArea'),
     startsAt: str('startsAt'),
     endsAt: str('endsAt'),
     registrationOpensAt: str('registrationOpensAt'),

@@ -71,6 +71,7 @@ export default async function AdminEventsPage({ searchParams }: Props) {
       slug: event.slug,
       startsLabel: formatDhakaLong(event.startsAt),
       status: event.status,
+      venueHidden: event.venueHidden,
       sold: t.sold,
       total: t.total,
       updatedLabel: formatRelative(event.updatedAt),

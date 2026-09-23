@@ -52,6 +52,11 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
         {formatDhakaLong(v.event.startsAt)} (Dhaka)
         {v.event.venue ? ` · ${v.event.venue}` : ''}
       </Text>
+      {v.event.venueHidden ? (
+        <Text style={styles.small}>
+          The venue isn&apos;t public — please don&apos;t share it widely.
+        </Text>
+      ) : null}
 
       <Hr style={styles.hr} />
       {live.map((t) => (

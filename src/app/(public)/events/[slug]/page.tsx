@@ -7,6 +7,7 @@ import { eventPhase } from '@/server/lib/event-phase';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { ticketAvailability } from '@/server/lib/event-phase';
 import { formatBDT } from '@/server/lib/money';
+import { VENUE_PRIVATE_NOTE, publicVenue, publicVenueLine } from '@/server/lib/venue';
 import { RichText } from '@/components/rich-text';
 import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import { getSiteSettings } from '@/lib/settings';
@@ -65,8 +66,11 @@ export default async function PublicEventPage({ params }: Props) {
   const past = phase === 'past';
 
   const dateLine = `${formatDhakaLong(event.startsAt)} (Dhaka)`;
-  const mapsHref = event.venue
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`
+  // The event came through forPublic: a private venue is already gone.
+  const venue = publicVenue(event);
+  const venueLine = publicVenueLine(event);
+  const mapsHref = venue.mapsQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.mapsQuery)}`
     : null;
 
   const selling = phase === 'open' || phase === 'closing_soon';
@@ -178,10 +182,10 @@ export default async function PublicEventPage({ params }: Props) {
               <CalendarIcon className="shrink-0" />
               {past ? `Happened ${dateLine}` : dateLine}
             </p>
-            {event.venue ? (
-              <p className="flex items-center gap-2">
+            {venueLine ? (
+              <p className="flex items-center gap-2" data-testid="event-venue-line">
                 <PinIcon className="shrink-0" />
-                {event.venue}
+                {venueLine}
               </p>
             ) : null}
           </div>
@@ -217,9 +221,17 @@ export default async function PublicEventPage({ params }: Props) {
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
                 Venue
               </dt>
-              <dd className="line-clamp-2 font-heading text-[15px] font-semibold text-pretty lg:text-[20px]">
-                {event.venue ?? 'To be announced'}
+              <dd
+                className="line-clamp-2 font-heading text-[15px] font-semibold text-pretty lg:text-[20px]"
+                data-testid="event-venue"
+              >
+                {venue.text ?? (venue.isPrivate ? 'Private' : 'To be announced')}
               </dd>
+              {venue.isPrivate ? (
+                <dd className="text-[13px] text-muted-foreground" data-testid="event-venue-note">
+                  {VENUE_PRIVATE_NOTE}
+                </dd>
+              ) : null}
               {mapsHref ? (
                 <dd className="text-[13px]">
                   <a

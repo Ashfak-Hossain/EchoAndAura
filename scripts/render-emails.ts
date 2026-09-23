@@ -47,6 +47,8 @@ const view: EmailView = {
     title: 'Echo & Aura Live — Dhaka',
     description: null,
     venue: 'ICCB Hall 4, Dhaka',
+    venueHidden: false,
+    venueArea: null,
     startsAt: new Date('2026-10-01T13:00:00Z'),
     endsAt: null,
     registrationOpensAt: new Date('2026-09-11T13:00:00Z'),

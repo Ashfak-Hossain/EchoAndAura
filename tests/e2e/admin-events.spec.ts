@@ -25,7 +25,7 @@ test.describe('admin events', () => {
 
     await page.goto('/admin/events/new');
     await page.getByLabel('Title', { exact: true }).fill(title);
-    await page.getByLabel('Venue').fill('Dhaka');
+    await page.getByLabel('Venue', { exact: true }).fill('Dhaka');
     await page.getByLabel(/^Starts at/).fill('2030-10-01T19:00');
     await page.getByRole('button', { name: /create event/i }).click();
 

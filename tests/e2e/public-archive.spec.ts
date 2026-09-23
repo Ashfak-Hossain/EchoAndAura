@@ -26,7 +26,7 @@ async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket typ
 async function archivedPastEvent(page: Page, title: string): Promise<string> {
   await page.goto('/admin/events/new');
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Venue').fill('Aura Rooftop, Banani');
+  await page.getByLabel('Venue', { exact: true }).fill('Aura Rooftop, Banani');
   await page.getByLabel(/^Starts at/).fill('2019-05-23T20:00');
   await page.getByLabel(/^Registration opens/).fill('2019-05-01T10:00');
   await page.getByRole('button', { name: /create event/i }).click();

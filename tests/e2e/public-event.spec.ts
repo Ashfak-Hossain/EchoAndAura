@@ -37,7 +37,7 @@ async function createPublishableEvent(
 ): Promise<string> {
   await page.goto('/admin/events/new');
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Venue').fill('ICCB Hall 4, Dhaka');
+  await page.getByLabel('Venue', { exact: true }).fill('ICCB Hall 4, Dhaka');
   await page.getByLabel('Description').fill('Four acts, one night, no support slots.');
   await page.getByLabel(/^Starts at/).fill(opts.startsAt ?? '2030-10-01T19:00');
   if (opts.registrationOpensAt) {
