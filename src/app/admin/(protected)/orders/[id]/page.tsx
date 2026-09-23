@@ -54,7 +54,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
     if (err instanceof OrderNotFoundError) notFound();
     throw err;
   }
-  const { order, event, ticketType, events, tickets } = view;
+  const { order, event, ticketType, events, tickets, promoCode } = view;
   const now = new Date();
   const liveTickets = tickets.filter((t) => t.status === 'issued');
   const cancelledTickets = tickets.length - liveTickets.length;
@@ -161,7 +161,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <Money paisa={order.subtotalPaisa} />
           </Row>
           {order.discountPaisa > 0 ? (
-            <Row label="Discount">
+            <Row label={promoCode ? `Discount · ${promoCode}` : 'Discount'}>
               −<Money paisa={order.discountPaisa} />
             </Row>
           ) : null}

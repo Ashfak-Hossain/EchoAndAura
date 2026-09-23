@@ -82,6 +82,7 @@ const view: EmailView = {
   })),
   siteUrl: process.env.SITE_URL ?? 'https://echoandaura.com',
   // The env seed, exactly as a fresh database resolves it — with demo values where env is blank.
+  promoCode: null,
   bkashNumber: seed.bkashReceiveNumber ?? '01712 345678',
   contactEmail: seed.supportEmail ?? 'hello@echoandaura.com',
   contactPhone: seed.supportPhone ?? '01712 345678',

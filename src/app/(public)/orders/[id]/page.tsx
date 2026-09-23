@@ -64,7 +64,7 @@ function frameOf({ order }: OrderView, now: Date): Frame {
 export default async function OrderPage({ params }: Props) {
   const { id } = await params;
   const [view, settings] = await Promise.all([load(id), getSiteSettings()]);
-  const { order, event, ticketType, events, tickets } = view;
+  const { order, event, ticketType, events, tickets, promoCode } = view;
   const frame = frameOf(view, new Date());
   const receiveNumber = settings.bkashReceiveNumber;
   const contactEmail = settings.supportEmail;
@@ -120,6 +120,13 @@ export default async function OrderPage({ params }: Props) {
             </div>
             <p className="text-sm text-muted-foreground tabular">
               {order.quantity} × {ticketType.name} at <Money paisa={order.unitPricePaisa} />
+              {order.discountPaisa > 0 ? (
+                <span className="text-[#17603b]" data-testid="order-discount">
+                  {' · '}
+                  <Money paisa={order.subtotalPaisa} /> − <Money paisa={order.discountPaisa} />{' '}
+                  {promoCode ? `with ${promoCode}` : 'discount'}
+                </span>
+              ) : null}
             </p>
             {order.holdExpiresAt ? (
               <p className="border-t border-border pt-3 text-sm leading-relaxed">

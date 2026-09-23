@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ORDER_REFERENCE_PATTERN } from '@/server/lib/order-reference';
 import { NAME_MAX, NAME_MIN } from '@/server/lib/attendee-name';
 import { MAX_TICKETS_PER_ORDER, MIN_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
+import { normalisePromoCode } from '@/server/lib/promo';
 
 /**
  * A3 registration form. The body carries the ticket type id and quantity —
@@ -52,6 +53,14 @@ export const registrationFormSchema = z
     // pass names (must then be one per ticket).
     attendeeNames: z.array(personName('a name for every ticket')).optional(),
     terms: z.literal('on', { error: 'Accept the terms to continue.' }),
+    // B10: the code as applied on the form (or typed and never applied). Only
+    // the text crosses the wire — the service prices it (Invariant 5).
+    promoCode: z
+      .string()
+      .optional()
+      .transform((v) => (v ? normalisePromoCode(v) : ''))
+      .pipe(z.string().max(24, { error: 'That code is not valid for this event.' }))
+      .transform((v) => v || undefined),
   })
   .superRefine((v, ctx) => {
     if (v.attendeeNames && v.attendeeNames.length !== v.quantity) {
@@ -88,6 +97,7 @@ export function registrationFormValues(formData: FormData): Record<string, unkno
       return names.length > 0 ? names : undefined;
     })(),
     terms: str('terms'),
+    promoCode: str('promoCode'),
   };
 }
 

@@ -35,20 +35,16 @@ test.describe('admin shell (B2)', () => {
       'href',
       '/admin/orders',
     );
-    // Settings (B14) and Reports (B12) are live.
-    await expect(nav.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/admin/settings',
-    );
-    await expect(nav.getByRole('link', { name: 'Reports' })).toHaveAttribute(
-      'href',
-      '/admin/reports',
-    );
-    // Unbuilt sections are visible but not links — no dead ends.
-    for (const label of ['Promo codes']) {
-      await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
-      await expect(nav.locator('[aria-disabled="true"]', { hasText: label })).toBeVisible();
+    // Every section is live now (Promo codes B10, Reports B12, Settings B14).
+    for (const [label, href] of [
+      ['Promo codes', '/admin/promo-codes'],
+      ['Reports', '/admin/reports'],
+      ['Settings', '/admin/settings'],
+    ] as const) {
+      await expect(nav.getByRole('link', { name: label })).toHaveAttribute('href', href);
     }
+    // No dead ends: nothing is rendered as a disabled placeholder any more.
+    await expect(nav.locator('[aria-disabled="true"]')).toHaveCount(0);
 
     // Environment chip + signed-in email in the header.
     // The chip reflects APP_ENV (the Playwright web server sets "test").

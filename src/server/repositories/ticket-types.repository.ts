@@ -59,7 +59,7 @@ export interface TicketTypesRepository {
   update(id: string, patch: TicketTypePatch): Promise<TicketTypeRecord | null>;
   /**
    * Resolves false when no row has this id.
-   * @throws TicketTypeInUseError when any order or ticket references it (FK).
+   * @throws TicketTypeInUseError when any order, ticket or promo-code restriction references it (FK).
    */
   delete(id: string): Promise<boolean>;
 }
@@ -69,6 +69,7 @@ const AVAILABILITY_CHECK = 'ticket_types_availability_nonneg';
 const EVENT_FK = 'ticket_types_event_id_events_id_fk';
 const ORDERS_FK = 'orders_ticket_type_id_ticket_types_id_fk';
 const TICKETS_FK = 'tickets_ticket_type_id_ticket_types_id_fk';
+const PROMO_FK = 'promo_code_ticket_types_ticket_type_id_ticket_types_id_fk';
 
 export const ticketTypesRepository: TicketTypesRepository = {
   listByEvent(eventId) {
@@ -145,6 +146,7 @@ export const ticketTypesRepository: TicketTypesRepository = {
       if (isForeignKeyViolation(err, ORDERS_FK) || isForeignKeyViolation(err, TICKETS_FK)) {
         throw new TicketTypeInUseError(id);
       }
+      if (isForeignKeyViolation(err, PROMO_FK)) throw new TicketTypeInUseError(id, 'promo_code');
       throw err;
     }
   },

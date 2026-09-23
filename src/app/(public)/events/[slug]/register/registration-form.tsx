@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Minus, Plus } from 'lucide-react';
-import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Minus, Plus } from 'lucide-react';
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
+import { promoAppliesTo, promoDiscountPaisa, promoDiscountPerTicket } from '@/server/lib/promo';
 import { Button } from '@/components/button';
 import { FieldHint } from '@/components/form-field';
 import { Money } from '@/components/money';
@@ -11,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BD_MOBILE_PREFIX } from '@/lib/validation/orders';
 import { cn } from '@/lib/utils';
-import type { RegistrationFormState } from './actions';
+import type { PromoCheckResult, RegistrationFormState } from './actions';
 
 export interface TicketOption {
   id: string;
@@ -27,6 +28,8 @@ export interface TicketOption {
 
 interface Props {
   action: (prev: RegistrationFormState, formData: FormData) => Promise<RegistrationFormState>;
+  /** B10 "Apply": bound to this event on the page. */
+  checkPromo: (input: { code: string; ticketTypeId: string }) => Promise<PromoCheckResult>;
   options: TicketOption[];
   registrationClosesAt: string | null;
   /** From the buyer's session, when signed in. */
@@ -41,7 +44,13 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
  * display only — the server recomputes every number from the ticket_types
  * row (Invariant 5) and re-checks stock atomically on submit.
  */
-export function RegistrationForm({ action, options, registrationClosesAt, prefill }: Props) {
+export function RegistrationForm({
+  action,
+  checkPromo,
+  options,
+  registrationClosesAt,
+  prefill,
+}: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   // After an action React resets uncontrolled inputs; seeding from the last
   // submission keeps the buyer's input on error (nothing is ever cleared).
@@ -78,6 +87,76 @@ export function RegistrationForm({ action, options, registrationClosesAt, prefil
     () => (selected ? selected.pricePaisa * quantity : 0),
     [selected, quantity],
   );
+
+  // B10 promo code. `applied` is what Apply learned from the server; the
+  // discount below is a preview from the same pure rule the server uses —
+  // the server prices the order again on submit (Invariant 5).
+  const [promoInput, setPromoInput] = useState(str(values.promoCode));
+  const [appliedResult, setApplied] = useState<{
+    rule: Extract<PromoCheckResult, { ok: true }>;
+    /** The action state it was applied against: a later submit that refuses the code wins. */
+    at: RegistrationFormState;
+  } | null>(null);
+  const refusedOnSubmit = Boolean(errors.promoCode) && appliedResult?.at !== state;
+  const applied = refusedOnSubmit ? null : (appliedResult?.rule ?? null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [checking, startCheck] = useTransition();
+  // Mirrors the server's judgePromo for the chosen type: covered, and not
+  // taking the whole price off (a ৳0 order cannot be paid by bKash).
+  const promoCovers =
+    applied !== null &&
+    selected !== null &&
+    promoAppliesTo(applied, selected.id) &&
+    promoDiscountPerTicket(applied, selected.pricePaisa) < selected.pricePaisa;
+  const discount =
+    applied && selected && promoCovers
+      ? Math.min(promoDiscountPaisa(applied, selected.pricePaisa, quantity), subtotal)
+      : 0;
+  const total = subtotal - discount;
+  const promoFieldError = (refusedOnSubmit ? errors.promoCode : undefined) ?? promoError;
+
+  const applyPromo = () => {
+    if (checking) return;
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError('Enter a code first.');
+      return;
+    }
+    if (!selected) {
+      setPromoError('Choose a ticket type first.');
+      return;
+    }
+    setPromoError(null);
+    startCheck(async () => {
+      let result: PromoCheckResult;
+      try {
+        result = await checkPromo({ code, ticketTypeId: selected.id });
+      } catch {
+        // A dropped connection must not throw away the whole form.
+        setPromoError('We could not check the code just now. Try again, or continue without it.');
+        return;
+      }
+      if (result.ok) {
+        setApplied({ rule: result, at: state });
+        setPromoInput(result.code);
+        return;
+      }
+      setApplied(null);
+      setPromoError(
+        'message' in result
+          ? result.message
+          : result.reason === 'unknown'
+            ? 'That code is not valid for this event.'
+            : `That code does not apply to ${selected.name} tickets.`,
+      );
+    });
+  };
+
+  const removePromo = () => {
+    setApplied(null);
+    setPromoError(null);
+    setPromoInput('');
+  };
 
   return (
     <form action={formAction} className="flex flex-col gap-8 pb-24 lg:pb-0" noValidate>
@@ -269,6 +348,85 @@ export function RegistrationForm({ action, options, registrationClosesAt, prefil
         </div>
       </fieldset>
 
+      {/* Promo code (B10) */}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="promoCode">
+          Promo code <span className="font-normal text-muted-foreground">· optional</span>
+        </Label>
+        {applied ? (
+          <div
+            className={cn(
+              'flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-[15px]',
+              promoCovers
+                ? 'border-[#bfe0cd] bg-success-tint text-[#17603b]'
+                : 'border-border-strong bg-secondary text-muted-foreground',
+            )}
+            data-testid="promo-applied"
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <Check className="size-4 shrink-0" aria-hidden="true" />
+              {promoCovers
+                ? `${applied.code} applied — ${applied.label}`
+                : `${applied.code} does not apply to ${selected?.name ?? 'this'} tickets`}
+            </span>
+            <button
+              type="button"
+              onClick={removePromo}
+              className="text-sm font-semibold underline underline-offset-2"
+            >
+              Remove
+            </button>
+            {/* Only a code that covers the chosen ticket is sent; the server decides. */}
+            {promoCovers ? <input type="hidden" name="promoCode" value={applied.code} /> : null}
+          </div>
+        ) : (
+          <div className="flex items-stretch gap-2">
+            {/* Named, so a code typed but never applied is still checked on submit
+                — it either applies or comes back as an error, never silently ignored. */}
+            <Input
+              id="promoCode"
+              name="promoCode"
+              value={promoInput}
+              onChange={(e) => {
+                setPromoInput(e.target.value.toUpperCase());
+                setPromoError(null);
+              }}
+              onKeyDown={(e) => {
+                // Enter applies the code instead of submitting the whole form.
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyPromo();
+                }
+              }}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              aria-invalid={Boolean(promoFieldError)}
+              aria-describedby={promoFieldError ? 'promoCode-error' : undefined}
+              className="h-11 bg-card font-mono tracking-wide uppercase"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 shrink-0 px-5"
+              onClick={applyPromo}
+              disabled={checking}
+            >
+              {checking ? 'Checking…' : 'Apply'}
+            </Button>
+          </div>
+        )}
+        {promoFieldError ? (
+          <p
+            id="promoCode-error"
+            className="text-sm leading-snug font-medium text-destructive"
+            role="alert"
+          >
+            {promoFieldError}
+          </p>
+        ) : null}
+      </div>
+
       {/* Summary */}
       <section
         aria-labelledby="summary-heading"
@@ -287,10 +445,21 @@ export function RegistrationForm({ action, options, registrationClosesAt, prefil
               <Money paisa={subtotal} />
             </dd>
           </div>
+          {discount > 0 && applied ? (
+            <div
+              className="flex justify-between gap-4 text-[#17603b]"
+              data-testid="summary-discount"
+            >
+              <dt>Discount · {applied.code}</dt>
+              <dd>
+                −<Money paisa={discount} />
+              </dd>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-4 border-t border-border pt-2 text-lg font-semibold">
             <dt>Total</dt>
             <dd data-testid="summary-total">
-              <Money paisa={subtotal} />
+              <Money paisa={total} />
             </dd>
           </div>
         </dl>

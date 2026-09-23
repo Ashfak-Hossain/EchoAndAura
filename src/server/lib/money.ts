@@ -77,6 +77,22 @@ export function sumPaisa(...amounts: number[]): number {
 }
 
 /**
+ * `percent`% of an amount, rounded DOWN to a whole paisa (B10 promo codes).
+ * Floor, not round: a discount is never a rounding paisa more than the
+ * organizer offered. `paisa × percent` stays an exact integer for any
+ * plausible amount (asserted), so there is no float step at all.
+ */
+export function percentOfPaisa(paisa: number, percent: number): number {
+  assertValidPaisa(paisa);
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new RangeError(`percent must be an integer from 0 to 100, got ${percent}`);
+  }
+  const scaled = paisa * percent;
+  assertValidPaisa(scaled);
+  return Math.floor(scaled / 100);
+}
+
+/**
  * Format integer paisa as a Bangladeshi Taka string, e.g. 123456 → "৳1,234.56".
  * Grouping is done manually (not Intl currency) so output is deterministic
  * across environments/ICU builds and trivial to assert in tests.

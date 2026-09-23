@@ -111,7 +111,7 @@ export function createEmailDispatcher({
      */
     async dispatch(kind: EmailKind, orderId: string): Promise<{ messageId: string }> {
       const view = await orders.getOrder(orderId);
-      const { order, event, ticketType, tickets, events } = view;
+      const { order, event, ticketType, tickets, events, promoCode } = view;
       if (!SENDABLE[kind].includes(order.status)) {
         await ordersRepo.insertEvent({
           orderId,
@@ -163,6 +163,7 @@ export function createEmailDispatcher({
         event,
         ticketType,
         tickets,
+        promoCode,
         ...emailSender(env.siteUrl, settings),
         bkashNumber: settings.bkashReceiveNumber,
         bkashAccountName: settings.bkashAccountName,

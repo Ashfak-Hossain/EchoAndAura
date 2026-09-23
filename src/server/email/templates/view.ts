@@ -19,6 +19,8 @@ export interface EmailView extends EmailSender {
   event: EventRecord;
   ticketType: TicketTypeRecord;
   tickets: TicketRecord[];
+  /** B10: the code behind `order.discountPaisa`, or null. */
+  promoCode: string | null;
   bkashNumber: string | null;
   bkashAccountName: string | null;
   /** "Send Money" (personal) vs "Payment" (merchant) in the payment steps. */

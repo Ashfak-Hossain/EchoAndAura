@@ -38,6 +38,11 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
       </Row>
       <Text style={styles.label}>Amount to send</Text>
       <Text style={styles.big}>{amount}</Text>
+      {v.order.discountPaisa > 0 && v.promoCode ? (
+        <Text style={styles.p}>
+          Includes {formatBDT(v.order.discountPaisa)} off with {v.promoCode}.
+        </Text>
+      ) : null}
       {deadline ? (
         <Text style={styles.p}>
           Send by <strong>{deadline}</strong>. After that the seats go back on sale automatically.

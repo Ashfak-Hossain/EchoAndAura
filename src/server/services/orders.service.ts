@@ -11,12 +11,21 @@ import {
   TicketTypeNotFoundError,
   TicketTypeNotOnSaleError,
   EventNotFoundError,
+  PromoCodeNotValidError,
 } from '@/server/lib/errors';
 import { eventPhase } from '@/server/lib/event-phase';
 import { logger } from '@/server/lib/logger';
 import { generateOrderReference } from '@/server/lib/order-reference';
 import { assertOrderTransition, REVENUE_STATUSES } from '@/server/lib/order-status';
 import { computeOrderTotals } from '@/server/lib/pricing';
+import {
+  describePromo,
+  judgePromo,
+  normalisePromoCode,
+  promoAppliesTo,
+  promoDiscountPaisa,
+} from '@/server/lib/promo';
+import { formatBDT } from '@/server/lib/money';
 import { ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
 import type {
@@ -29,6 +38,10 @@ import type {
   StatusTotal,
 } from '@/server/repositories/orders.repository';
 import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
+import type {
+  PromoCodeRule,
+  PromoCodesRepository,
+} from '@/server/repositories/promo-codes.repository';
 import type {
   TicketTypeRecord,
   TicketTypesRepository,
@@ -60,6 +73,11 @@ export interface OrdersServiceDeps {
   ticketTypes: TicketTypesRepository;
   inventory: InventoryService;
   /**
+   * B10: where promo codes are looked up. Optional so callers that never
+   * price with a code need not supply it; without it every code is unknown.
+   */
+  promoCodes?: Pick<PromoCodesRepository, 'findByCode' | 'findById'>;
+  /**
    * Opens a database transaction and runs `fn` inside it — injected so this
    * module never imports the client. Everything inside must be a database
    * write (Invariant 7: no HTTP in a transaction).
@@ -86,7 +104,23 @@ export interface CreateOrderInput {
   buyerPhone: string;
   /** One per ticket; length === quantity (enforced at the boundary). */
   attendeeNames: string[];
+  /** B10: the code as typed. The discount is worked out here, never sent (Invariant 5). */
+  promoCode?: string;
 }
+
+/** What Apply on the registration form learns about a code (B10). */
+export type PromoCheck =
+  | {
+      ok: true;
+      code: string;
+      type: PromoCodeRule['type'];
+      value: number;
+      /** This event's ticket types the code covers; empty = all of them. */
+      ticketTypeIds: string[];
+      /** "15% off" */
+      label: string;
+    }
+  | { ok: false; reason: PromoCodeNotValidError['reason'] };
 
 export interface OrderView {
   order: OrderRecord;
@@ -96,6 +130,8 @@ export interface OrderView {
   events: OrderEventRecord[];
   /** Empty until fulfilment issues them. */
   tickets: TicketRecord[];
+  /** B10: the code the discount came from, or null. */
+  promoCode: string | null;
 }
 
 /** One verification-queue row with the derived timing the B7 table shows. */
@@ -190,12 +226,32 @@ export function createOrdersService({
   events,
   ticketTypes,
   inventory,
+  promoCodes = { findByCode: async () => null, findById: async () => null },
   runInTransaction,
   now = () => new Date(),
   reference = generateOrderReference,
   onOrderCreated = async () => {},
   onOrderExpired = async () => {},
 }: OrdersServiceDeps) {
+  /**
+   * The code must pass `judgePromo` for this event's ticket types (the same
+   * judgement Apply uses) — else PromoCodeNotValidError. Read before the
+   * order transaction: a code switched off in the same millisecond may still
+   * apply, which is harmless — the order page shows the amount due before
+   * anyone sends money.
+   */
+  async function resolvePromo(
+    raw: string,
+    eventTypes: TicketTypeRecord[],
+    ticketTypeId: string,
+  ): Promise<PromoCodeRule> {
+    const code = normalisePromoCode(raw);
+    const rule = await promoCodes.findByCode(code);
+    const refusal = judgePromo(rule, eventTypes, ticketTypeId);
+    if (refusal || !rule) throw new PromoCodeNotValidError(code, refusal ?? 'unknown');
+    return rule;
+  }
+
   async function afterCommit(hook: () => Promise<void>, what: string, orderId: string) {
     try {
       await hook();
@@ -247,10 +303,18 @@ export function createOrdersService({
         throw new AttendeeNamesMismatchError(input.quantity, input.attendeeNames.length);
       }
 
-      // 3. Money, from the row, never from the client.
+      // 3. Money, from the rows, never from the client: the ticket type's
+      //    price and, when a code was entered, the promo_codes row. A code
+      //    that does not apply is refused here — before any stock is held —
+      //    rather than silently dropped: the buyer never pays a price they
+      //    were not shown.
+      const promo = input.promoCode
+        ? await resolvePromo(input.promoCode, allTypes, ticketType.id)
+        : null;
       const totals = computeOrderTotals({
         unitPricePaisa: ticketType.pricePaisa,
         quantity: input.quantity,
+        discountPaisa: promo ? promoDiscountPaisa(promo, ticketType.pricePaisa, input.quantity) : 0,
       });
 
       // 4. Hold + order + audit row, atomically. Sold-out is thrown *inside*
@@ -272,6 +336,7 @@ export function createOrdersService({
                 subtotalPaisa: totals.subtotalPaisa,
                 discountPaisa: totals.discountPaisa,
                 totalPaisa: totals.totalPaisa,
+                promoCodeId: promo?.id ?? null,
                 status: 'pending_payment',
                 buyerName: input.buyerName,
                 buyerEmail: input.buyerEmail,
@@ -289,7 +354,9 @@ export function createOrdersService({
                 action: 'order.created',
                 fromStatus: null,
                 toStatus: 'pending_payment',
-                note: `${totals.quantity} × ${ticketType.name}, hold until ${order.holdExpiresAt?.toISOString()}`,
+                note: `${totals.quantity} × ${ticketType.name}${
+                  promo ? ` · ${promo.code} −${formatBDT(totals.discountPaisa)}` : ''
+                }, hold until ${order.holdExpiresAt?.toISOString()}`,
               },
               tx,
             );
@@ -307,20 +374,59 @@ export function createOrdersService({
       }
     },
 
+    /**
+     * B10 "Apply" on the registration form: can this code be used for this
+     * event's ticket type? Read-only — the order is priced again from the
+     * database on submit, whatever this said. Returns only this event's
+     * ticket types, so the form can re-check when the buyer switches type.
+     */
+    async checkPromo(
+      eventSlug: string,
+      rawCode: string,
+      ticketTypeId: string,
+    ): Promise<PromoCheck> {
+      const code = normalisePromoCode(rawCode);
+      const event = await events.findBySlug(eventSlug);
+      if (!event || event.status !== 'published') return { ok: false, reason: 'unknown' };
+      const [rule, types] = await Promise.all([
+        promoCodes.findByCode(code),
+        ticketTypes.listByEvent(event.id),
+      ]);
+      const refusal = judgePromo(rule, types, ticketTypeId);
+      if (refusal || !rule) return { ok: false, reason: refusal ?? 'unknown' };
+      const here = types.map((t) => t.id).filter((id) => promoAppliesTo(rule, id));
+      return {
+        ok: true,
+        code: rule.code,
+        type: rule.type,
+        value: rule.value,
+        ticketTypeIds: rule.ticketTypeIds.length === 0 ? [] : here,
+        label: describePromo(rule),
+      };
+    },
+
     /** The order page read model (A4). @throws OrderNotFoundError */
     async getOrder(id: string): Promise<OrderView> {
       const order = await orders.findById(id);
       if (!order) throw new OrderNotFoundError(id);
-      const [event, ticketType, auditEvents, ticketRows] = await Promise.all([
+      const [event, ticketType, auditEvents, ticketRows, promo] = await Promise.all([
         events.findById(order.eventId),
         ticketTypes.findById(order.ticketTypeId),
         orders.listEvents(order.id),
         tickets.listByOrder(order.id),
+        order.promoCodeId ? promoCodes.findById(order.promoCodeId) : null,
       ]);
       // FKs guarantee these; a miss is corruption, not a 404.
       if (!event) throw new Error(`order ${id}: event ${order.eventId} missing`);
       if (!ticketType) throw new Error(`order ${id}: ticket type ${order.ticketTypeId} missing`);
-      return { order, event, ticketType, events: auditEvents, tickets: ticketRows };
+      return {
+        order,
+        event,
+        ticketType,
+        events: auditEvents,
+        tickets: ticketRows,
+        promoCode: promo?.code ?? null,
+      };
     },
 
     /** B7: what is waiting for a person, oldest first. */

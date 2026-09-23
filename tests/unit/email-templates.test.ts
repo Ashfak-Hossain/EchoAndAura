@@ -65,6 +65,7 @@ function view(over: Partial<EmailView> = {}): EmailView {
     event: ev,
     ticketType: ticketType({ name: 'General' }),
     tickets,
+    promoCode: null,
     siteUrl: 'https://echoandaura.com',
     bkashNumber: '01712 345678',
     contactEmail: 'hello@echoandaura.com',

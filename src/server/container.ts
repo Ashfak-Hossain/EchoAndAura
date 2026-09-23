@@ -11,6 +11,7 @@ import { db } from '@/db/client';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
+import { promoCodesRepository } from '@/server/repositories/promo-codes.repository';
 import { reportsRepository } from '@/server/repositories/reports.repository';
 import { settingsRepository } from '@/server/repositories/settings.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
@@ -20,6 +21,7 @@ import { enqueueEmail } from '@/server/queue/producer';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createReportsService } from '@/server/services/reports.service';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createTicketsService } from '@/server/services/tickets.service';
@@ -54,6 +56,7 @@ export const ordersService = createOrdersService({
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
+  promoCodes: promoCodesRepository,
   runInTransaction: (fn) => db.transaction(fn),
   // Emails are queued after commit and sent by the worker (Invariant 7).
   onOrderCreated: (orderId) => enqueueEmail('payment-instructions', orderId),
@@ -86,3 +89,13 @@ export const reportsService = createReportsService({
   orders: ordersRepository,
   reports: reportsRepository,
 });
+
+// B10: promo codes, the admin side. Pricing reads codes via ordersService.
+export const promoCodesService = createPromoCodesService({
+  promoCodes: promoCodesRepository,
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+export type { PromoCheck } from '@/server/services/orders.service';

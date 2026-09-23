@@ -80,10 +80,21 @@ export class TicketTypeCapacityTooLowError extends DomainError {
   }
 }
 
-/** A ticket type with sales, holds, or any order history cannot be deleted. */
+/**
+ * A ticket type with sales, holds or any order history cannot be deleted —
+ * nor one a promo code is restricted to (B10: removing it would silently
+ * widen that code to every ticket type).
+ */
 export class TicketTypeInUseError extends DomainError {
-  constructor(public readonly ticketTypeId: string) {
-    super(`Ticket type ${ticketTypeId} has orders and cannot be deleted`);
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly by: 'orders' | 'promo_code' = 'orders',
+  ) {
+    super(
+      by === 'orders'
+        ? `Ticket type ${ticketTypeId} has orders and cannot be deleted`
+        : `Ticket type ${ticketTypeId} is restricted by a promo code and cannot be deleted`,
+    );
   }
 }
 
@@ -264,5 +275,39 @@ export class InvalidAttendeeNameError extends DomainError {
 export class TicketRenameConflictError extends DomainError {
   constructor(public readonly code: string) {
     super(`Ticket ${code} changed before the rename could be saved`);
+  }
+}
+
+/**
+ * B10: the code cannot be used on the chosen ticket type (see
+ * `judgePromo` for the reasons). Raised before any stock is held, so a bad
+ * code never costs the buyer a seat.
+ */
+export class PromoCodeNotValidError extends DomainError {
+  constructor(
+    public readonly code: string,
+    public readonly reason: 'unknown' | 'not_for_ticket_type' | 'makes_ticket_free',
+  ) {
+    super(`Promo code ${code} is not valid (${reason})`);
+  }
+}
+
+/** B10: codes are unique (case-insensitively — they are stored upper-cased). */
+export class PromoCodeTakenError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Promo code ${code} already exists`);
+  }
+}
+
+export class PromoCodeNotFoundError extends DomainError {
+  constructor(public readonly promoCodeId: string) {
+    super(`Promo code ${promoCodeId} not found`);
+  }
+}
+
+/** B10: a code some order used can be switched off, never deleted — the order still names it. */
+export class PromoCodeInUseError extends DomainError {
+  constructor(public readonly promoCodeId: string) {
+    super(`Promo code ${promoCodeId} has orders and cannot be deleted`);
   }
 }

@@ -10,7 +10,7 @@ import { ButtonLink } from '@/components/button-link';
 import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
 import { PhaseNotice } from '../phase-notice';
-import { registerAction } from './actions';
+import { checkPromoCodeAction, registerAction } from './actions';
 import { RegistrationForm, type TicketOption } from './registration-form';
 
 interface Props {
@@ -92,6 +92,7 @@ export default async function RegisterPage({ params }: Props) {
       {open ? (
         <RegistrationForm
           action={registerAction.bind(null, event.slug)}
+          checkPromo={checkPromoCodeAction.bind(null, event.slug)}
           options={options}
           registrationClosesAt={
             event.registrationClosesAt ? formatDhakaLong(event.registrationClosesAt) : null

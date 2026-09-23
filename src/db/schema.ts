@@ -115,7 +115,7 @@ export const promoCodes = pgTable(
     // Stored normalised: uppercase, trimmed.
     code: text('code').notNull().unique(),
     type: promoType('type').notNull(),
-    // Meaning depends on `type`: 'percentage' → whole percent (0–100);
+    // Meaning depends on `type`: 'percentage' → whole percent (1–99);
     // 'fixed' → discount in paisa. bigint holds paisa safely.
     value: bigint('value', { mode: 'number' }).notNull(),
     active: boolean('active').notNull().default(true),
@@ -123,11 +123,18 @@ export const promoCodes = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // 1–99: a 100% code would make every order ৳0, which bKash cannot pay
+    // (free tickets are complimentary tickets, B13). ADR-027.
     check(
       'promo_codes_percentage_range',
-      sql`${t.type} <> 'percentage' OR (${t.value} >= 0 AND ${t.value} <= 100)`,
+      sql`${t.type} <> 'percentage' OR (${t.value} >= 1 AND ${t.value} <= 99)`,
     ),
-    check('promo_codes_value_nonneg', sql`${t.value} >= 0`),
+    check('promo_codes_value_positive', sql`${t.value} > 0`),
+    // The unique index compares bytes: a code that is not in the stored form
+    // ("dhaka15" beside "DHAKA15", or one with a space) could never match a
+    // buyer's normalised lookup. The database refuses anything but the exact
+    // format the app writes (lib/promo.ts PROMO_CODE_PATTERN).
+    check('promo_codes_code_format', sql`${t.code} ~ '^[A-Z0-9][A-Z0-9-]{1,22}[A-Z0-9]$'`),
   ],
 );
 
@@ -139,9 +146,12 @@ export const promoCodeTicketTypes = pgTable(
     promoCodeId: uuid('promo_code_id')
       .notNull()
       .references(() => promoCodes.id, { onDelete: 'cascade' }),
+    // RESTRICT, not cascade (B10): "no rows" means "every ticket type", so
+    // deleting the last type a code is restricted to would silently turn it
+    // into a code for everything. The ticket type delete is refused instead.
     ticketTypeId: uuid('ticket_type_id')
       .notNull()
-      .references(() => ticketTypes.id, { onDelete: 'cascade' }),
+      .references(() => ticketTypes.id, { onDelete: 'restrict' }),
   },
   (t) => [uniqueIndex('promo_code_ticket_types_pk').on(t.promoCodeId, t.ticketTypeId)],
 );
@@ -207,6 +217,8 @@ export const orders = pgTable(
     index('orders_buyer_email_idx').on(t.buyerEmail),
     index('orders_buyer_phone_idx').on(t.buyerPhone),
     index('orders_created_at_idx').on(t.createdAt),
+    // B10 usage counts per code.
+    index('orders_promo_code_id_idx').on(t.promoCodeId),
     check('orders_quantity_range', sql`${t.quantity} >= 1 AND ${t.quantity} <= 10`),
     // Invariant 3 backstop: the UNIQUE index compares bytes, so a trxID that
     // is not upper-cased and trimmed could slip past it. The database
@@ -218,6 +230,12 @@ export const orders = pgTable(
     check(
       'orders_totals_nonneg',
       sql`${t.subtotalPaisa} >= 0 AND ${t.discountPaisa} >= 0 AND ${t.totalPaisa} >= 0`,
+    ),
+    // Invariant 5 backstop now that discounts are live (B10): whatever wrote
+    // the row, its money adds up. Totals are never updated after insert.
+    check(
+      'orders_totals_consistent',
+      sql`${t.subtotalPaisa} = ${t.unitPricePaisa} * ${t.quantity} AND ${t.discountPaisa} <= ${t.subtotalPaisa} AND ${t.totalPaisa} = ${t.subtotalPaisa} - ${t.discountPaisa}`,
     ),
   ],
 );
