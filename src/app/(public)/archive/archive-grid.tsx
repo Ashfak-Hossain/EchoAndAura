@@ -47,7 +47,7 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
                   href={`/events/${event.slug}`}
                   className="flex flex-col gap-2.5 rounded-xl focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none"
                 >
-                  <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-[#2a2a2a]">
+                  <div className="aspect-16/10 w-full overflow-hidden rounded-xl bg-[#2a2a2a]">
                     {coverUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={coverUrl} alt="" className="size-full object-cover grayscale" />

@@ -28,7 +28,7 @@ export function UpcomingRow({ events: all }: { events: HomeEvent[] }) {
               href={`/events/${event.slug}`}
               className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none"
             >
-              <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-secondary">
+              <div className="relative aspect-16/10 w-full shrink-0 overflow-hidden bg-secondary">
                 {coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={coverUrl} alt="" className="size-full object-cover" />

@@ -134,7 +134,7 @@ export default async function PublicEventPage({ params }: Props) {
       <section className={cn('relative overflow-hidden bg-[#14120f] text-background')}>
         <div
           className={cn(
-            'relative aspect-[16/10] w-full bg-[#1a2a20] lg:hidden',
+            'relative aspect-16/10 w-full bg-[#1a2a20] lg:hidden',
             past && 'grayscale',
           )}
         >
@@ -162,7 +162,7 @@ export default async function PublicEventPage({ params }: Props) {
           )}
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(20_18_15/0.96)_0%,rgb(20_18_15/0.85)_45%,rgb(20_18_15/0.25)_100%)]" />
         </div>
-        <div className="relative mx-auto flex w-full max-w-360 flex-col justify-end gap-3 px-4 pt-5 pb-6 lg:min-h-[480px] lg:max-w-360 lg:gap-4 lg:px-16 lg:py-12">
+        <div className="relative mx-auto flex w-full max-w-360 flex-col justify-end gap-3 px-4 pt-5 pb-6 lg:min-h-120 lg:max-w-360 lg:gap-4 lg:px-16 lg:py-12">
           <Link href="/" className="text-sm text-[#a8a29a] hover:text-background">
             ← All events
           </Link>
@@ -174,7 +174,7 @@ export default async function PublicEventPage({ params }: Props) {
               </span>
             ) : null}
           </div>
-          <h1 className="max-w-[760px] font-heading text-[34px] leading-[1.05] font-extrabold tracking-[-0.025em] text-pretty lg:text-[56px] lg:leading-[1.02]">
+          <h1 className="max-w-190 font-heading text-[34px] leading-[1.05] font-extrabold tracking-tight text-pretty lg:text-[56px] lg:leading-[1.02]">
             {event.title}
           </h1>
           <div className="flex flex-col gap-1.5 text-[15px] text-[#e6e1d6] lg:flex-row lg:flex-wrap lg:gap-7 lg:text-[17px]">
@@ -267,7 +267,7 @@ export default async function PublicEventPage({ params }: Props) {
               </h2>
               <RichText
                 description={event.description}
-                className="max-w-[640px] text-[16px] text-pretty text-[#2b2925] lg:text-[17px]"
+                className="max-w-160 text-[16px] text-pretty text-[#2b2925] lg:text-[17px]"
               />
             </section>
           ) : null}
