@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { eventsService, ticketTypesService } from '@/server/container';
@@ -15,20 +16,22 @@ import { EventForm, type EventFormValues } from '../../event-form';
 import { CoverSection } from '../cover/cover-section';
 import { DatesInPlainWords } from '../dates-in-plain-words';
 import { StatusSection } from '../status/status-section';
+import { issueComplimentaryTicketsAction } from '../ticket-types/comp-actions';
+import { CompTicketsSheet } from '../ticket-types/comp-tickets-sheet';
 import { TicketTypesSection } from '../ticket-types/ticket-types-section';
 
 export const metadata: Metadata = { title: 'Edit event' };
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; tab?: string }>;
+  searchParams: Promise<{ saved?: string; tab?: string; comp?: string; comped?: string }>;
 }
 
 // B5: the event hub. Tabs are URL state (?tab=), server-rendered, so each
 // section only loads what it needs and every view is deep-linkable.
 export default async function EditEventPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { saved, tab: rawTab } = await searchParams;
+  const { saved, tab: rawTab, comp, comped } = await searchParams;
   const tab: EditorTab = isEditorTab(rawTab) ? rawTab : 'details';
 
   // Reject malformed ids before they reach Postgres (invalid uuid → SQL error).
@@ -45,6 +48,12 @@ export default async function EditEventPage({ params, searchParams }: Props) {
   const ticketTypes = await ticketTypesService.listForEvent(event.id);
   const sold = ticketTypes.reduce((n, t) => n + t.quantitySold, 0);
   const total = ticketTypes.reduce((n, t) => n + t.quantityTotal, 0);
+
+  // B13 sheet over the Ticket types tab: `comp=<ticketTypeId>` preselects
+  // that row's type, `comp=1` the first with stock. Anything else is ignored.
+  const compOpen = tab === 'ticket-types' && comp !== undefined && ticketTypes.length > 0;
+  const compPreselect = ticketTypes.some((t) => t.id === comp) ? comp! : null;
+  const compedOrder = comped && z.uuid().safeParse(comped).success ? comped : null;
 
   const defaultValues: EventFormValues = {
     title: event.title,
@@ -129,8 +138,34 @@ export default async function EditEventPage({ params, searchParams }: Props) {
         </div>
       ) : null}
       {tab === 'cover' ? <CoverSection event={event} /> : null}
+      {tab === 'ticket-types' && compedOrder ? (
+        <p
+          role="status"
+          className="rounded-md bg-success-tint px-3 py-2 text-sm text-success"
+          data-testid="comp-issued"
+        >
+          Complimentary tickets issued — the tickets email is on its way.{' '}
+          <Link href={`/admin/orders/${compedOrder}`} className="font-medium underline">
+            View order
+          </Link>
+        </p>
+      ) : null}
       {tab === 'ticket-types' ? (
         <TicketTypesSection eventId={event.id} ticketTypes={ticketTypes} />
+      ) : null}
+      {compOpen ? (
+        <CompTicketsSheet
+          closeHref={editorPath(event.id, 'ticket-types')}
+          eventTitle={event.title}
+          action={issueComplimentaryTicketsAction.bind(null, event.id)}
+          ticketTypes={ticketTypes.map((t) => ({
+            id: t.id,
+            name: t.name,
+            pricePaisa: t.pricePaisa,
+            available: Math.max(0, t.quantityTotal - t.quantitySold - t.quantityReserved),
+          }))}
+          initialTicketTypeId={compPreselect}
+        />
       ) : null}
       {tab === 'publish' ? <StatusSection event={event} /> : null}
     </div>

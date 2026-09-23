@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ADD CONSTRAINT "orders_complimentary_status" CHECK ("orders"."complimentary_reason" IS NULL OR "orders"."status" IN ('issued', 'cancelled'));--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_phone_unless_comp" CHECK ("orders"."buyer_phone" IS NOT NULL OR "orders"."complimentary_reason" IS NOT NULL);

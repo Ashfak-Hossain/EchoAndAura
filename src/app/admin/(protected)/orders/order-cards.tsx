@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Money } from '@/components/money';
-import { StatusChip } from '@/components/status-chip';
+import { Chip, StatusChip } from '@/components/status-chip';
 import { cn } from '@/lib/utils';
 import type { OrderRow } from './columns';
 
@@ -28,16 +28,27 @@ export function OrderCards({ rows }: { rows: OrderRow[] }) {
             <div className="text-[15px]">{o.buyerName}</div>
             <div className="text-[13px] text-muted-foreground">
               <span className={cn(o.matchedField === 'email' && hit)}>{o.buyerEmail}</span>
-              {' · '}
-              <span className={cn('tabular', o.matchedField === 'phone' && hit)}>
-                {o.buyerPhone}
-              </span>
+              {o.buyerPhone ? (
+                <>
+                  {' · '}
+                  <span className={cn('tabular', o.matchedField === 'phone' && hit)}>
+                    {o.buyerPhone}
+                  </span>
+                </>
+              ) : null}
             </div>
             <div className="flex items-baseline justify-between gap-3 text-[13px]">
               <span>
                 {o.ticketTypeName} × {o.quantity} · {o.eventTitle}
               </span>
-              <Money paisa={o.totalPaisa} className="font-semibold" />
+              <span className="inline-flex items-center gap-2">
+                {o.complimentary ? (
+                  <Chip tone="warning" size="sm">
+                    Comp
+                  </Chip>
+                ) : null}
+                <Money paisa={o.totalPaisa} className="font-semibold" />
+              </span>
             </div>
             <div className="flex items-baseline justify-between gap-3 text-[13px] text-muted-foreground">
               <span className={cn('font-mono', o.matchedField === 'trxId' && hit)}>

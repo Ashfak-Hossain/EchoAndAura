@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { formatBDT } from '@/server/lib/money';
 import { adminColumnHelper, type DataTableColumn } from '@/components/admin/data-table';
-import { StatusChip } from '@/components/status-chip';
+import { Chip, StatusChip } from '@/components/status-chip';
 import type { OrderStatus } from '@/lib/status-labels';
 import type { MatchedField } from '@/lib/validation/orders-search';
 import { cn } from '@/lib/utils';
@@ -14,11 +14,13 @@ export interface OrderRow {
   reference: string;
   buyerName: string;
   buyerEmail: string;
-  buyerPhone: string;
+  /** NULL on complimentary orders (B13). */
+  buyerPhone: string | null;
   ticketTypeName: string;
   quantity: number;
   eventTitle: string;
   totalPaisa: number;
+  complimentary: boolean;
   trxId: string | null;
   status: OrderStatus;
   /** Already formatted in Dhaka time on the server. */
@@ -62,14 +64,16 @@ export const orderColumns: DataTableColumn<OrderRow>[] = col.columns([
         >
           {row.original.buyerEmail}
         </div>
-        <div
-          className={cn(
-            'text-[13px] text-muted-foreground tabular',
-            row.original.matchedField === 'phone' && hit,
-          )}
-        >
-          {row.original.buyerPhone}
-        </div>
+        {row.original.buyerPhone ? (
+          <div
+            className={cn(
+              'text-[13px] text-muted-foreground tabular',
+              row.original.matchedField === 'phone' && hit,
+            )}
+          >
+            {row.original.buyerPhone}
+          </div>
+        ) : null}
       </>
     ),
   }),
@@ -89,7 +93,16 @@ export const orderColumns: DataTableColumn<OrderRow>[] = col.columns([
     id: 'total',
     header: 'Total',
     meta: { sortKey: 'total', sortDescFirst: true, align: 'right', className: 'font-semibold' },
-    cell: ({ getValue }) => <span className="tabular">{formatBDT(getValue())}</span>,
+    cell: ({ row, getValue }) => (
+      <span className="inline-flex items-center gap-2">
+        {row.original.complimentary ? (
+          <Chip tone="warning" size="sm">
+            Comp
+          </Chip>
+        ) : null}
+        <span className="tabular">{formatBDT(getValue())}</span>
+      </span>
+    ),
   }),
   col.accessor('trxId', {
     id: 'trxId',

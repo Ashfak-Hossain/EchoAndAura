@@ -182,21 +182,26 @@ export interface OrderTotals {
    * the app. Never call this "refunds" — the app does not know them.
    */
   revenuePaisa: number;
+  /** Paid orders — comps (B13) are issued too but were never paid, so they are not counted. */
   revenueCount: number;
+  /** Complimentary orders among the revenue statuses, shown beside the paid count. */
+  compCount: number;
 }
 
 export function summariseTotals(byStatus: StatusTotal[]): OrderTotals {
   let count = 0;
   let revenuePaisa = 0;
   let revenueCount = 0;
+  let compCount = 0;
   for (const t of byStatus) {
     count += t.count;
     if (REVENUE_STATUSES.includes(t.status)) {
       revenuePaisa += t.totalPaisa;
-      revenueCount += t.count;
+      revenueCount += t.count - t.compCount;
+      compCount += t.compCount;
     }
   }
-  return { byStatus, count, revenuePaisa, revenueCount };
+  return { byStatus, count, revenuePaisa, revenueCount, compCount };
 }
 
 function toSearchFilter(input: OrdersSearchInput): OrdersSearchFilter {

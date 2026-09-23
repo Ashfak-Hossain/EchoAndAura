@@ -1,5 +1,5 @@
 import { alias, type PgColumn } from 'drizzle-orm/pg-core';
-import { and, asc, count, eq, inArray, sql, sum, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNotNull, isNull, sql, sum, type SQL } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { orderEvents, orders, ticketTypes, tickets } from '@/db/schema';
 import { type OrderStatus, REVENUE_STATUSES } from '@/server/lib/order-status';
@@ -13,6 +13,12 @@ import { DHAKA_TZ } from '@/lib/time';
  * totals fit a number for any plausible organizer (MAX_SAFE_INTEGER paisa
  * ≈ ৳90 trillion). Calendar buckets are Dhaka days/hours computed in SQL
  * so the code never does offset arithmetic.
+ *
+ * Complimentary orders (B13) are seats, not buyers: they are in the
+ * inventory counters (they fill the room) and out of every figure that
+ * describes sales — verified-order counts, the daily series, discounts,
+ * order sizes, when people register. They are counted on their own by
+ * `complimentary`.
  */
 
 export interface TicketTypeSales {
@@ -22,10 +28,18 @@ export interface TicketTypeSales {
   quantityTotal: number;
   quantitySold: number;
   quantityReserved: number;
-  /** Verified (paid + issued) orders on this type and their money. */
+  /** Verified (paid + issued) buyer orders on this type and their money — comps excluded. */
   orderCount: number;
   revenuePaisa: number;
   discountPaisa: number;
+}
+
+export interface ComplimentaryTotals {
+  /**
+   * Comp tickets still live, per ticket type — net of cancellations, like
+   * seats sold. (Comp orders per status come with `orders.totalsByStatus`.)
+   */
+  liveTicketsByType: { ticketTypeId: string; tickets: number }[];
 }
 
 export interface Timings {
@@ -49,19 +63,23 @@ export interface ReportsRepository {
   salesByTicketType(eventId: string): Promise<TicketTypeSales[]>;
   /**
    * Verified sales per Dhaka day, dated by the `payment.approved` audit row
-   * (Invariant 6 is the clock — there is no `paid_at` column). Unbounded:
-   * an event's lifetime is a few hundred days at most.
+   * (Invariant 6 is the clock — there is no `paid_at` column). Comps have no
+   * such row and are not sales. Unbounded: an event's lifetime is a few
+   * hundred days at most.
    */
   dailySales(eventId: string): Promise<DailySalesRow[]>;
   timings(eventId: string): Promise<Timings>;
-  /** Orders placed (any status) per Dhaka weekday and hour. */
+  /** Buyer orders placed (any status) per Dhaka weekday and hour. */
   ordersByWeekdayHour(eventId: string): Promise<WeekdayHourRow[]>;
-  /** Verified orders per quantity. */
+  /** Verified buyer orders per quantity. */
   orderSizes(eventId: string): Promise<OrderSizeRow[]>;
   countCancelledTickets(eventId: string): Promise<number>;
-  /** Every event: count and sum(total) per status — the cross-event overview. */
+  complimentary(eventId: string): Promise<ComplimentaryTotals>;
+  /** Every event: buyer-order count and sum(total) per status — the cross-event overview. */
   totalsByEventAndStatus(): Promise<EventStatusTotal[]>;
 }
+
+const buyerOrder = isNull(orders.complimentaryReason);
 
 // A literal, not a bound parameter: the same expression appears in SELECT
 // and GROUP BY, and Postgres matches those textually — `$1` vs `$2` would
@@ -86,7 +104,9 @@ export const reportsRepository: ReportsRepository = {
       .from(ticketTypes)
       .leftJoin(
         orders,
-        and(eq(orders.ticketTypeId, ticketTypes.id), inArray(orders.status, REVENUE)),
+        // A comp's whole price is its "discount": counting it would read as
+        // money given away through codes. Comps are counted by `complimentary`.
+        and(eq(orders.ticketTypeId, ticketTypes.id), inArray(orders.status, REVENUE), buyerOrder),
       )
       .where(eq(ticketTypes.eventId, eventId))
       .groupBy(ticketTypes.id)
@@ -110,6 +130,7 @@ export const reportsRepository: ReportsRepository = {
       .from(orders)
       .innerJoin(
         orderEvents,
+        // Buyer sales only: a comp is never approved, so it has no such row.
         and(eq(orderEvents.orderId, orders.id), eq(orderEvents.action, 'payment.approved')),
       )
       .where(and(eq(orders.eventId, eventId), inArray(orders.status, REVENUE)))
@@ -178,7 +199,7 @@ export const reportsRepository: ReportsRepository = {
     return db
       .select({ dow, hour, n: count() })
       .from(orders)
-      .where(eq(orders.eventId, eventId))
+      .where(and(eq(orders.eventId, eventId), buyerOrder))
       .groupBy(dow, hour);
   },
 
@@ -186,7 +207,7 @@ export const reportsRepository: ReportsRepository = {
     return db
       .select({ quantity: orders.quantity, n: count() })
       .from(orders)
-      .where(and(eq(orders.eventId, eventId), inArray(orders.status, REVENUE)))
+      .where(and(eq(orders.eventId, eventId), inArray(orders.status, REVENUE), buyerOrder))
       .groupBy(orders.quantity);
   },
 
@@ -198,6 +219,22 @@ export const reportsRepository: ReportsRepository = {
     return row?.n ?? 0;
   },
 
+  async complimentary(eventId) {
+    const live = await db
+      .select({ ticketTypeId: tickets.ticketTypeId, tickets: count() })
+      .from(tickets)
+      .innerJoin(orders, eq(orders.id, tickets.orderId))
+      .where(
+        and(
+          eq(orders.eventId, eventId),
+          isNotNull(orders.complimentaryReason),
+          eq(tickets.status, 'issued'),
+        ),
+      )
+      .groupBy(tickets.ticketTypeId);
+    return { liveTicketsByType: live };
+  },
+
   async totalsByEventAndStatus() {
     const rows = await db
       .select({
@@ -207,6 +244,7 @@ export const reportsRepository: ReportsRepository = {
         paisa: sum(orders.totalPaisa),
       })
       .from(orders)
+      .where(buyerOrder)
       .groupBy(orders.eventId, orders.status);
     return rows.map((r) => ({
       eventId: r.eventId,

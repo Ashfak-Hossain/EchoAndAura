@@ -92,6 +92,7 @@ export async function GET(request: Request): Promise<Response> {
       'verified_orders',
       'revenue_bdt',
       'discounts_bdt',
+      'complimentary',
     ];
     const rows = report.byTicketType;
     body = rows.map((t) => [
@@ -104,6 +105,7 @@ export async function GET(request: Request): Promise<Response> {
       t.orderCount,
       formatDecimalBDT(t.revenuePaisa),
       formatDecimalBDT(t.discountPaisa),
+      t.compTickets,
     ]);
     const sum = (f: (t: (typeof rows)[number]) => number) => rows.reduce((n, t) => n + f(t), 0);
     body.push([
@@ -116,6 +118,7 @@ export async function GET(request: Request): Promise<Response> {
       sum((t) => t.orderCount),
       formatDecimalBDT(report.revenue.paisa),
       formatDecimalBDT(report.revenue.discountPaisa),
+      report.complimentary.tickets,
     ]);
   }
 

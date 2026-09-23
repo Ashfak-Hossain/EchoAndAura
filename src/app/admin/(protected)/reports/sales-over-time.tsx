@@ -34,7 +34,9 @@ export function SalesOverTime({ report }: { report: SalesReport }) {
         <CumulativeLine
           points={cumulative.points}
           capacity={seats.total}
-          seatsSold={seats.sold}
+          // Compared like for like: the lines are buyer sales, so are these seats.
+          seatsSold={seats.sold - report.complimentary.tickets}
+          compSeats={report.complimentary.tickets}
           closesDay={event.registrationClosesAt ? dhakaDay(event.registrationClosesAt) : null}
           eventDay={dhakaDay(event.startsAt)}
         />
@@ -95,13 +97,16 @@ function CumulativeLine({
   points,
   capacity,
   seatsSold,
+  compSeats,
   closesDay,
   eventDay,
 }: {
   points: SalesReport['cumulative']['points'];
   capacity: number;
-  /** The inventory counter (net of cancellations) — the KPI's number, quoted when it differs. */
+  /** Seats sold to buyers now (the counter net of cancellations, minus live comps), quoted when it differs. */
   seatsSold: number;
+  /** B13: live complimentary seats — in the counters, never in these lines. */
+  compSeats: number;
   closesDay: string | null;
   eventDay: string;
 }) {
@@ -128,7 +133,11 @@ function CumulativeLine({
               end !== seatsSold
                 ? ` · ${formatCount(seatsSold)} ${seatsSold === 1 ? 'seat' : 'seats'} sold now, after cancellations`
                 : ''
-            }. The dashed line is capacity (${formatCount(capacity)}).`
+            }.${
+              compSeats > 0
+                ? ` ${formatCount(compSeats)} complimentary ${compSeats === 1 ? 'seat is' : 'seats are'} not in these lines.`
+                : ''
+            } The dashed line is capacity (${formatCount(capacity)}).`
           : 'Add ticket types to see the capacity line.'}
       </p>
     </figure>

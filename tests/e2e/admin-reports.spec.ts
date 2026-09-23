@@ -178,10 +178,10 @@ test.describe('sales report (B12)', () => {
     expect(summary.headers()['content-disposition']).toContain(`sales-${slug}-summary-`);
     const summaryLines = (await summary.text()).replace(/^﻿/, '').trim().split('\r\n');
     expect(summaryLines[0]).toBe(
-      'ticket_type,unit_price_bdt,seats,sold,held,available,verified_orders,revenue_bdt,discounts_bdt',
+      'ticket_type,unit_price_bdt,seats,sold,held,available,verified_orders,revenue_bdt,discounts_bdt,complimentary',
     );
-    expect(summaryLines[1]).toBe('General,1200.00,20,1,0,19,1,2400.00,0.00');
-    expect(summaryLines[2]).toBe('Total,,20,1,0,19,1,2400.00,0.00');
+    expect(summaryLines[1]).toBe('General,1200.00,20,1,0,19,1,2400.00,0.00,0');
+    expect(summaryLines[2]).toBe('Total,,20,1,0,19,1,2400.00,0.00,0');
 
     const daily = await page.request.get(
       `/admin/reports/export.csv?event=${id}&section=daily&range=14`,

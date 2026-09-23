@@ -58,6 +58,7 @@ function view(over: Partial<EmailView> = {}): EmailView {
       promoCodeId: null,
       rejectionReason: 'no_matching_credit',
       rejectionNote: 'No credit of ৳2,400.00 appears for 9AB12CD34E.',
+      complimentaryReason: null,
       holdExpiresAt: new Date('2026-09-18T01:08:00Z'),
       createdAt: T0,
       updatedAt: T0,
@@ -168,6 +169,34 @@ describe('email templates', () => {
     expect(joined(r.html)).toContain('TKT-9WQ2LM5D');
     expect(joined(r.html)).toContain('Ticket 2 of 2');
     expect(r.text).not.toContain('TKT-4H8ZP2XQ');
+  });
+
+  // B13: a comp was never paid for, and its reason is internal.
+  it('C2 for a comp says complimentary, never "paid", and never shows the reason', async () => {
+    const base = view();
+    const r = await renderEmail(
+      'tickets-issued',
+      view({
+        order: {
+          ...base.order,
+          totalPaisa: 0,
+          discountPaisa: base.order.subtotalPaisa,
+          bkashTrxId: null,
+          bkashSenderMsisdn: null,
+          buyerPhone: null,
+          rejectionReason: null,
+          rejectionNote: null,
+          complimentaryReason: 'Press — internal note',
+        },
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('Complimentary tickets from');
+    expect(html).toContain('TKT-4H8ZP2XQ');
+    for (const absent of ['Payment confirmed', 'Paid ৳', 'trxID', 'Press — internal note']) {
+      expect(html).not.toContain(absent);
+      expect(r.text).not.toContain(absent);
+    }
   });
 
   it('C3 quotes the reason label and the note word for word', async () => {

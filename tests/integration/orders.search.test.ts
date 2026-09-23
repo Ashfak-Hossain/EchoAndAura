@@ -222,8 +222,14 @@ describe('ordersRepository.search (Postgres)', () => {
       status: 'pending_verification',
       count: 1,
       totalPaisa: 120_000,
+      compCount: 0,
     });
-    expect(byStatus.get('issued')).toEqual({ status: 'issued', count: 1, totalPaisa: 120_000 });
+    expect(byStatus.get('issued')).toEqual({
+      status: 'issued',
+      count: 1,
+      totalPaisa: 120_000,
+      compCount: 0,
+    });
     expect(byStatus.size).toBe(2);
   });
 });

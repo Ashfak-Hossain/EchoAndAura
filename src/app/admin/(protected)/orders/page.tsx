@@ -55,6 +55,7 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
       quantity: order.quantity,
       eventTitle,
       totalPaisa: order.totalPaisa,
+      complimentary: order.complimentaryReason !== null,
       trxId: order.bkashTrxId,
       status: order.status,
       createdLabel: formatDhaka(order.createdAt),

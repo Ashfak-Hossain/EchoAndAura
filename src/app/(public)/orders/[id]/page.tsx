@@ -85,6 +85,9 @@ export default async function OrderPage({ params }: Props) {
     (e) => e.action === 'payment.submitted' || e.action === 'payment.updated',
   );
   const lastApproval = newestFirst.find((e) => e.action === 'payment.approved');
+  // B13: a comp was never paid for. Its reason is internal and never shown here.
+  const comp = order.complimentaryReason !== null;
+  const compIssued = newestFirst.find((e) => e.action === 'order.comp_issued');
   const lastRejection = newestFirst.find((e) => e.action === 'payment.rejected');
 
   return (
@@ -265,9 +268,14 @@ export default async function OrderPage({ params }: Props) {
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
             <h2 className="font-heading text-xl font-semibold">You&apos;re in.</h2>
-            <p className="text-sm leading-relaxed">
-              Payment confirmed
-              {lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''}.{' '}
+            <p className="text-sm leading-relaxed" data-testid="issued-line">
+              {comp
+                ? `Complimentary ${tickets.length === 1 ? 'ticket' : 'tickets'} from ${settings.organizerName}${
+                    compIssued ? `, issued on ${formatDhakaLong(compIssued.createdAt)} (Dhaka)` : ''
+                  }.`
+                : `Payment confirmed${
+                    lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''
+                  }.`}{' '}
               {tickets.length === 1 ? 'Your ticket is' : `${tickets.length} tickets are`} in your
               inbox at <strong>{order.buyerEmail}</strong>.
             </p>
@@ -294,9 +302,11 @@ export default async function OrderPage({ params }: Props) {
               </li>
             ))}
           </ul>
-          <p className="text-sm text-muted-foreground tabular">
-            Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
-          </p>
+          {comp ? null : (
+            <p className="text-sm text-muted-foreground tabular">
+              Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
+            </p>
+          )}
         </>
       ) : null}
 

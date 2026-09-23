@@ -23,7 +23,7 @@ import {
   type ReportWindow,
 } from '@/server/lib/sales-report';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
-import type { OrdersRepository } from '@/server/repositories/orders.repository';
+import type { OrdersRepository, StatusTotal } from '@/server/repositories/orders.repository';
 import type {
   ReportsRepository,
   TicketTypeSales,
@@ -76,9 +76,16 @@ export interface SalesReport {
   timings: Timings;
   orderSize: OrderSizeStats;
   whenPeopleRegister: Histograms;
-  byTicketType: TicketTypeSales[];
+  byTicketType: TicketTypeReport[];
+  /** B13: comps are seats, not sales — counted here and nowhere in revenue or the funnel. */
+  complimentary: { tickets: number; orders: number };
   /** True until the first payment is approved: the design's empty state. */
   noSalesYet: boolean;
+}
+
+export interface TicketTypeReport extends TicketTypeSales {
+  /** Live complimentary tickets on this type (already inside `quantitySold`). */
+  compTickets: number;
 }
 
 export interface EventOverviewRow {
@@ -104,7 +111,7 @@ export function createReportsService(
       const event = await events.findById(eventId);
       if (!event) throw new EventNotFoundError(eventId);
 
-      const [byTicketType, dailyRows, byStatus, timings, weekdayHour, sizes, cancelledTickets] =
+      const [sales, dailyRows, allByStatus, timings, weekdayHour, sizes, cancelledTickets, comp] =
         await Promise.all([
           reports.salesByTicketType(eventId),
           reports.dailySales(eventId),
@@ -113,7 +120,16 @@ export function createReportsService(
           reports.ordersByWeekdayHour(eventId),
           reports.orderSizes(eventId),
           reports.countCancelledTickets(eventId),
+          reports.complimentary(eventId),
         ]);
+      // The funnel describes buyers; a comp was never placed or paid for.
+      // Its count comes from the same status query, so the two always agree.
+      const byStatus = withoutComps(allByStatus);
+      const compByType = new Map(comp.liveTicketsByType.map((c) => [c.ticketTypeId, c.tickets]));
+      const byTicketType: TicketTypeReport[] = sales.map((t) => ({
+        ...t,
+        compTickets: compByType.get(t.ticketTypeId) ?? 0,
+      }));
 
       const generatedAt = now();
       const today = dhakaDay(generatedAt);
@@ -190,6 +206,10 @@ export function createReportsService(
         orderSize,
         whenPeopleRegister: histograms(weekdayHour),
         byTicketType,
+        complimentary: {
+          tickets: byTicketType.reduce((n, t) => n + t.compTickets, 0),
+          orders: allByStatus.reduce((n, s) => n + s.compCount, 0),
+        },
         noSalesYet: f.verifiedMoney.count === 0 && dailyRows.length === 0,
       };
     },
@@ -236,3 +256,10 @@ export function createReportsService(
 }
 
 export type ReportsService = ReturnType<typeof createReportsService>;
+
+/** Status totals with comp orders taken out (a comp adds ৳0, so only counts move). */
+export function withoutComps(all: readonly StatusTotal[]): StatusTotal[] {
+  return all
+    .map((row) => ({ ...row, count: row.count - row.compCount, compCount: 0 }))
+    .filter((row) => row.count > 0);
+}

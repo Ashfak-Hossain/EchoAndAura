@@ -41,6 +41,7 @@ async function setup(now: () => Date = () => NOW) {
   const { tickets } = await createFulfilmentService({
     orders: db.orders,
     tickets: db.tickets,
+    ticketTypes: db.ticketTypes,
     inventory,
     runInTransaction: db.runInTransaction,
     onTicketsIssued: async () => {},

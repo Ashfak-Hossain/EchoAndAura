@@ -158,6 +158,7 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         bkashTrxId: null,
         bkashSenderMsisdn: null,
         promoCodeId: null,
+        complimentaryReason: null,
         holdExpiresAt: null,
         createdAt: stamp,
         updatedAt: stamp,
@@ -236,10 +237,14 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         { ...filter, status: null },
         { limit: 100_000, offset: 0 },
       );
-      const acc = new Map<string, { count: number; totalPaisa: number }>();
+      const acc = new Map<string, { count: number; totalPaisa: number; compCount: number }>();
       for (const { order } of rows) {
-        const t = acc.get(order.status) ?? { count: 0, totalPaisa: 0 };
-        acc.set(order.status, { count: t.count + 1, totalPaisa: t.totalPaisa + order.totalPaisa });
+        const t = acc.get(order.status) ?? { count: 0, totalPaisa: 0, compCount: 0 };
+        acc.set(order.status, {
+          count: t.count + 1,
+          totalPaisa: t.totalPaisa + order.totalPaisa,
+          compCount: t.compCount + (order.complimentaryReason === null ? 0 : 1),
+        });
       }
       return [...acc.entries()].map(([status, t]) => ({
         status: status as OrderRecord['status'],

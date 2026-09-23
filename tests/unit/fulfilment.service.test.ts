@@ -48,6 +48,7 @@ async function setup(opts: { ticketCode?: () => string } = {}) {
   const fulfilment = createFulfilmentService({
     orders: db.orders,
     tickets: db.tickets,
+    ticketTypes: db.ticketTypes,
     inventory,
     runInTransaction: db.runInTransaction,
     onTicketsIssued,
@@ -107,6 +108,7 @@ describe('fulfilmentService.approveOrder', () => {
     const f = createFulfilmentService({
       orders: db.orders,
       tickets: db.tickets,
+      ticketTypes: db.ticketTypes,
       inventory: createInventoryService(db.inventoryRepo),
       runInTransaction: async (fn) => {
         const out = await original(fn);

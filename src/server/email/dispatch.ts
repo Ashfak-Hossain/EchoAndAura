@@ -145,7 +145,7 @@ export function createEmailDispatcher({
         .reverse()
         .find((e) =>
           kind === 'tickets-issued'
-            ? e.action === 'payment.approved'
+            ? e.action === 'payment.approved' || e.action === 'order.comp_issued'
             : kind === 'rejected'
               ? e.action === 'payment.rejected'
               : kind === 'expired'

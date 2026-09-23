@@ -67,6 +67,7 @@ export const ordersService = createOrdersService({
 export const fulfilmentService = createFulfilmentService({
   orders: ordersRepository,
   tickets: ticketsRepository,
+  ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
   runInTransaction: (fn) => db.transaction(fn),
   onTicketsIssued: (orderId) => enqueueEmail('tickets-issued', orderId),

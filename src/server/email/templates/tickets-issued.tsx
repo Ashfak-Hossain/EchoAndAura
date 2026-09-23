@@ -4,7 +4,7 @@ import { formatDhakaLong } from '@/lib/time';
 import { EmailLayout, Hr, styles } from './layout';
 import type { EmailView } from './view';
 
-/** C2 — sent on approval. One card per ticket with the code large: this is the email people screenshot. */
+/** C2 — sent on approval, and to the guest of a comp (B13). One card per ticket with the code large: this is the email people screenshot. */
 /** Live tickets only: a re-send after an admin cancel must not count a dead one. */
 function liveTickets(v: EmailView) {
   return v.tickets.filter((t) => t.status === 'issued');
@@ -27,11 +27,23 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
   const closes = v.event.registrationClosesAt
     ? `${formatDhakaLong(v.event.registrationClosesAt)} (Dhaka)`
     : null;
+  // B13: a comp was never paid for. Its reason is internal and never rendered here.
+  const comp = v.order.complimentaryReason !== null;
   return (
-    <EmailLayout preview="Payment confirmed. Show the name and code at the door." sender={v}>
+    <EmailLayout
+      preview={
+        comp
+          ? `Complimentary ${live.length === 1 ? 'ticket' : 'tickets'}. Show the name and code at the door.`
+          : 'Payment confirmed. Show the name and code at the door.'
+      }
+      sender={v}
+    >
       <Text style={styles.h1}>You&apos;re in — here are your tickets</Text>
       <Text style={styles.p}>
-        Payment confirmed on {formatDhakaLong(v.at)} (Dhaka) for order{' '}
+        {comp
+          ? `Complimentary ${live.length === 1 ? 'ticket' : 'tickets'} from ${v.organizerName}, issued on`
+          : 'Payment confirmed on'}{' '}
+        {formatDhakaLong(v.at)} (Dhaka) for order{' '}
         <span style={styles.mono}>{v.order.reference}</span>. Check-in is a printed list — bring the
         name, and the code if you have it.
       </Text>
@@ -70,9 +82,14 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
       </Text>
       <Text style={styles.small}>
         Wrong name on a ticket? Open it and edit the name yourself
-        {closes ? ` until registration closes on ${closes}` : ''}. Paid{' '}
-        {formatBDT(v.order.totalPaisa)}
-        {v.order.bkashTrxId ? ` · trxID ${v.order.bkashTrxId}` : ''}.
+        {closes ? ` until registration closes on ${closes}` : ''}.
+        {comp ? null : (
+          <>
+            {' '}
+            Paid {formatBDT(v.order.totalPaisa)}
+            {v.order.bkashTrxId ? ` · trxID ${v.order.bkashTrxId}` : ''}.
+          </>
+        )}
       </Text>
     </EmailLayout>
   );

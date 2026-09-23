@@ -8,7 +8,8 @@ import { formatCount, ReportCard } from './report-card';
 /**
  * B12 "Sold per ticket type": seats from the inventory counters (sold is
  * net of cancellations — the number the public stock shows), money from
- * verified orders on that type. A type with no sales is still a row.
+ * verified buyer orders on that type (comps are a column of their own, B13).
+ * A type with no sales is still a row.
  * Phones get a card per type instead of a nine-column table.
  */
 export function TicketTypeTable({ report }: { report: SalesReport }) {
@@ -18,15 +19,23 @@ export function TicketTypeTable({ report }: { report: SalesReport }) {
       seats: t.seats + r.quantityTotal,
       sold: t.sold + r.quantitySold,
       held: t.held + r.quantityReserved,
+      comp: t.comp + r.compTickets,
       orders: t.orders + r.orderCount,
       revenue: t.revenue + r.revenuePaisa,
     }),
-    { seats: 0, sold: 0, held: 0, orders: 0, revenue: 0 },
+    { seats: 0, sold: 0, held: 0, comp: 0, orders: 0, revenue: 0 },
   );
   const left = (r: (typeof rows)[number]) =>
     Math.max(0, r.quantityTotal - r.quantitySold - r.quantityReserved);
+  // B13: the column exists only once there is something to show.
+  const hasComps = total.comp > 0;
 
   const notes: string[] = [];
+  if (hasComps) {
+    notes.push(
+      `${formatCount(total.comp)} complimentary ${total.comp === 1 ? 'ticket is' : 'tickets are'} counted as sold at ${formatBDT(0)}; they are not in Orders or Revenue.`,
+    );
+  }
   if (report.revenue.discountPaisa > 0) {
     notes.push(
       `Discounts of ${formatBDT(report.revenue.discountPaisa)} are already taken off these figures.`,
@@ -57,6 +66,7 @@ export function TicketTypeTable({ report }: { report: SalesReport }) {
                 <th className="py-2 pr-3 text-right font-medium">Price</th>
                 <th className="py-2 pr-3 text-right font-medium">Seats</th>
                 <th className="py-2 pr-3 text-right font-medium">Sold</th>
+                {hasComps ? <th className="py-2 pr-3 text-right font-medium">Comp</th> : null}
                 <th className="py-2 pr-3 text-right font-medium">Held</th>
                 <th className="py-2 pr-3 text-right font-medium">Left</th>
                 <th className="w-[18%] py-2 pr-3 font-medium">Sold %</th>
@@ -79,6 +89,11 @@ export function TicketTypeTable({ report }: { report: SalesReport }) {
                   <td className="py-2.5 pr-3 text-right font-semibold tabular">
                     {formatCount(r.quantitySold)}
                   </td>
+                  {hasComps ? (
+                    <td className="py-2.5 pr-3 text-right tabular" data-testid="ticket-type-comp">
+                      {formatCount(r.compTickets)}
+                    </td>
+                  ) : null}
                   <td className="py-2.5 pr-3 text-right tabular">
                     {formatCount(r.quantityReserved)}
                   </td>
@@ -110,6 +125,9 @@ export function TicketTypeTable({ report }: { report: SalesReport }) {
                 <td className="py-2.5 pr-3" />
                 <td className="py-2.5 pr-3 text-right tabular">{formatCount(total.seats)}</td>
                 <td className="py-2.5 pr-3 text-right tabular">{formatCount(total.sold)}</td>
+                {hasComps ? (
+                  <td className="py-2.5 pr-3 text-right tabular">{formatCount(total.comp)}</td>
+                ) : null}
                 <td className="py-2.5 pr-3 text-right tabular">{formatCount(total.held)}</td>
                 <td className="py-2.5 pr-3 text-right tabular">
                   {formatCount(Math.max(0, total.seats - total.sold - total.held))}
@@ -143,9 +161,10 @@ export function TicketTypeTable({ report }: { report: SalesReport }) {
                   label={`${r.name}: ${r.quantitySold} of ${r.quantityTotal} sold`}
                 />
                 <p className="text-[12px] text-muted-foreground tabular">
-                  {formatCount(r.quantitySold)} sold · {formatCount(r.quantityReserved)} held ·{' '}
-                  {formatCount(left(r))} left of {formatCount(r.quantityTotal)} ·{' '}
-                  <Money paisa={r.pricePaisa} /> each
+                  {formatCount(r.quantitySold)} sold
+                  {r.compTickets > 0 ? ` (${formatCount(r.compTickets)} comp)` : ''} ·{' '}
+                  {formatCount(r.quantityReserved)} held · {formatCount(left(r))} left of{' '}
+                  {formatCount(r.quantityTotal)} · <Money paisa={r.pricePaisa} /> each
                 </p>
               </li>
             ))}

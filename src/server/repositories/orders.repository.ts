@@ -80,6 +80,8 @@ export interface StatusTotal {
   status: OrderStatus;
   count: number;
   totalPaisa: number;
+  /** B13: how many of `count` are complimentary (৳0, never paid) — from the same snapshot. */
+  compCount: number;
 }
 
 export interface OrderTransition {
@@ -261,13 +263,23 @@ export const ordersRepository: OrdersRepository = {
 
   async totalsByStatus(filter) {
     const rows = await db
-      .select({ status: orders.status, n: count(), paisa: sum(orders.totalPaisa) })
+      .select({
+        status: orders.status,
+        n: count(),
+        comp: sql<number>`(count(*) filter (where ${orders.complimentaryReason} is not null))::int`,
+        paisa: sum(orders.totalPaisa),
+      })
       .from(orders)
       .where(searchWhere({ ...filter, status: null }))
       .groupBy(orders.status);
     // sum() comes back as a string (bigint-safe); totals fit a number for
     // any plausible organizer (Number.MAX_SAFE_INTEGER paisa ≈ ৳90 trillion).
-    return rows.map((r) => ({ status: r.status, count: r.n, totalPaisa: Number(r.paisa ?? 0) }));
+    return rows.map((r) => ({
+      status: r.status,
+      count: r.n,
+      totalPaisa: Number(r.paisa ?? 0),
+      compCount: r.comp,
+    }));
   },
 };
 

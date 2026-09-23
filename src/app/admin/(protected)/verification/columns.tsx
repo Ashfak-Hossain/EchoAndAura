@@ -9,7 +9,7 @@ export interface QueueRowData {
   id: string;
   reference: string;
   buyerName: string;
-  buyerPhone: string;
+  buyerPhone: string | null;
   ticketTypeName: string;
   quantity: number;
   eventTitle: string;
@@ -39,7 +39,9 @@ export const queueColumns: DataTableColumn<QueueRowData>[] = col.columns([
           {row.original.reference}
         </Link>
         <div className="text-[13px]">{row.original.buyerName}</div>
-        <div className="text-[13px] text-muted-foreground tabular">{row.original.buyerPhone}</div>
+        <div className="text-[13px] text-muted-foreground tabular">
+          {row.original.buyerPhone ?? '—'}
+        </div>
       </>
     ),
   }),

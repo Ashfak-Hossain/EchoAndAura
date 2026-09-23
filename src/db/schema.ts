@@ -183,7 +183,9 @@ export const orders = pgTable(
     status: orderStatus('status').notNull().default('pending_payment'),
     buyerName: text('buyer_name').notNull(),
     buyerEmail: text('buyer_email').notNull(),
-    buyerPhone: text('buyer_phone').notNull(),
+    // NULL only on complimentary orders: the organizer issues those by email
+    // and there is no bKash payment to compare a sending number against.
+    buyerPhone: text('buyer_phone'),
     // One name per ticket, captured at registration (A3 "Who is coming?").
     // Tickets do not exist until fulfilment, so the names wait here and are
     // copied onto the ticket rows when the order is issued.
@@ -200,6 +202,10 @@ export const orders = pgTable(
     // the same text; these columns make the current reason cheap to read.
     rejectionReason: text('rejection_reason'),
     rejectionNote: text('rejection_note'),
+    // B13: non-NULL marks a complimentary order and says why (audit only,
+    // never shown to the guest). One column, so the flag and the reason can
+    // never disagree.
+    complimentaryReason: text('complimentary_reason'),
     // 24-hour inventory hold (ADR-002). The expiry job releases stock once this
     // passes without payment being verified.
     holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),
@@ -237,6 +243,24 @@ export const orders = pgTable(
       'orders_totals_consistent',
       sql`${t.subtotalPaisa} = ${t.unitPricePaisa} * ${t.quantity} AND ${t.discountPaisa} <= ${t.subtotalPaisa} AND ${t.totalPaisa} = ${t.subtotalPaisa} - ${t.discountPaisa}`,
     ),
+    // B13: a comp is free in full (with the check above, total = 0), was never
+    // paid by bKash and never used a code — whatever code path wrote it.
+    check(
+      'orders_complimentary_free',
+      sql`${t.complimentaryReason} IS NULL OR (${t.discountPaisa} = ${t.subtotalPaisa} AND ${t.bkashTrxId} IS NULL AND ${t.promoCodeId} IS NULL)`,
+    ),
+    // A comp is born issued and can only end cancelled — never pending,
+    // never expired by the job, never in the verification queue.
+    check(
+      'orders_complimentary_status',
+      sql`${t.complimentaryReason} IS NULL OR ${t.status} IN ('issued', 'cancelled')`,
+    ),
+    // Only a comp may lack a phone: Find my order matches reference + phone,
+    // and a buyer order without one could never be found again.
+    check(
+      'orders_phone_unless_comp',
+      sql`${t.buyerPhone} IS NOT NULL OR ${t.complimentaryReason} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -257,7 +281,12 @@ export const orderEvents = pgTable(
     fromStatus: orderStatus('from_status'),
     toStatus: orderStatus('to_status'),
     note: text('note'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // clock_timestamp(), not now(): now() is the transaction's start, so the
+    // rows one transaction writes (ticket cancelled → order cancelled, paid →
+    // issued) would tie and the trail could read back out of order.
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
   },
   (t) => [index('order_events_order_id_idx').on(t.orderId)],
 );

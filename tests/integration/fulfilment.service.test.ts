@@ -46,6 +46,7 @@ describe('fulfilmentService (Postgres)', () => {
   const fulfilment = createFulfilmentService({
     orders: ordersRepository,
     tickets: ticketsRepository,
+    ticketTypes: ticketTypesRepository,
     inventory,
     runInTransaction: (fn) => db.transaction(fn),
     onTicketsIssued,

@@ -54,10 +54,10 @@ const types: TicketTypeSales[] = [
 ];
 
 const byStatus: StatusTotal[] = [
-  { status: 'pending_payment', count: 2, totalPaisa: 240_000 },
-  { status: 'pending_verification', count: 1, totalPaisa: 120_000 },
-  { status: 'issued', count: 22, totalPaisa: 6_100_000 },
-  { status: 'expired', count: 3, totalPaisa: 360_000 },
+  { status: 'pending_payment', count: 2, totalPaisa: 240_000, compCount: 0 },
+  { status: 'pending_verification', count: 1, totalPaisa: 120_000, compCount: 0 },
+  { status: 'issued', count: 22, totalPaisa: 6_100_000, compCount: 0 },
+  { status: 'expired', count: 3, totalPaisa: 360_000, compCount: 0 },
 ];
 
 function deps(over: Partial<ReportsRepository> = {}, hasEvent = true): ReportsDeps {
@@ -72,6 +72,7 @@ function deps(over: Partial<ReportsRepository> = {}, hasEvent = true): ReportsDe
     ordersByWeekdayHour: async () => [{ dow: 1, hour: 21, n: 28 }],
     orderSizes: async () => [{ quantity: 2, n: 22 }],
     countCancelledTickets: async () => 2,
+    complimentary: async () => ({ liveTicketsByType: [] }),
     totalsByEventAndStatus: async () => byStatus.map((t) => ({ eventId: event.id, ...t })),
     ...over,
   };
@@ -128,8 +129,39 @@ describe('reportsService.salesReport', () => {
     expect(r.whenPeopleRegister.peakHour).toBe(21);
     expect(r.timings.toVerifyMedianS).toBe(5400);
     expect(r.byTicketType.map((t) => t.name)).toEqual(['General', 'VIP']);
+    expect(r.complimentary).toEqual({ tickets: 0, orders: 0 });
     expect(r.noSalesYet).toBe(false);
     expect(r.generatedAt).toBe(NOW);
+  });
+
+  it('B13: comps are seats, not buyers — counted on their own, out of the funnel and revenue', async () => {
+    // Two comp orders on VIP, both `issued` inside the status totals (at ৳0), plus
+    // one fully cancelled comp: 3 tickets still live.
+    const withComps: StatusTotal[] = [
+      ...byStatus.map((s) =>
+        s.status === 'issued' ? { ...s, count: s.count + 2, compCount: 2 } : s,
+      ),
+      { status: 'cancelled', count: 1, totalPaisa: 0, compCount: 1 },
+    ];
+    const service = createReportsService(
+      {
+        ...deps({
+          complimentary: async () => ({
+            liveTicketsByType: [{ ticketTypeId: 'tt-2', tickets: 3 }],
+          }),
+        }),
+        orders: { totalsByStatus: async () => withComps },
+      },
+      { now: () => NOW },
+    );
+    const r = await service.salesReport(event.id, '14');
+    expect(r.complimentary).toEqual({ tickets: 3, orders: 3 });
+    expect(r.byTicketType.map((t) => t.compTickets)).toEqual([0, 3]);
+    // Exactly the figures of the comp-free report: comps never read as buyers,
+    // and a fully cancelled comp leaves no "cancelled" row in the funnel.
+    expect(r.revenue).toMatchObject({ paisa: 6_100_000, orders: 22 });
+    expect(r.funnel).toMatchObject({ placed: 28, verified: 22, conversionPct: 79 });
+    expect(r.funnel.cancelled.count).toBe(0);
   });
 
   it('no range in the URL: 14 days for a live event, all time for a finished one', async () => {
@@ -188,7 +220,7 @@ describe('reportsService.salesReport', () => {
         }),
         orders: {
           totalsByStatus: async () => [
-            { status: 'pending_payment', count: 1, totalPaisa: 120_000 },
+            { status: 'pending_payment', count: 1, totalPaisa: 120_000, compCount: 0 },
           ],
         },
       },

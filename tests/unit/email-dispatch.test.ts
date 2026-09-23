@@ -50,6 +50,7 @@ async function setup() {
   const fulfilment = createFulfilmentService({
     orders: db.orders,
     tickets: db.tickets,
+    ticketTypes: db.ticketTypes,
     inventory,
     runInTransaction: db.runInTransaction,
     onTicketsIssued: async (id) => {
@@ -208,6 +209,33 @@ describe('emailDispatcher.dispatch', () => {
     expect(sent[0]?.html).toContain('TKT-');
   });
 
+  // B13: a comp is born issued — no payment.approved row — and still gets C2,
+  // dated by its own order.comp_issued row, not by "now".
+  it('sends C2 to a comp guest, dated by the order.comp_issued row', async () => {
+    const { db, fulfilment, dispatcher, sent, hooks } = await setup();
+    const { order } = await fulfilment.issueComplimentaryTickets({
+      eventId: 'ev-1',
+      ticketTypeId: 'tt-1',
+      quantity: 1,
+      guestName: 'Tahmina Akter',
+      guestEmail: 'tahmina@dhakapress.com',
+      reason: 'Press',
+      actor: 'raj@example.com',
+    });
+    expect(hooks.issuedHook).toEqual([order.id]);
+    const row = db.state.events.find(
+      (e) => e.orderId === order.id && e.action === 'order.comp_issued',
+    )!;
+    row.createdAt = new Date('2026-09-14T08:30:00Z'); // Mon 14 Sep, 14:30 Dhaka
+
+    await dispatcher.dispatch('tickets-issued', order.id);
+    expect(sent[0]?.to).toBe('tahmina@dhakapress.com');
+    const html = sent[0]!.html.replace(/<!-- -->/g, '');
+    expect(html).toContain('Mon 14 Sep 2026, 14:30');
+    expect(html).not.toContain('Payment confirmed');
+    expect(html).not.toContain('Press');
+  });
+
   it('C3 and C4 only go to orders in that state', async () => {
     const { orders, fulfilment, dispatcher, sent, order } = await setup();
     await expect(dispatcher.dispatch('rejected', order.id)).rejects.toBeInstanceOf(
@@ -303,6 +331,7 @@ describe('after-commit ordering (Invariant 7)', () => {
     const fulfilment = createFulfilmentService({
       orders: db.orders,
       tickets: db.tickets,
+      ticketTypes: db.ticketTypes,
       inventory,
       runInTransaction: tracked,
       onTicketsIssued: async () => {},
@@ -343,6 +372,7 @@ describe('fulfilmentService.resendTicketsEmail', () => {
     const svc = createFulfilmentService({
       orders: db.orders,
       tickets: db.tickets,
+      ticketTypes: db.ticketTypes,
       inventory: createInventoryService(db.inventoryRepo),
       runInTransaction: db.runInTransaction,
       onTicketsIssued: async () => {},
@@ -365,6 +395,7 @@ describe('fulfilmentService.resendTicketsEmail', () => {
     const broken = createFulfilmentService({
       orders: db.orders,
       tickets: db.tickets,
+      ticketTypes: db.ticketTypes,
       inventory: createInventoryService(db.inventoryRepo),
       runInTransaction: db.runInTransaction,
       onTicketsIssued: async () => {},

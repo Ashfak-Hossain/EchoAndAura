@@ -7,7 +7,7 @@ import { OrderNotFoundError } from '@/server/lib/errors';
 import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-reasons';
 import { Money } from '@/components/money';
 import { PageHeader } from '@/components/page-header';
-import { StatusChip } from '@/components/status-chip';
+import { Chip, StatusChip } from '@/components/status-chip';
 import {
   Table,
   TableBody,
@@ -63,6 +63,14 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
   const submitted = [...events]
     .reverse()
     .find((e) => e.action === 'payment.submitted' || e.action === 'payment.updated');
+  // B13: a comp has no bKash side; who issued it and why take that column.
+  const comp =
+    order.complimentaryReason === null
+      ? null
+      : {
+          reason: order.complimentaryReason,
+          issued: events.find((e) => e.action === 'order.comp_issued') ?? null,
+        };
 
   const metaLine = [
     `Created ${formatDhakaLong(order.createdAt)} (Dhaka)`,
@@ -80,8 +88,15 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
       <PageHeader
         title={<span className="font-mono">{order.reference}</span>}
         badge={
-          <span data-testid="order-status">
-            <StatusChip kind="order" status={order.status} />
+          <span className="inline-flex items-center gap-2">
+            <span data-testid="order-status">
+              <StatusChip kind="order" status={order.status} />
+            </span>
+            {comp ? (
+              <span data-testid="order-comp">
+                <Chip tone="warning">Complimentary</Chip>
+              </span>
+            ) : null}
           </span>
         }
         subtitle={metaLine}
@@ -142,7 +157,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             </a>
           </Row>
           <Row label="Phone" mono>
-            {order.buyerPhone}
+            {order.buyerPhone ?? '—'}
           </Row>
         </Card>
         <Card title="Order">
@@ -161,7 +176,9 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <Money paisa={order.subtotalPaisa} />
           </Row>
           {order.discountPaisa > 0 ? (
-            <Row label={promoCode ? `Discount · ${promoCode}` : 'Discount'}>
+            <Row
+              label={comp ? 'Complimentary' : promoCode ? `Discount · ${promoCode}` : 'Discount'}
+            >
               −<Money paisa={order.discountPaisa} />
             </Row>
           ) : null}
@@ -169,19 +186,37 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <Money paisa={order.totalPaisa} />
           </Row>
         </Card>
-        {/* Tinted: the only column Raj compares against another screen. */}
-        <Card title="bKash" tinted>
-          <Row label="Transaction ID" mono>
-            {order.bkashTrxId ?? '—'}
-          </Row>
-          <Row label="Sender" mono>
-            {order.bkashSenderMsisdn ?? '—'}
-          </Row>
-          <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
-          <Row label="Hold expires">
-            {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
-          </Row>
-        </Card>
+        {comp ? (
+          <section
+            className="flex flex-col gap-2.5 rounded-xl border border-[#f0d9ac] bg-accent p-4.5 text-[#5c4514]"
+            data-testid="comp-card"
+          >
+            <h2 className="font-sans text-xs font-medium tracking-widest uppercase">
+              Complimentary
+            </h2>
+            <p className="text-[15px] leading-normal">{comp.reason}</p>
+            {comp.issued ? (
+              <p className="text-[13px]">
+                Issued by {comp.issued.actor} · {formatDhakaShort(comp.issued.createdAt)} (Dhaka)
+              </p>
+            ) : null}
+            <p className="text-[13px]">Not shown to the guest. No bKash payment.</p>
+          </section>
+        ) : (
+          /* Tinted: the only column Raj compares against another screen. */
+          <Card title="bKash" tinted>
+            <Row label="Transaction ID" mono>
+              {order.bkashTrxId ?? '—'}
+            </Row>
+            <Row label="Sender" mono>
+              {order.bkashSenderMsisdn ?? '—'}
+            </Row>
+            <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
+            <Row label="Hold expires">
+              {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
+            </Row>
+          </Card>
+        )}
       </div>
 
       {order.status === 'pending_verification' ? (

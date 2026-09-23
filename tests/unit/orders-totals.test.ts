@@ -7,13 +7,13 @@ import { NOW, event, fakeDb, ticketType } from './helpers/fake-db';
 describe('summariseTotals — the money rule', () => {
   it('revenue is paid + issued only; held, rejected, expired and cancelled never count', () => {
     const t = summariseTotals([
-      { status: 'pending_payment', count: 3, totalPaisa: 300_000 },
-      { status: 'pending_verification', count: 2, totalPaisa: 200_000 },
-      { status: 'paid', count: 1, totalPaisa: 120_000 },
-      { status: 'issued', count: 4, totalPaisa: 480_000 },
-      { status: 'rejected', count: 1, totalPaisa: 120_000 },
-      { status: 'expired', count: 5, totalPaisa: 500_000 },
-      { status: 'cancelled', count: 1, totalPaisa: 120_000 },
+      { status: 'pending_payment', count: 3, totalPaisa: 300_000, compCount: 0 },
+      { status: 'pending_verification', count: 2, totalPaisa: 200_000, compCount: 0 },
+      { status: 'paid', count: 1, totalPaisa: 120_000, compCount: 0 },
+      { status: 'issued', count: 4, totalPaisa: 480_000, compCount: 0 },
+      { status: 'rejected', count: 1, totalPaisa: 120_000, compCount: 0 },
+      { status: 'expired', count: 5, totalPaisa: 500_000, compCount: 0 },
+      { status: 'cancelled', count: 1, totalPaisa: 120_000, compCount: 0 },
     ]);
     expect(t.count).toBe(17);
     expect(t.revenueCount).toBe(5);
@@ -25,7 +25,16 @@ describe('summariseTotals — the money rule', () => {
       count: 0,
       revenuePaisa: 0,
       revenueCount: 0,
+      compCount: 0,
     });
+  });
+  // B13: a comp is issued but was never paid — B9 must not call it a paid order.
+  it('comps are counted beside paid orders, never as one', () => {
+    const t = summariseTotals([
+      { status: 'issued', count: 6, totalPaisa: 480_000, compCount: 2 },
+      { status: 'cancelled', count: 1, totalPaisa: 0, compCount: 1 },
+    ]);
+    expect(t).toMatchObject({ count: 7, revenueCount: 4, compCount: 2, revenuePaisa: 480_000 });
   });
 });
 

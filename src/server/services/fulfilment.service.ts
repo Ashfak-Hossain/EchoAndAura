@@ -3,14 +3,20 @@ import {
   AttendeeNamesMismatchError,
   InvalidRejectionReasonError,
   OrderNotFoundError,
+  OrderReferenceCollisionError,
   OrderStatusConflictError,
+  SoldOutError,
   TicketCancelledError,
   TicketCodeCollisionError,
   TicketNotFoundError,
+  TicketTypeNotFoundError,
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
+import { multiplyPaisa } from '@/server/lib/money';
+import { generateOrderReference } from '@/server/lib/order-reference';
 import { assertOrderTransition } from '@/server/lib/order-status';
+import { computeOrderTotals } from '@/server/lib/pricing';
 import {
   REJECTION_REASONS,
   type RejectionReason,
@@ -18,27 +24,32 @@ import {
 } from '@/server/lib/rejection-reasons';
 import { generateTicketCode } from '@/server/lib/ticket-code';
 import type { OrderRecord, OrdersRepository } from '@/server/repositories/orders.repository';
+import type { TicketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
 import type { InventoryService } from '@/server/services/inventory.service';
 
 /**
  * FULFILMENT (Invariant 4). This module is the ONLY code that marks an
  * order `paid` or `issued`, the only caller of `inventory.convertToSold`,
- * and the only creator of ticket rows. It is called from the admin
- * Approve action and nowhere else. Never duplicate this logic.
+ * and the only creator of ticket rows. Two entry points, both admin
+ * actions: Approve (a verified bKash payment) and Issue complimentary
+ * tickets (B13). Never duplicate this logic elsewhere.
  *
  * Approve is one transaction: lock the order → `paid` → held → sold →
  * ticket rows → `issued`, with an audit row per status change (Invariant
- * 6). Nothing inside it touches the network (Invariant 7); the ticket
- * email is handed to `onTicketsIssued` only after the commit.
+ * 6). A comp is one transaction too: hold → sold → order row born `issued`
+ * → ticket rows → one audit row. Nothing inside either touches the network
+ * (Invariant 7); the ticket email is handed to `onTicketsIssued` only after
+ * the commit.
  */
 
-/** How many fresh code sets to try before giving up on a collision. */
+/** How many fresh code sets (and, for comps, references) to try on a collision. */
 const CODE_ATTEMPTS = 3;
 
 export interface FulfilmentDeps {
   orders: OrdersRepository;
   tickets: TicketsRepository;
+  ticketTypes: TicketTypesRepository;
   inventory: InventoryService;
   runInTransaction: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
   /**
@@ -52,6 +63,22 @@ export interface FulfilmentDeps {
   /** B8 Re-send: enqueue C2 again. Unlike the others, a failure here is the caller's to report. */
   onTicketsResendRequested?: (orderId: string) => Promise<void>;
   ticketCode?: () => string;
+  orderReference?: () => string;
+}
+
+export interface ComplimentaryInput {
+  /** The event the admin issued from — the ticket type must be this event's. */
+  eventId: string;
+  ticketTypeId: string;
+  quantity: number;
+  /** One name for every ticket; each can be renamed on its ticket page. */
+  guestName: string;
+  /** Where the tickets email goes. */
+  guestEmail: string;
+  /** Why — kept on the order and in the audit trail, never shown to the guest. */
+  reason: string;
+  /** The admin's identity for the audit row (their email). */
+  actor: string;
 }
 
 export interface ApproveInput {
@@ -93,14 +120,120 @@ export interface CancelTicketResult {
 export function createFulfilmentService({
   orders,
   tickets,
+  ticketTypes,
   inventory,
   runInTransaction,
   onTicketsIssued,
   onOrderRejected = async () => {},
   onTicketsResendRequested = async () => {},
   ticketCode = generateTicketCode,
+  orderReference = generateOrderReference,
 }: FulfilmentDeps) {
   return {
+    /**
+     * B13: issue free tickets. They take real stock (the same atomic hold
+     * every order takes — Invariant 2), are born `issued` with a ৳0 order
+     * whose whole subtotal is the discount, and are cancelled ticket by
+     * ticket like any other. No sales-window check: comps are the
+     * organizer's call; stock is the only limit.
+     * @throws TicketTypeNotFoundError (unknown, or another event's),
+     *   SoldOutError, InvalidQuantityError, AttendeeNamesMismatchError
+     */
+    async issueComplimentaryTickets(input: ComplimentaryInput): Promise<ApproveResult> {
+      const ticketType = await ticketTypes.findById(input.ticketTypeId);
+      if (!ticketType || ticketType.eventId !== input.eventId) {
+        throw new TicketTypeNotFoundError(input.ticketTypeId);
+      }
+      // The price is the row's (Invariant 5), snapshotted like any order's;
+      // the discount is all of it, so the total is 0 by the one pricing rule.
+      const totals = computeOrderTotals({
+        unitPricePaisa: ticketType.pricePaisa,
+        quantity: input.quantity,
+        discountPaisa: multiplyPaisa(ticketType.pricePaisa, input.quantity),
+      });
+      const names = Array.from({ length: input.quantity }, () => input.guestName);
+
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const result = await runInTransaction(async (tx) => {
+            // Held, then straight to sold: comps compete for the last seats
+            // exactly like paid orders do, through the same conditional UPDATEs.
+            const held = await inventory.hold(ticketType.id, input.quantity, tx);
+            if (!held) throw new SoldOutError(ticketType.id, input.quantity);
+            await inventory.convertToSold(ticketType.id, input.quantity, tx);
+
+            // Born `issued`: there is no payment step to pass through, the
+            // same way createOrder inserts at `pending_payment`.
+            const order = await orders.insert(
+              {
+                reference: orderReference(),
+                eventId: ticketType.eventId,
+                ticketTypeId: ticketType.id,
+                quantity: totals.quantity,
+                unitPricePaisa: totals.unitPricePaisa,
+                subtotalPaisa: totals.subtotalPaisa,
+                discountPaisa: totals.discountPaisa,
+                totalPaisa: totals.totalPaisa,
+                status: 'issued',
+                buyerName: input.guestName,
+                buyerEmail: input.guestEmail,
+                buyerPhone: null,
+                attendeeNames: names,
+                complimentaryReason: input.reason,
+                holdExpiresAt: null,
+              },
+              tx,
+            );
+            if (order.attendeeNames.length !== order.quantity) {
+              throw new AttendeeNamesMismatchError(order.quantity, order.attendeeNames.length);
+            }
+
+            const rows = await tickets.insertMany(
+              order.attendeeNames.map((attendeeName, i) => ({
+                orderId: order.id,
+                ticketTypeId: order.ticketTypeId,
+                eventId: order.eventId,
+                code: ticketCode(),
+                position: i + 1,
+                attendeeName,
+                status: 'issued' as const,
+              })),
+              tx,
+            );
+
+            // One change (nothing → issued), one audit row (Invariant 6).
+            await orders.insertEvent(
+              {
+                orderId: order.id,
+                actor: input.actor,
+                action: 'order.comp_issued',
+                fromStatus: null,
+                toStatus: 'issued',
+                note: `${order.quantity} × ${ticketType.name} · complimentary — ${input.reason} · ${rows
+                  .map((t) => t.code)
+                  .join(', ')}`,
+              },
+              tx,
+            );
+            return { order, tickets: rows };
+          });
+
+          try {
+            await onTicketsIssued(result.order.id);
+          } catch (err: unknown) {
+            logger.error({ orderId: result.order.id, err }, 'fulfilment: onTicketsIssued failed');
+          }
+          return result;
+        } catch (err: unknown) {
+          // Rolled back whole (hold included): a fresh reference and codes are all that is needed.
+          const collision =
+            err instanceof TicketCodeCollisionError || err instanceof OrderReferenceCollisionError;
+          if (collision && attempt < CODE_ATTEMPTS) continue;
+          throw err;
+        }
+      }
+    },
+
     /**
      * Approve a verified payment: the order becomes `issued`, its hold
      * becomes sales, and one ticket per attendee name exists.

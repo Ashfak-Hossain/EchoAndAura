@@ -85,7 +85,7 @@ export function StatusTotals({
         );
       })}
       <div
-        className="flex h-[92px] flex-col justify-between rounded-xl border border-foreground bg-foreground px-4 py-3 text-background"
+        className="flex h-23 flex-col justify-between rounded-xl border border-foreground bg-foreground px-4 py-3 text-background"
         data-testid="revenue-tile"
       >
         <span className="text-[12px] font-medium text-[#c9c3b7]">Revenue</span>
@@ -94,6 +94,7 @@ export function StatusTotals({
         </span>
         <span className="text-[12px] text-[#c9c3b7] tabular">
           {totals.revenueCount} paid {totals.revenueCount === 1 ? 'order' : 'orders'}
+          {totals.compCount > 0 ? ` · ${totals.compCount} comp` : ''}
         </span>
       </div>
     </div>
@@ -125,7 +126,7 @@ function Tile({
       aria-current={active ? 'true' : undefined}
       data-testid={testId}
       className={cn(
-        'flex h-[92px] flex-col justify-between rounded-xl border px-4 py-3 transition-[border-color,box-shadow] hover:border-foreground',
+        'flex h-23 flex-col justify-between rounded-xl border px-4 py-3 transition-[border-color,box-shadow] hover:border-foreground',
         className,
         // Active = a 2px charcoal edge drawn inside the same box, so the tile
         // never grows or shifts its neighbours.

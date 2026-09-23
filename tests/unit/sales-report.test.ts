@@ -130,13 +130,13 @@ describe('periods', () => {
 describe('funnel', () => {
   it('counts placed, submitted and verified; cancelled is its own line, never verified', () => {
     const f = funnel([
-      { status: 'pending_payment', count: 5, totalPaisa: 600_000 },
-      { status: 'pending_verification', count: 9, totalPaisa: 1_080_000 },
-      { status: 'paid', count: 1, totalPaisa: 120_000 },
-      { status: 'issued', count: 213, totalPaisa: 51_740_000 },
-      { status: 'rejected', count: 4, totalPaisa: 480_000 },
-      { status: 'expired', count: 20, totalPaisa: 2_400_000 },
-      { status: 'cancelled', count: 2, totalPaisa: 240_000 },
+      { status: 'pending_payment', count: 5, totalPaisa: 600_000, compCount: 0 },
+      { status: 'pending_verification', count: 9, totalPaisa: 1_080_000, compCount: 0 },
+      { status: 'paid', count: 1, totalPaisa: 120_000, compCount: 0 },
+      { status: 'issued', count: 213, totalPaisa: 51_740_000, compCount: 0 },
+      { status: 'rejected', count: 4, totalPaisa: 480_000, compCount: 0 },
+      { status: 'expired', count: 20, totalPaisa: 2_400_000, compCount: 0 },
+      { status: 'cancelled', count: 2, totalPaisa: 240_000, compCount: 0 },
     ]);
     expect(f.placed).toBe(254);
     expect(f.submitted).toBe(9 + 214 + 4 + 2);

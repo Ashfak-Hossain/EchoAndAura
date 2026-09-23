@@ -27,8 +27,15 @@ export function KpiRow({ report }: { report: SalesReport }) {
   } else if (closes) seatsDetail = 'registration closed';
   else seatsDetail = `${pace7}/day this week`;
 
+  // B13: a fifth card once the event has comps — seats given away, never money.
+  const comp = report.complimentary;
+  const hasComps = comp.orders > 0;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="kpi-row">
+    <div
+      className={cn('grid gap-4 sm:grid-cols-2', hasComps ? 'xl:grid-cols-5' : 'xl:grid-cols-4')}
+      data-testid="kpi-row"
+    >
       <StatCard
         label="Tickets sold"
         value={<CountUp value={seats.sold} className="tabular" data-testid="kpi-sold" />}
@@ -81,6 +88,13 @@ export function KpiRow({ report }: { report: SalesReport }) {
         detail={seatsDetail}
         detailTone={soldOut ? 'success' : 'muted'}
       />
+      {hasComps ? (
+        <StatCard
+          label="Complimentary"
+          value={<CountUp value={comp.tickets} className="tabular" data-testid="kpi-comp" />}
+          detail={`${comp.tickets === 1 ? 'ticket' : 'tickets'} at ${formatBDT(0)} · in Tickets sold, not in Revenue`}
+        />
+      ) : null}
     </div>
   );
 }
