@@ -1,5 +1,20 @@
 import { alias, type PgColumn } from 'drizzle-orm/pg-core';
-import { and, asc, count, eq, inArray, isNotNull, isNull, sql, sum, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  sql,
+  sum,
+  type SQL,
+} from 'drizzle-orm';
 import { db } from '@/db/client';
 import { orderEvents, orders, ticketTypes, tickets } from '@/db/schema';
 import { type OrderStatus, REVENUE_STATUSES } from '@/server/lib/order-status';
@@ -42,6 +57,14 @@ export interface ComplimentaryTotals {
   liveTicketsByType: { ticketTypeId: string; tickets: number }[];
 }
 
+export interface DayTotals {
+  /** Buyer orders placed (any status, comps excluded). */
+  ordersPlaced: number;
+  /** Orders whose payment was approved, and their money. */
+  approvedOrders: number;
+  approvedPaisa: number;
+}
+
 export interface Timings {
   /** Median seconds from order creation to the first trxID submission; null with no sample. */
   toPayMedianS: number | null;
@@ -75,6 +98,14 @@ export interface ReportsRepository {
   orderSizes(eventId: string): Promise<OrderSizeRow[]>;
   countCancelledTickets(eventId: string): Promise<number>;
   complimentary(eventId: string): Promise<ComplimentaryTotals>;
+  /**
+   * B3, across every event, for [from, to): buyer orders placed, and the
+   * money of revenue-status orders approved (the payment.approved row — the
+   * same clock as the daily series). Bounds come from the caller in UTC.
+   */
+  dayTotals(from: Date, to: Date): Promise<DayTotals>;
+  /** B3: pending_payment holds ending in (from, until]. */
+  holdsExpiring(from: Date, until: Date): Promise<number>;
   /** Every event: buyer-order count and sum(total) per status — the cross-event overview. */
   totalsByEventAndStatus(): Promise<EventStatusTotal[]>;
 }
@@ -233,6 +264,48 @@ export const reportsRepository: ReportsRepository = {
       )
       .groupBy(tickets.ticketTypeId);
     return { liveTicketsByType: live };
+  },
+
+  async dayTotals(from, to) {
+    const [placed, approved] = await Promise.all([
+      db
+        .select({ n: count() })
+        .from(orders)
+        .where(and(buyerOrder, gte(orders.createdAt, from), lt(orders.createdAt, to))),
+      db
+        .select({ n: count(), paisa: sum(orders.totalPaisa) })
+        .from(orders)
+        .innerJoin(
+          orderEvents,
+          and(eq(orderEvents.orderId, orders.id), eq(orderEvents.action, 'payment.approved')),
+        )
+        .where(
+          and(
+            inArray(orders.status, REVENUE),
+            gte(orderEvents.createdAt, from),
+            lt(orderEvents.createdAt, to),
+          ),
+        ),
+    ]);
+    return {
+      ordersPlaced: placed[0]?.n ?? 0,
+      approvedOrders: approved[0]?.n ?? 0,
+      approvedPaisa: Number(approved[0]?.paisa ?? 0),
+    };
+  },
+
+  async holdsExpiring(from, until) {
+    const [row] = await db
+      .select({ n: count() })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.status, 'pending_payment'),
+          gt(orders.holdExpiresAt, from),
+          lte(orders.holdExpiresAt, until),
+        ),
+      );
+    return row?.n ?? 0;
   },
 
   async totalsByEventAndStatus() {

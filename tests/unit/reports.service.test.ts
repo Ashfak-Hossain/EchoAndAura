@@ -75,6 +75,8 @@ function deps(over: Partial<ReportsRepository> = {}, hasEvent = true): ReportsDe
     orderSizes: async () => [{ quantity: 2, n: 22 }],
     countCancelledTickets: async () => 2,
     complimentary: async () => ({ liveTicketsByType: [] }),
+    dayTotals: async () => ({ ordersPlaced: 0, approvedOrders: 0, approvedPaisa: 0 }),
+    holdsExpiring: async () => 0,
     totalsByEventAndStatus: async () => byStatus.map((t) => ({ eventId: event.id, ...t })),
     ...over,
   };

@@ -1,23 +1,25 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { differenceInCalendarDays } from 'date-fns';
-import { eventsService, ordersService, ticketTypesService } from '@/server/container';
+import { dashboardService, eventsService, ticketTypesService } from '@/server/container';
+import { quietDay, vsYesterday } from '@/server/services/dashboard.service';
 import { ButtonLink } from '@/components/button-link';
 import { EmptyState } from '@/components/empty-state';
 import { Money } from '@/components/money';
 import { ProgressBar } from '@/components/progress-bar';
 import { StatCard } from '@/components/stat-card';
-import { StatusChip } from '@/components/status-chip';
+import { Chip, StatusChip } from '@/components/status-chip';
 import { ticketTypeSaleState } from '@/lib/status-labels';
-import { formatDhakaLong } from '@/lib/time';
+import { formatDhakaLong, formatRelative } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Dashboard' };
+// Live numbers on every load — "today" moves.
+export const dynamic = 'force-dynamic';
 
 /**
- * B3, laid out as designed. The StatCard row is ordered by urgency. Order and
- * payment numbers (pending verification, orders/revenue today, expiring
- * holds, recent orders) come from Phase 3/4; until then the cards show the
- * design's zero states, which say what is true rather than a bare 0.
+ * B3, laid out as designed. The StatCard row is ordered by urgency; zero
+ * states say what is true rather than a bare 0. Every number is defined as
+ * B9 and B12 define it (dashboard.service.ts), so the three pages agree.
  */
 export default async function AdminDashboardPage() {
   const now = new Date();
@@ -54,14 +56,20 @@ export default async function AdminDashboardPage() {
     ? `${formatDhakaLong(now)} (Dhaka) · ${differenceInCalendarDays(next.startsAt, now)} days to ${next.title}`
     : `${formatDhakaLong(now)} (Dhaka)`;
 
-  // Phase 3/4 wire these to orders; the zero states are the design's own copy.
-  const pendingVerification = await ordersService.countPendingVerification();
-  const ordersToday = 0;
-  const revenueTodayPaisa = 0;
-  const holdsExpiring = 0;
+  // B3's numbers, defined as B9 and B12 define them (dashboard.service.ts).
+  const summary = await dashboardService.summary();
+  const pendingVerification = summary.pendingVerification;
+  const ordersToday = summary.today.ordersPlaced;
+  const revenueTodayPaisa = summary.today.approvedPaisa;
+  const holdsExpiring = summary.holdsExpiringSoon;
+  const quiet = quietDay(summary);
+  const salesDays =
+    next?.registrationOpensAt && next.registrationOpensAt.getTime() <= now.getTime()
+      ? differenceInCalendarDays(now, next.registrationOpensAt)
+      : null;
 
   return (
-    <div className="flex flex-col gap-[18px]">
+    <div className="flex flex-col gap-4.5">
       <p className="text-[15px] text-muted-foreground">{headline}</p>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -82,18 +90,30 @@ export default async function AdminDashboardPage() {
         />
         <StatCard
           label="Orders today"
-          value={ordersToday}
-          detail={ordersToday > 0 ? undefined : 'Quiet so far'}
+          value={<span data-testid="orders-today">{ordersToday}</span>}
+          detail={vsYesterday(ordersToday, summary.yesterday.ordersPlaced)}
         />
         <StatCard
           label="Revenue today"
-          value={<Money paisa={revenueTodayPaisa} />}
+          value={
+            <span data-testid="revenue-today">
+              <Money paisa={revenueTodayPaisa} />
+            </span>
+          }
           detail={revenueTodayPaisa > 0 ? 'Verified payments only' : '—'}
         />
         <StatCard
           label="Holds expiring < 2h"
-          value={holdsExpiring}
-          detail={holdsExpiring > 0 ? 'Review now →' : '—'}
+          value={<span data-testid="holds-expiring">{holdsExpiring}</span>}
+          detail={
+            holdsExpiring > 0 ? (
+              <Link href="/admin/orders?status=pending_payment" className="hover:underline">
+                Review now →
+              </Link>
+            ) : (
+              '—'
+            )
+          }
           detailTone="accent"
         />
       </div>
@@ -125,7 +145,7 @@ export default async function AdminDashboardPage() {
         return (
           <section
             key={event.id}
-            className="flex flex-col gap-[18px] rounded-xl border border-border bg-card p-5 shadow-sm"
+            className="flex flex-col gap-4.5 rounded-xl border border-border bg-card p-5 shadow-sm"
             aria-labelledby={`event-${event.id}`}
           >
             <div className="flex flex-col gap-1.5">
@@ -191,7 +211,9 @@ export default async function AdminDashboardPage() {
               </span>
               <span>
                 <span className="text-muted-foreground">Revenue </span>
-                <span className="text-muted-foreground">—</span>
+                <span className="font-semibold tabular" data-testid="event-revenue">
+                  <Money paisa={summary.revenueByEvent.get(event.id) ?? 0} />
+                </span>
               </span>
               <span>
                 <span className="text-muted-foreground">Held </span>
@@ -208,23 +230,118 @@ export default async function AdminDashboardPage() {
         );
       })}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <section
+        className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+        data-testid="recent-orders"
+      >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-lg">Recent orders</h2>
-          <span className="text-sm font-semibold text-[#a8a29a]">All orders →</span>
+          <Link
+            href="/admin/orders"
+            className="text-sm font-semibold text-accent-ink hover:underline"
+          >
+            All orders →
+          </Link>
         </div>
-        {/* B3 quiet-day empty state, until orders exist (Phase 3). */}
-        <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <span className="flex size-11 items-center justify-center rounded-full border border-[#bfe0cd] bg-success-tint text-success">
-            ✓
-          </span>
-          <p className="text-[17px] font-semibold">Nothing needs you right now</p>
-          <p className="max-w-[400px] text-sm leading-relaxed text-muted-foreground">
-            {capacity > 0
-              ? `${sold} of ${capacity} tickets are gone and no payments are waiting. Orders appear here once registration opens.`
-              : 'Orders appear here once registration opens.'}
-          </p>
-        </div>
+        {quiet || summary.recentOrders.length === 0 ? (
+          // B3 quiet day: say what is true instead of a table of old news.
+          <div
+            className="flex flex-col items-center gap-2 px-6 py-12 text-center"
+            data-testid="quiet-day"
+          >
+            <span className="flex size-11 items-center justify-center rounded-full border border-[#bfe0cd] bg-success-tint text-success">
+              ✓
+            </span>
+            <p className="text-[17px] font-semibold">Nothing needs you right now</p>
+            <p className="max-w-100 text-sm leading-relaxed text-muted-foreground">
+              {salesDays !== null
+                ? `Sales have been running for ${salesDays} ${salesDays === 1 ? 'day' : 'days'}. `
+                : ''}
+              {capacity > 0
+                ? `${sold} of ${capacity} tickets are gone and no payments are waiting.`
+                : 'Orders appear here once registration opens.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <table className="hidden w-full text-sm sm:table">
+              <thead>
+                <tr className="border-b border-border text-left text-[12px] text-muted-foreground">
+                  <th className="px-5 py-2.5 font-medium">Reference</th>
+                  <th className="px-3 py-2.5 font-medium">Buyer</th>
+                  <th className="px-3 py-2.5 font-medium">Ticket type</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Amount</th>
+                  <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.recentOrders.map(({ order, ticketTypeName }) => (
+                  <tr
+                    key={order.id}
+                    className="border-b border-border last:border-0"
+                    data-testid="recent-order"
+                  >
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="font-mono font-medium hover:underline"
+                      >
+                        {order.reference}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="inline-flex items-center gap-2">
+                        {order.buyerName}
+                        {order.complimentaryReason !== null ? (
+                          <Chip tone="warning" size="sm">
+                            Comp
+                          </Chip>
+                        ) : null}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      {ticketTypeName} × {order.quantity}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular">
+                      <Money paisa={order.totalPaisa} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusChip kind="order" status={order.status} />
+                    </td>
+                    <td className="px-5 py-3 text-right whitespace-nowrap text-muted-foreground tabular">
+                      {formatRelative(order.createdAt, now)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Phone: one stacked row per order. */}
+            <ul className="flex flex-col divide-y divide-border sm:hidden">
+              {summary.recentOrders.map(({ order, ticketTypeName }) => (
+                <li key={order.id}>
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="flex flex-col gap-1.5 px-5 py-3.5"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="font-mono font-semibold">{order.reference}</span>
+                      <StatusChip kind="order" status={order.status} />
+                    </span>
+                    <span className="flex items-baseline justify-between gap-3 text-[13px] text-muted-foreground">
+                      <span>
+                        {order.buyerName} · {ticketTypeName} × {order.quantity}
+                      </span>
+                      <span className="tabular">
+                        <Money paisa={order.totalPaisa} /> · {formatRelative(order.createdAt, now)}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
     </div>
   );

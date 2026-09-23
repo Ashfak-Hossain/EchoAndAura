@@ -23,6 +23,7 @@ import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
 import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createReportsService } from '@/server/services/reports.service';
+import { createDashboardService } from '@/server/services/dashboard.service';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
@@ -87,6 +88,12 @@ export const ticketsService = createTicketsService({
 export const reportsService = createReportsService({
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
+  orders: ordersRepository,
+  reports: reportsRepository,
+});
+
+// B3: the admin dashboard's live numbers (read-only).
+export const dashboardService = createDashboardService({
   orders: ordersRepository,
   reports: reportsRepository,
 });
