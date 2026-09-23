@@ -19,9 +19,32 @@ pnpm install
 cp .env.example .env            # then fill in real values
 docker compose up -d            # Postgres 17 + Redis 7
 pnpm db:migrate                 # apply migrations
-pnpm db:seed                    # optional sample data
+pnpm admin:create               # the admin login
+pnpm db:seed                    # realistic demo data (see "Demo data" below)
 pnpm dev                        # http://localhost:3000
 ```
+
+## Demo data
+
+`pnpm db:seed` builds five Dhaka events — one open with ~60 orders, one
+closing soon with a **private venue**, one sold out, one not open yet, one
+past and archived — plus ~155 orders in every state (issued, awaiting
+verification, awaiting payment with one hold ending within 2 hours,
+rejected, expired, a cancelled ticket, comps) and the promo codes DHAKA15,
+VIP500 and EARLYFRIENDS. Dates are relative to today, so it never goes
+stale; covers are generated (sharp). Everything goes through the real
+services, so every counter and audit row is genuine; only the timestamps
+are backdated so reports show weeks of history. Buyers are `@example.com`
+and email hooks are off — nothing is ever sent.
+
+- `pnpm db:seed` — adds whatever is missing; an event already seeded is
+  skipped with its orders.
+- `pnpm db:seed --reset` — first **empties** events, ticket types, orders,
+  tickets and promo codes (users, sessions and settings stay). Refused
+  unless the database is local and not `_e2e`, and `APP_ENV`/`NODE_ENV`
+  are not production or staging (`scripts/seed/guard.ts`).
+- Settings are written only when none are saved yet.
+- Needs Postgres and MinIO running (`docker compose up -d`).
 
 Run the background worker (email, expiry jobs) in a second terminal:
 
@@ -53,7 +76,7 @@ obtain each.
 | `pnpm db:generate`         | Generate a Drizzle migration from the schema                                                                                                                              |
 | `pnpm db:migrate`          | Apply migrations                                                                                                                                                          |
 | `pnpm db:studio`           | Drizzle Studio                                                                                                                                                            |
-| `pnpm db:seed`             | Seed sample data                                                                                                                                                          |
+| `pnpm db:seed [--reset]`   | Realistic demo data through the real services; `--reset` empties events/orders first (dev database only) — see "Demo data"                                                |
 | `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis                                                                                     |
 | `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                                                                                                    |
 | `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first                                                                                           |
