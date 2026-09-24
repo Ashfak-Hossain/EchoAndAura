@@ -51,7 +51,7 @@ export function PolicyPage({
                   <a
                     href={`#${t.id}`}
                     aria-current={i === 0 ? 'true' : 'false'}
-                    className="flex min-h-10 items-start gap-3 rounded-r-sm border-l-2 border-transparent px-3 py-2.5 text-sm leading-[1.45] text-muted-foreground hover:bg-secondary hover:text-foreground aria-[current=true]:border-foreground aria-[current=true]:font-semibold aria-[current=true]:text-foreground"
+                    className="flex min-h-10 items-start gap-3 rounded-r-sm border-l-2 border-transparent px-3 py-2.5 text-sm leading-[1.45] text-muted-foreground hover:bg-secondary hover:text-foreground aria-current:border-foreground aria-current:font-semibold aria-current:text-foreground"
                   >
                     <span className="w-4 shrink-0 font-normal text-muted-foreground tabular">
                       {t.n}
@@ -225,7 +225,7 @@ export function RelatedPolicies({
               <span className="font-heading text-lg leading-[1.3] font-semibold">
                 {HELP_PAGES[k].title}
               </span>
-              <span className="text-sm leading-[1.5] text-muted-foreground">
+              <span className="text-sm leading-normal text-muted-foreground">
                 {HELP_PAGES[k].description}
               </span>
               <span className="text-sm font-semibold text-accent-ink">
