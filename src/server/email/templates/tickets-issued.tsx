@@ -33,8 +33,8 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
     <EmailLayout
       preview={
         comp
-          ? `Complimentary ${live.length === 1 ? 'ticket' : 'tickets'}. Show the name and code at the door.`
-          : 'Payment confirmed. Show the name and code at the door.'
+          ? `Complimentary ${live.length === 1 ? 'ticket' : 'tickets'}. Show the ticket QR at the door.`
+          : 'Payment confirmed. Show the ticket QR at the door.'
       }
       sender={v}
     >
@@ -44,8 +44,8 @@ export function TicketsIssuedEmail({ v }: { v: EmailView }) {
           ? `Complimentary ${live.length === 1 ? 'ticket' : 'tickets'} from ${v.organizerName}, issued on`
           : 'Payment confirmed on'}{' '}
         {formatDhakaLong(v.at)} (Dhaka) for order{' '}
-        <span style={styles.mono}>{v.order.reference}</span>. Check-in is a printed list — bring the
-        name, and the code if you have it.
+        <span style={styles.mono}>{v.order.reference}</span>. At the door, open your ticket and show
+        its QR to be scanned — or just give the code below. Each ticket admits one person, once.
       </Text>
       <Text style={{ ...styles.p, fontWeight: 700, margin: '0 0 4px' }}>{v.event.title}</Text>
       <Text style={styles.small}>

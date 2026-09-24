@@ -24,6 +24,8 @@ import { createOrdersService } from '@/server/services/orders.service';
 import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createReportsService } from '@/server/services/reports.service';
 import { createDashboardService } from '@/server/services/dashboard.service';
+import { createDoorService } from '@/server/services/door.service';
+import { doorRepository } from '@/server/repositories/door.repository';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
@@ -103,6 +105,15 @@ export const promoCodesService = createPromoCodesService({
   promoCodes: promoCodesRepository,
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+// ADR-030: gate passes and check-in at the door.
+export const doorService = createDoorService({
+  door: doorRepository,
+  tickets: ticketsRepository,
+  orders: ordersRepository,
+  events: eventsRepository,
   runInTransaction: (fn) => db.transaction(fn),
 });
 

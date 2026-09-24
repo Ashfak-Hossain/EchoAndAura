@@ -25,8 +25,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-// A5: "Admit one". The QR is the code and nothing else; the code and the
-// name stay readable beside it because the door works from a printed list.
+// A5: "Admit one". The QR is the code and nothing else — the gate scanner
+// looks it up (ADR-030); the code and the name stay readable beside it
+// because a dead phone, a typed code or the printed backup list must work too.
 export default async function TicketPage({ params }: Props) {
   const { code } = await params;
   const view = await loadTicket(code);
@@ -105,7 +106,7 @@ export default async function TicketPage({ params }: Props) {
           <p className="text-center text-[13px] leading-snug text-muted-foreground">
             {cancelled
               ? 'This ticket will not be admitted.'
-              : 'Show this at the door. Staff find you by name and code on the printed list — the QR is just the code.'}
+              : 'Show this QR at the door — it is scanned and admits one person, once. No signal or a flat battery? Your name and code work too.'}
           </p>
         </div>
 

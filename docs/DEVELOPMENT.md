@@ -40,7 +40,8 @@ and email hooks are off — nothing is ever sent.
 - `pnpm db:seed` — adds whatever is missing; an event already seeded is
   skipped with its orders.
 - `pnpm db:seed --reset` — first **empties** events, ticket types, orders,
-  tickets and promo codes (users, sessions and settings stay). Refused
+  tickets, promo codes, gate passes and door scans (users, sessions and
+  settings stay). Refused
   unless the database is local and not `_e2e`, and `APP_ENV`/`NODE_ENV`
   are not production or staging (`scripts/seed/guard.ts`).
 - Settings are written only when none are saved yet.
@@ -109,6 +110,39 @@ obtain each.
 
 Every service gets unit tests; money and state-machine functions must cover the
 failure path, not just the happy path.
+
+### The gate scanner on a real phone
+
+The door page (`/door`, [ADR-030](DECISIONS.md)) needs the camera, and
+phones only allow it on HTTPS with a real certificate. `next dev
+--experimental-https` is not enough: its certificate is for `localhost`
+only, and the phone reaches your laptop by another name. Use a Cloudflare
+quick tunnel instead (free, no account):
+
+1. `brew install cloudflared`, then with `pnpm dev` running:
+   `cloudflared tunnel --url http://localhost:3000`. It prints an address
+   like `https://<random>.trycloudflare.com`.
+2. For that session, set `SITE_URL` and `BETTER_AUTH_URL` in `.env` to the
+   tunnel address and restart `pnpm dev` (gate-pass QR codes and admin
+   sign-in use them). Put them back afterwards.
+   `*.trycloudflare.com` is already in `allowedDevOrigins` (dev only).
+3. On the laptop, open the tunnel address → admin → an event → Check-in
+   list → **New gate pass**. Scan the pass QR with the phone and open it in
+   Safari or Chrome (not inside Messenger).
+4. Check on an Android phone (Chrome) and an iPhone (Safari): a ticket QR
+   shown on another screen decodes; the torch toggles; locking the phone
+   and coming back shows **Tap to resume**; the iPhone still beeps with
+   the ringer on silent.
+
+Before doors open (4 h before the start) a pass is in **practice** (blue
+banner): scans answer but check nothing in, so testing with real tickets at
+home is safe. Every seeded event is days away, so steps 1–4 all run in
+practice. To see the real answers — green ADMIT, amber "at this gate", red
+ALREADY IN from a second phone, name search with the phone digits, Undo —
+open one event's **Details** tab and set **Starts at** to an hour ago and
+**Registration closes** to before that (a started event never becomes the
+home-page hero). Put it back afterwards, or re-seed with
+`pnpm db:seed --reset`.
 
 ## The quality gate
 

@@ -32,8 +32,8 @@ export const REPLY_PROMISE = 'replies within a day';
 
 /** "Last updated" per policy page — bump when the wording changes. */
 export const LAST_UPDATED = {
-  about: new Date('2026-09-20T00:00:00+06:00'),
-  terms: new Date('2026-09-20T00:00:00+06:00'),
-  privacy: new Date('2026-09-20T00:00:00+06:00'),
+  about: new Date('2026-09-24T00:00:00+06:00'),
+  terms: new Date('2026-09-24T00:00:00+06:00'),
+  privacy: new Date('2026-09-24T00:00:00+06:00'),
   refund: new Date('2026-09-20T00:00:00+06:00'),
 } as const;

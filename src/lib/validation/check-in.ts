@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
   CHECK_IN_DEFAULT_SORT,
+  CHECK_IN_SHOW,
   CHECK_IN_SORT_COLUMNS,
+  type CheckInShow,
   type CheckInSortColumn,
 } from '@/server/lib/check-in';
 import { parseSort, type SortState } from '@/lib/table-sort';
@@ -20,6 +22,13 @@ export const checkInQuerySchema = z.object({
     .optional()
     .transform((v): SortState<CheckInSortColumn> =>
       parseSort(v, CHECK_IN_SORT_COLUMNS, CHECK_IN_DEFAULT_SORT),
+    ),
+  // ADR-030 — lenient like the rest: anything unknown means "all".
+  show: z
+    .string()
+    .optional()
+    .transform((v): CheckInShow =>
+      (CHECK_IN_SHOW as readonly string[]).includes(v ?? '') ? (v as CheckInShow) : 'all',
     ),
 });
 

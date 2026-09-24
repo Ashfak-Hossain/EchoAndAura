@@ -133,10 +133,7 @@ export default async function PublicEventPage({ params }: Props) {
       {/* Title band: the cover as a darkened backdrop on desktop, on top on mobile */}
       <section className={cn('relative overflow-hidden bg-[#14120f] text-background')}>
         <div
-          className={cn(
-            'relative aspect-16/10 w-full bg-[#1a2a20] lg:hidden',
-            past && 'grayscale',
-          )}
+          className={cn('relative aspect-16/10 w-full bg-[#1a2a20] lg:hidden', past && 'grayscale')}
         >
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -250,9 +247,9 @@ export default async function PublicEventPage({ params }: Props) {
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
                 Entry
               </dt>
-              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">Name + code</dd>
+              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">QR ticket</dd>
               <dd className="hidden text-[13px] text-muted-foreground lg:block">
-                Printed door list, no scanner
+                Scanned at the door · name + code works too
               </dd>
             </div>
           </dl>

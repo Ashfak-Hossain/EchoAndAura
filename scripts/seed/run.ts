@@ -89,7 +89,7 @@ async function main(): Promise<void> {
       .map((r) => r.key)
       .filter((k): k is string => k !== null);
     await db.execute(
-      sql`TRUNCATE order_events, tickets, orders, promo_code_ticket_types, promo_codes, ticket_types, events`,
+      sql`TRUNCATE door_scans, door_passes, order_events, tickets, orders, promo_code_ticket_types, promo_codes, ticket_types, events`,
     );
     // After the rows are gone; an orphaned object is harmless, a dangling key is not.
     let removed = 0;

@@ -101,3 +101,7 @@ export function sortCheckInRows<T extends CheckInEntry>(
       collator.compare(a.code, b.code),
   );
 }
+
+/** ADR-030: which issued tickets the list shows — everyone, only arrivals, or only those not yet in. */
+export const CHECK_IN_SHOW = ['all', 'in', 'out'] as const;
+export type CheckInShow = (typeof CHECK_IN_SHOW)[number];

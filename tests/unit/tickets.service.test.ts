@@ -212,6 +212,28 @@ describe('ticketsService.checkInList (B11)', () => {
     expect(none.total).toBe(2);
   });
 
+  it('counts who is checked in and filters to In or Not yet (ADR-030), with the search', async () => {
+    const { db, svc, tickets } = await setup();
+    Object.assign(db.state.tickets[1]!, {
+      checkedInAt: NOW,
+      checkedInBy: 'Gate A',
+      checkedInScanId: 'scan-1',
+    });
+    const all = await svc.checkInList('ev-1', { q: '', sort: byName });
+    expect(all).toMatchObject({ total: 2, checkedIn: 1 });
+    expect(all.rows).toHaveLength(2);
+
+    const inside = await svc.checkInList('ev-1', { q: '', sort: byName, show: 'in' });
+    expect(inside.rows.map((r) => r.id)).toEqual([tickets[1]!.id]);
+    expect(inside).toMatchObject({ total: 2, checkedIn: 1 }); // counts are never filtered
+
+    const notYet = await svc.checkInList('ev-1', { q: '', sort: byName, show: 'out' });
+    expect(notYet.rows.map((r) => r.id)).toEqual([tickets[0]!.id]);
+
+    const both = await svc.checkInList('ev-1', { q: 'nusrat', sort: byName, show: 'in' });
+    expect(both.rows).toEqual([]);
+  });
+
   it('sorts by the requested column and direction', async () => {
     const { svc } = await setup();
     const desc = await svc.checkInList('ev-1', { q: '', sort: { column: 'name', desc: true } });

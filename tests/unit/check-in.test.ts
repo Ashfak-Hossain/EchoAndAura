@@ -150,7 +150,15 @@ describe('checkInQuerySchema', () => {
     const parsed = checkInQuerySchema.parse({ q: `  ${'x'.repeat(100)}  `, sort: 'nope:up' });
     expect(parsed.q).toHaveLength(80);
     expect(parsed.sort).toEqual(CHECK_IN_DEFAULT_SORT);
-    expect(checkInQuerySchema.parse({})).toEqual({ q: '', sort: CHECK_IN_DEFAULT_SORT });
+    expect(checkInQuerySchema.parse({})).toEqual({
+      q: '',
+      sort: CHECK_IN_DEFAULT_SORT,
+      show: 'all',
+    });
+    // ADR-030 filter: lenient like the rest — unknown means everyone.
+    expect(checkInQuerySchema.parse({ show: 'in' }).show).toBe('in');
+    expect(checkInQuerySchema.parse({ show: 'out' }).show).toBe('out');
+    expect(checkInQuerySchema.parse({ show: 'IN; drop' }).show).toBe('all');
     expect(checkInQuerySchema.parse({ sort: 'code:desc' }).sort).toEqual({
       column: 'code',
       desc: true,

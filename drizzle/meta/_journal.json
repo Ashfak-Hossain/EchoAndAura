@@ -127,6 +127,20 @@
       "when": 1790177725592,
       "tag": "0017_wet_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790227048754,
+      "tag": "0018_modern_ultimo",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790270878890,
+      "tag": "0019_bizarre_talos",
+      "breakpoints": true
     }
   ]
 }

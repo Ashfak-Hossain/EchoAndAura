@@ -28,7 +28,9 @@ and this file is stale.
 - Promo codes: percentage or fixed, unlimited uses, restrictable by ticket type
 - Admin can cancel a ticket (releases inventory); refunds happen outside the
   system
-- Check-in via printed/exported list — no QR scanning at the gate
+- Check-in at the gate: door phones scan the ticket QR with a per-gate pass
+  (first scan wins, name search as a fallback); the printed/exported list is
+  the backup ([ADR-030](DECISIONS.md)). Offline scanning is the next slice
 
 ## Explicit out-of-scope
 
@@ -39,7 +41,6 @@ scope** for the MVP.
   [DECISIONS.md — ADR-001](DECISIONS.md))
 - Custom field builder per event
 - Bangla localisation
-- QR scanner PWA
 - Waitlist
 - Reminder emails
 

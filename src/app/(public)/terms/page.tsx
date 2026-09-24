@@ -39,8 +39,10 @@ export default async function TermsPage() {
           Registration asks for one name — yours. Every ticket in the order starts with it. Tickets
           are transferable: the name on each ticket can be changed on its ticket page until
           registration closes, {REGISTRATION_CLOSES_DAYS_BEFORE} days before the event. After that
-          the door list is printed and the names are final. Admission at the door is by name and
-          ticket code against that list; there is no scanning.
+          the names are final. At the door the QR on your ticket is scanned (staff can also type the
+          ticket code or find your name). Each ticket admits one person, once: the first scan wins,
+          and a copy of a ticket that has already been scanned is turned away. A printed list is
+          kept as the backup.
         </p>
 
         <h2>3. Paying by bKash</h2>

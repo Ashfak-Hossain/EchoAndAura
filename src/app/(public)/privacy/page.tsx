@@ -37,6 +37,10 @@ export default async function PrivacyPage() {
             with the time they were made.
           </li>
           <li>
+            <strong>At the door:</strong> when, and at which entrance, each ticket was checked in,
+            and a log of every scan made at the door.
+          </li>
+          <li>
             <strong>If you sign in:</strong> your email address and a session cookie. There is no
             password.
           </li>
@@ -45,16 +49,19 @@ export default async function PrivacyPage() {
         <h2>Why</h2>
         <p>
           To hold and issue your tickets, to match your payment against the bKash statement, to
-          email you your order page and tickets, to print the door list, and to reach you if the
-          event changes. Your mobile number is also how{' '}
+          email you your order page and tickets, to check tickets in at the door (and print the
+          backup list), and to reach you if the event changes. Your mobile number is also how{' '}
           <Link href="/orders/find">Find my order</Link> proves an order is yours.
         </p>
 
         <h2>Who sees it</h2>
         <p>
           The organizer, when checking payments, answering your messages and running the door. Door
-          staff see the printed list: names and ticket codes only. Nobody else, and nothing is sold
-          or shared for marketing.
+          staff scan tickets with a phone that shows the attendee&apos;s name and ticket type. When
+          they look someone up by name instead, they ask for the last 3 digits of the mobile number
+          that bought the ticket and the system checks them — staff never see your number. The
+          printed backup list shows names and ticket codes. Nobody else, and nothing is sold or
+          shared for marketing.
         </p>
 
         <h2>Where it lives</h2>
@@ -79,9 +86,10 @@ export default async function PrivacyPage() {
 
         <h2>How long we keep it</h2>
         <p>
-          Order records are kept after the event so that questions about payments can be answered
-          and the accounts reconciled. Ask, and we will delete the personal details on an order once
-          the event has passed and no payment question is open.
+          Order records — with the check-in record and the log of door scans — are kept after the
+          event so that questions about payments and entry can be answered and the accounts
+          reconciled. Ask, and we will delete the personal details on an order once the event has
+          passed and no payment question is open.
         </p>
 
         <h2>Your rights</h2>

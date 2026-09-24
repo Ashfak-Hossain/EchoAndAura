@@ -6,6 +6,7 @@ import {
   OrderNotFoundError,
   OrderStatusConflictError,
   TicketCancelledError,
+  TicketCheckedInError,
   TicketCodeCollisionError,
   TicketNotFoundError,
   TrxIdChangedError,
@@ -345,6 +346,27 @@ describe('fulfilmentService.cancelTicket', () => {
 
     expect(db.state.types.get('tt-1')?.quantitySold).toBe(2); // released exactly once
     expect(db.state.events).toHaveLength(events + 1);
+  });
+
+  // ADR-030: a ticket used at the gate is a seat someone sat in — undo the check-in first.
+  it('refuses a ticket already checked in at the gate, saying when and where', async () => {
+    const { db, fulfilment, order, tickets } = await issued();
+    const events = db.state.events.length;
+    const at = new Date('2026-10-01T14:51:00Z');
+    Object.assign(db.state.tickets[0]!, {
+      checkedInAt: at,
+      checkedInBy: 'Gate A',
+      checkedInScanId: 'scan-1',
+    });
+
+    const err = await fulfilment
+      .cancelTicket(tickets[0]!.id, input(order.id))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TicketCheckedInError);
+    expect(err).toMatchObject({ code: tickets[0]!.code, checkedInAt: at, checkedInBy: 'Gate A' });
+    expect(db.state.tickets[0]!.status).toBe('issued');
+    expect(db.state.types.get('tt-1')?.quantitySold).toBe(3);
+    expect(db.state.events).toHaveLength(events);
   });
 
   // The conditional UPDATE saw `issued` on read but lost the race by the

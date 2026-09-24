@@ -2,20 +2,24 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
-import { fulfilmentService } from '@/server/container';
+import { doorService, fulfilmentService } from '@/server/container';
 import {
   AttendeeNamesMismatchError,
+  CheckInUndoRefusedError,
   InvalidRejectionReasonError,
   InventoryStateError,
   OrderNotFoundError,
   OrderStatusConflictError,
   TicketCancelledError,
+  TicketCheckedInError,
   TicketCodeCollisionError,
   TicketNotFoundError,
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
 import { requireAdmin } from '@/lib/session';
+import { formatDhakaClock } from '@/lib/time';
+import { checkInUndoFormSchema } from '@/lib/validation/door';
 import { cancelTicketFormSchema, rejectFormSchema } from '@/lib/validation/verification';
 
 export interface VerificationActionState {
@@ -111,7 +115,46 @@ export async function cancelTicketAction(
   redirect(`/admin/orders/${orderId}?${params.toString()}`);
 }
 
+/**
+ * ADR-030 "Undo check-in" (B8): the ticket can be scanned in again. Thin:
+ * uuid guards → Zod → session → door.undoCheckInAsAdmin → back to the order.
+ * `expectedScanId` is the check-in the page showed (compare-and-swap).
+ */
+export async function undoCheckInAction(
+  orderId: string,
+  ticketId: string,
+  expectedScanId: string,
+  _prev: VerificationActionState,
+  formData: FormData,
+): Promise<VerificationActionState> {
+  if ([orderId, ticketId, expectedScanId].some((id) => !z.uuid().safeParse(id).success)) {
+    notFound();
+  }
+  const parsed = checkInUndoFormSchema.safeParse({ reason: formData.get('reason') ?? '' });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+
+  const who = await actor();
+  let result;
+  try {
+    result = await doorService.undoCheckInAsAdmin(ticketId, {
+      orderId,
+      expectedScanId,
+      actor: who,
+      reason: parsed.data.reason,
+    });
+  } catch (err: unknown) {
+    return { error: toMessage(err) };
+  }
+  redirect(`/admin/orders/${orderId}?${new URLSearchParams({ undone: result.code }).toString()}`);
+}
+
 function toMessage(err: unknown): string {
+  if (err instanceof TicketCheckedInError) {
+    return `Already admitted at ${formatDhakaClock(err.checkedInAt)} · ${err.checkedInBy} — undo the check-in first.`;
+  }
+  if (err instanceof CheckInUndoRefusedError) {
+    return 'This check-in changed since you opened the page (undone, or scanned again) — reload to see the current state.';
+  }
   if (err instanceof OrderStatusConflictError) {
     return `This order is already ${err.status.replace('_', ' ')} — reload to see its current state.`;
   }

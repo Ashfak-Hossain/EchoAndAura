@@ -311,3 +311,58 @@ export class PromoCodeInUseError extends DomainError {
     super(`Promo code ${promoCodeId} has orders and cannot be deleted`);
   }
 }
+
+/** ADR-030: someone who walked in holds this ticket — undo the check-in first. */
+export class TicketCheckedInError extends DomainError {
+  constructor(
+    public readonly code: string,
+    public readonly checkedInAt: Date,
+    public readonly checkedInBy: string,
+  ) {
+    super(`Ticket ${code} was checked in at ${checkedInBy}`);
+  }
+}
+
+export class DoorPassNotFoundError extends DomainError {
+  constructor(public readonly passId: string) {
+    super(`Gate pass ${passId} not found`);
+  }
+}
+
+/** A pass is only made for a published event whose door window has not ended. */
+export class DoorPassNotAllowedError extends DomainError {
+  constructor(public readonly reason: 'not_published' | 'window_ended') {
+    super(`Gate pass cannot be created (${reason})`);
+  }
+}
+
+/** Repository-level: the random pass code collided; the service retries. */
+export class DoorPassCodeCollisionError extends DomainError {
+  constructor() {
+    super('Gate pass code collision');
+  }
+}
+
+/** Repository-level: this scan id is already logged (a retry racing itself). */
+export class DoorScanIdTakenError extends DomainError {
+  constructor(public readonly scanId: string) {
+    super(`Scan ${scanId} already recorded`);
+  }
+}
+
+/** An undo the door or the admin may not do (too late, not theirs, not checked in). */
+export class CheckInUndoRefusedError extends DomainError {
+  constructor(public readonly reason: 'not_found' | 'not_yours' | 'too_late' | 'not_checked_in') {
+    super(`Check-in undo refused (${reason})`);
+  }
+}
+
+/**
+ * The pass was revoked while this request was in flight: the scan
+ * transaction locks the pass row first and found it revoked (ADR-030).
+ */
+export class DoorPassRevokedError extends DomainError {
+  constructor(public readonly passId: string) {
+    super(`Gate pass ${passId} was revoked`);
+  }
+}

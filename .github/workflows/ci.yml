@@ -53,6 +53,7 @@ jobs:
 
       - run: pnpm verify
 
-      # THE most important test in the repo (CLAUDE.md § Testing) runs here.
+      # THE most important test in the repo (CLAUDE.md § Testing) runs here,
+      # with the gate check-in race tests (ADR-030) — both need only Postgres.
       - run: pnpm db:migrate
       - run: pnpm test:integration:db

@@ -1,6 +1,7 @@
 import type { DbExecutor } from '@/db/executor';
 import { normaliseAttendeeName } from '@/server/lib/attendee-name';
 import {
+  type CheckInShow,
   type CheckInSortColumn,
   filterCheckInRows,
   normaliseCheckInQuery,
@@ -69,6 +70,8 @@ export interface CheckInListInput {
   /** Free text: name substring, ticket code or order reference. */
   q: string;
   sort: SortState<CheckInSortColumn>;
+  /** ADR-030: all issued tickets, only the checked-in, or only those not yet in. */
+  show?: CheckInShow;
 }
 
 export interface CheckInList {
@@ -79,6 +82,8 @@ export interface CheckInList {
   total: number;
   /** Cancelled tickets — never listed, only counted, so the footer can say so. */
   cancelled: number;
+  /** ADR-030: issued tickets checked in at a gate ("212 of 410"), from the same rows. */
+  checkedIn: number;
 }
 
 /** Codes are typed and read aloud: normalise before lookup. */
@@ -126,12 +131,20 @@ export function createTicketsService({
           orderId: row.ticket.orderId,
         });
       }
-      const matched = filterCheckInRows(issued, normaliseCheckInQuery(input.q));
+      const show = input.show ?? 'all';
+      const matched = filterCheckInRows(issued, normaliseCheckInQuery(input.q)).filter((r) =>
+        show === 'all'
+          ? true
+          : show === 'in'
+            ? r.ticket.checkedInAt !== null
+            : r.ticket.checkedInAt === null,
+      );
       return {
         event,
         rows: sortCheckInRows(matched, input.sort),
         total: issued.length,
         cancelled,
+        checkedIn: issued.filter((r) => r.ticket.checkedInAt !== null).length,
       };
     },
 

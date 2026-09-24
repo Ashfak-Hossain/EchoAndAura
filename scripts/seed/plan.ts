@@ -211,7 +211,7 @@ export function buildSeedPlan(now: Date): SeedPlan {
     slug: 'echo-aura-live-dhaka',
     title: 'Echo & Aura Live — Dhaka',
     description:
-      '<p>Four acts, one room, no support slots. The biggest night we have put on: a full live set from Echo &amp; Aura with the string section, plus three of our favourite Dhaka bands opening the evening.</p><h2>The night</h2><ul><li>Doors 7:00 pm, first act 7:45 pm</li><li>Standing floor; VIP gets the balcony and a drink</li><li>Food stalls in the lobby</li></ul><p>Tickets are named. Bring the name on your ticket — the door works from a printed list.</p>',
+      '<p>Four acts, one room, no support slots. The biggest night we have put on: a full live set from Echo &amp; Aura with the string section, plus three of our favourite Dhaka bands opening the evening.</p><h2>The night</h2><ul><li>Doors 7:00 pm, first act 7:45 pm</li><li>Standing floor; VIP gets the balcony and a drink</li><li>Food stalls in the lobby</li></ul><p>Tickets are named. Show your ticket QR at the door — your name and code work too.</p>',
     venue: 'ICCB Hall 4, Bashundhara, Dhaka',
     venueHidden: false,
     ...schedule(12),

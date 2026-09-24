@@ -22,6 +22,9 @@ erDiagram
     promo_codes |o--o{ orders : "applied to"
     orders ||--o{ order_events : "audited by"
     orders ||--o{ tickets : issues
+    events ||--o{ door_passes : "gates of"
+    door_passes ||--o{ door_scans : logs
+    tickets |o--o{ door_scans : "scanned as"
 
     events {
         uuid id PK
@@ -86,6 +89,25 @@ erDiagram
         text code UK
         text attendee_name
         ticket_status status
+        timestamptz checked_in_at
+        text checked_in_by
+        uuid checked_in_scan_id
+    }
+    door_passes {
+        uuid id PK
+        uuid event_id FK
+        text label
+        text code UK
+        timestamptz revoked_at
+    }
+    door_scans {
+        uuid id PK
+        uuid scan_id UK
+        uuid pass_id FK
+        uuid ticket_id FK
+        door_scan_result result
+        door_scan_method method
+        timestamptz received_at
     }
 ```
 

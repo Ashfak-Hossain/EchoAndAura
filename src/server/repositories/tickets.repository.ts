@@ -1,4 +1,4 @@
-import { and, asc, count, eq, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
 import { orders, ticketTypes, tickets } from '@/db/schema';
@@ -35,10 +35,28 @@ export interface TicketsRepository {
   findByIdForUpdate(id: string, tx: DbExecutor): Promise<TicketRecord | null>;
   /**
    * THE ticket status write: `issued → cancelled` only while still
-   * `issued`. Null when it is not — the caller lost a race and must not
-   * release a seat for it.
+   * `issued` and not checked in (ADR-030). Null when it is not — the caller
+   * lost a race and must not release a seat for it.
    */
   cancel(id: string, tx?: DbExecutor): Promise<TicketRecord | null>;
+  /**
+   * ADR-030 gate check-in, one conditional UPDATE: only an `issued` ticket
+   * not yet checked in. Null when it is not — exactly one of any number of
+   * concurrent scans wins, the way inventory holds do (Invariant 2).
+   */
+  checkIn(
+    id: string,
+    by: { gate: string; scanId: string },
+    tx: DbExecutor,
+  ): Promise<TicketRecord | null>;
+  /**
+   * The audited reverse, as a compare-and-swap: only while `scanId` is
+   * still the scan that checked the ticket in. Every undo names the check-in
+   * it means (the door's own admit, the one the admin was shown, the ones a
+   * revoked pass made), so it can never clear a later, legitimate one. Null
+   * when the ticket is not (or no longer) checked in by that scan.
+   */
+  undoCheckIn(id: string, tx: DbExecutor, scanId: string): Promise<TicketRecord | null>;
   /**
    * Live tickets left on the order — zero means the order itself is over.
    * Transaction-only: it must see the cancel that just happened in `tx`.
@@ -102,7 +120,36 @@ export const ticketsRepository: TicketsRepository = {
     const [row] = await tx
       .update(tickets)
       .set({ status: 'cancelled', updatedAt: sql`now()` })
-      .where(and(eq(tickets.id, id), eq(tickets.status, 'issued')))
+      .where(and(eq(tickets.id, id), eq(tickets.status, 'issued'), isNull(tickets.checkedInAt)))
+      .returning();
+    return row ?? null;
+  },
+
+  async checkIn(id, { gate, scanId }, tx) {
+    const [row] = await tx
+      .update(tickets)
+      .set({
+        checkedInAt: sql`clock_timestamp()`,
+        checkedInBy: gate,
+        checkedInScanId: scanId,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(tickets.id, id), eq(tickets.status, 'issued'), isNull(tickets.checkedInAt)))
+      .returning();
+    return row ?? null;
+  },
+
+  async undoCheckIn(id, tx, scanId) {
+    const [row] = await tx
+      .update(tickets)
+      .set({ checkedInAt: null, checkedInBy: null, checkedInScanId: null, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(tickets.id, id),
+          isNotNull(tickets.checkedInAt),
+          eq(tickets.checkedInScanId, scanId),
+        ),
+      )
       .returning();
     return row ?? null;
   },

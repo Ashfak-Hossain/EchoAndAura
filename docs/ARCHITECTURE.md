@@ -120,7 +120,12 @@ generated — never hand-edited):
 - **promo_codes** — percentage or fixed, optionally restricted to specific
   `ticket_types`
 - **tickets** — issued on fulfilment; named and transferable, attendee name
-  editable until registration closes
+  editable until registration closes; `checked_in_at / _by / _scan_id` once
+  scanned at a gate (ADR-030)
+- **door_passes** — one per event gate: a 12-symbol code, revocable; its
+  working window is derived from the event's dates, never stored
+- **door_scans** — append-only log of every answered gate scan, keyed by the
+  phone's `scan_id` (UNIQUE) so a retried request replays its answer
 
 ## Directory-structure rationale
 

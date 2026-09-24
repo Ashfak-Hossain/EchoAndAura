@@ -321,7 +321,8 @@ export const tickets = pgTable(
     eventId: uuid('event_id')
       .notNull()
       .references(() => events.id),
-    // Public code for the web ticket page (no QR scanning at the gate).
+    // Public code for the web ticket page, and what the ticket QR encodes —
+    // scanned at the gate with a gate pass (ADR-030).
     code: text('code').notNull().unique(),
     // 1-based place within the order ("ticket 2 of 3"), fixed at issue so
     // pages, PDFs and emails never disagree about which ticket is which.
@@ -329,15 +330,107 @@ export const tickets = pgTable(
     // Attendee name is editable until registration closes.
     attendeeName: text('attendee_name').notNull(),
     status: ticketStatus('status').notNull().default('issued'),
+    // Gate check-in (ADR-030): set once by a conditional UPDATE, never
+    // overwritten; cleared only by an audited undo. `checked_in_by` is the
+    // gate label, `checked_in_scan_id` the scan that did it.
+    checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
+    checkedInBy: text('checked_in_by'),
+    checkedInScanId: uuid('checked_in_scan_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index('tickets_order_id_idx').on(t.orderId),
     index('tickets_event_id_idx').on(t.eventId),
+    index('tickets_event_checked_in_idx').on(t.eventId, t.checkedInAt),
     // "Ticket 2 of 3" is a database fact, not a loop index.
     uniqueIndex('tickets_order_position_uq').on(t.orderId, t.position),
     check('tickets_position_positive', sql`${t.position} >= 1`),
+    check(
+      'tickets_check_in_consistent',
+      sql`(${t.checkedInAt} IS NULL) = (${t.checkedInBy} IS NULL) AND (${t.checkedInAt} IS NULL) = (${t.checkedInScanId} IS NULL)`,
+    ),
+    // Someone who walked in can never hold a cancelled ticket: undo the
+    // check-in first (a cancel would put their seat back on sale).
+    check('tickets_checked_in_is_issued', sql`${t.checkedInAt} IS NULL OR ${t.status} = 'issued'`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Gate check-in (ADR-030) — gate passes and the scan log
+// ---------------------------------------------------------------------------
+
+export const doorScanResult = pgEnum('door_scan_result', [
+  'admitted',
+  'already_in',
+  'cancelled',
+  'wrong_event',
+  'unknown',
+  'practice_ok',
+  // A name-search admit whose 3 phone digits did not match the buying
+  // phone: refused, and logged so repeated guessing shows up (ADR-030).
+  'phone_mismatch',
+]);
+export const doorScanMethod = pgEnum('door_scan_method', ['qr', 'typed', 'search']);
+export const doorScanMode = pgEnum('door_scan_mode', ['online', 'offline', 'practice']);
+
+// One pass per gate per event. The code is the bearer secret a door phone
+// signs in with (~59 bits, so guessing is not a practical attack); it is
+// kept in plain text so the organizer can show it again to a new phone.
+// No stored expiry: the window follows the event's current dates.
+export const doorPasses = pgTable(
+  'door_passes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    label: text('label').notNull(),
+    code: text('code').notNull().unique(),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('door_passes_event_id_idx').on(t.eventId),
+    check('door_passes_code_format', sql`${t.code} ~ '^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{12}$'`),
+  ],
+);
+
+// Append-only: one row per scan attempt, so "who let this person in, and
+// who was turned away" is always answerable. `scan_id` comes from the
+// phone and makes a retried request return the same answer.
+export const doorScans = pgTable(
+  'door_scans',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    scanId: uuid('scan_id').notNull().unique(),
+    passId: uuid('pass_id')
+      .notNull()
+      .references(() => doorPasses.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    ticketId: uuid('ticket_id').references(() => tickets.id, { onDelete: 'restrict' }),
+    // The ticket code when the scan parsed as one; otherwise "<unparsed:len=N>"
+    // — stray QR text (Wi-Fi passwords, URLs) is never stored.
+    input: text('input').notNull(),
+    result: doorScanResult('result').notNull(),
+    method: doorScanMethod('method').notNull(),
+    mode: doorScanMode('mode').notNull(),
+    // The earlier check-in shown on an already_in, so a replay is identical.
+    priorCheckedInAt: timestamp('prior_checked_in_at', { withTimezone: true }),
+    priorCheckedInBy: text('prior_checked_in_by'),
+    // The phone's clock — advisory only; received_at is the truth.
+    scannedAt: timestamp('scanned_at', { withTimezone: true }),
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    index('door_scans_pass_id_idx').on(t.passId, t.receivedAt),
+    index('door_scans_event_id_idx').on(t.eventId),
+    index('door_scans_ticket_id_idx').on(t.ticketId),
   ],
 );
 

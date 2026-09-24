@@ -318,6 +318,9 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
             id: `tk-${state.tickets.length + i + 1}`,
             position: i + 1,
             status: 'issued',
+            checkedInAt: null,
+            checkedInBy: null,
+            checkedInScanId: null,
             createdAt: NOW,
             updatedAt: NOW,
             ...r,
@@ -337,13 +340,27 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       const row = state.tickets.find((t) => t.id === id);
       return row ? { ...row } : null;
     },
-    // Conditional like the real UPDATE … WHERE status = 'issued'.
+    // Conditional like the real UPDATE … WHERE status = 'issued' AND not checked in.
     cancel: vi.fn(async (id, tx) => {
       expect(tx).toBe(TX);
       const row = state.tickets.find((t) => t.id === id);
-      if (!row || row.status !== 'issued') return null;
+      if (!row || row.status !== 'issued' || row.checkedInAt) return null;
       row.status = 'cancelled';
       row.updatedAt = NOW;
+      return { ...row };
+    }),
+    checkIn: vi.fn(async (id, { gate, scanId }, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || row.status !== 'issued' || row.checkedInAt) return null;
+      Object.assign(row, { checkedInAt: NOW, checkedInBy: gate, checkedInScanId: scanId });
+      return { ...row };
+    }),
+    undoCheckIn: vi.fn(async (id, tx, scanId) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || !row.checkedInAt || (scanId && row.checkedInScanId !== scanId)) return null;
+      Object.assign(row, { checkedInAt: null, checkedInBy: null, checkedInScanId: null });
       return { ...row };
     }),
     countIssuedByOrder: async (orderId, tx) => {

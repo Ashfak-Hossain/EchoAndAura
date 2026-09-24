@@ -59,3 +59,20 @@ export function isCheckViolation(err: unknown, constraint: string): boolean {
 export function isForeignKeyViolation(err: unknown, constraint: string): boolean {
   return violates(err, FOREIGN_KEY_VIOLATION, constraint);
 }
+
+/**
+ * An error, safe to log. Drizzle's `DrizzleQueryError` message ends with
+ * `params: …` — the bound values, which at the door are a gate-pass code
+ * or a ticket code (credentials). Keep the SQL text (it has only `$n`
+ * placeholders), the Postgres code and constraint; never the params.
+ */
+export function safeErrorShape(err: unknown): Record<string, string | undefined> {
+  if (!(err instanceof Error)) return { value: typeof err };
+  const pg = findPostgresError(err);
+  return {
+    name: err.name,
+    message: err.message.split('\nparams:')[0],
+    pgCode: pg?.code,
+    constraint: pg?.constraint_name,
+  };
+}

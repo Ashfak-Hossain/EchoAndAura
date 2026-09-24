@@ -16,14 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
+import { formatDhakaClock, formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
 import {
   approveOrderAction,
   cancelTicketAction,
   rejectOrderAction,
   resendTicketsEmailAction,
+  undoCheckInAction,
 } from './actions';
 import { CancelTicketButton } from './cancel-ticket-button';
+import { UndoCheckInButton } from './undo-check-in-button';
 import { VerificationActions } from './verification-actions';
 
 export const metadata: Metadata = { title: 'Order' };
@@ -37,6 +39,7 @@ interface Props {
     resent?: string;
     cancelled?: string;
     order?: string;
+    undone?: string;
   }>;
 }
 
@@ -44,7 +47,7 @@ interface Props {
 // The page shape never changes between statuses — only which actions exist.
 export default async function AdminOrderPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { approved, rejected, resent, cancelled, order: orderFlag } = await searchParams;
+  const { approved, rejected, resent, cancelled, order: orderFlag, undone } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
 
   let view;
@@ -132,6 +135,12 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
           Ticket <span className="font-mono">{cancelled}</span> cancelled — one seat is back on
           sale.
           {orderFlag === 'cancelled' ? ' No live tickets remain, so the order is cancelled.' : ''}
+        </p>
+      ) : null}
+      {undone ? (
+        <p role="status" className="rounded-md bg-secondary px-3 py-2 text-sm">
+          Check-in of <span className="font-mono">{undone}</span> undone — the next scan of it
+          admits.
         </p>
       ) : null}
 
@@ -277,7 +286,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                   <TableHead>Attendee</TableHead>
                   <TableHead>Status</TableHead>
                   {canCancel ? (
-                    <TableHead className="w-24">
+                    <TableHead className="w-36">
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   ) : null}
@@ -298,11 +307,29 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                     </TableCell>
                     <TableCell>{t.attendeeName}</TableCell>
                     <TableCell>
-                      <StatusChip kind="ticket" status={t.status} />
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <StatusChip kind="ticket" status={t.status} />
+                        {t.checkedInAt ? (
+                          <span
+                            data-testid="ticket-checked-in"
+                            className="text-[13px] text-success"
+                          >
+                            In {formatDhakaClock(t.checkedInAt)} · {t.checkedInBy}
+                          </span>
+                        ) : null}
+                      </span>
                     </TableCell>
                     {canCancel ? (
                       <TableCell className="text-right">
-                        {t.status === 'issued' ? (
+                        {/* A ticket used at the gate cannot be cancelled until the check-in is undone. */}
+                        {t.checkedInAt && t.checkedInScanId ? (
+                          <UndoCheckInButton
+                            code={t.code}
+                            attendeeName={t.attendeeName}
+                            admitted={`${formatDhakaClock(t.checkedInAt)} · ${t.checkedInBy ?? ''}`}
+                            undo={undoCheckInAction.bind(null, order.id, t.id, t.checkedInScanId)}
+                          />
+                        ) : t.status === 'issued' ? (
                           <CancelTicketButton
                             code={t.code}
                             attendeeName={t.attendeeName}

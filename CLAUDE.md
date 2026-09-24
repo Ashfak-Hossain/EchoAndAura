@@ -121,7 +121,8 @@ Full system diagram, data flow, and data model overview:
 - Promo codes: percentage or fixed, unlimited uses, restrictable to ticket types
 - No refunds. Admin can cancel a ticket, which releases inventory; money is
   returned outside the system
-- No QR scanning at the gate — check-in is a printed/exported list
+- Check-in: the ticket QR is scanned at the gate with a gate pass (ADR-030); the
+  printed/exported list is the backup
 
 ## Testing
 

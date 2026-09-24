@@ -41,7 +41,7 @@ export function TrustPoints({ verificationPromise }: { verificationPromise: stri
             id="trust-heading"
             className="font-heading text-[26px] leading-[1.15] font-semibold tracking-[-0.015em] text-pretty lg:text-[36px] lg:leading-[1.1]"
           >
-            No card, no app, no queue at the gate. Just a name on a list.
+            No card, no app, no queue at the gate. Just your ticket&apos;s QR.
           </h2>
         </div>
         <ul className="flex flex-col gap-3 lg:grid lg:grid-cols-3 lg:gap-8">

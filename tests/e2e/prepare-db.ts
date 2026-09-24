@@ -47,9 +47,10 @@ export async function prepareDatabase(url: string): Promise<void> {
 
   const sql = postgres(url, { max: 1 });
   try {
-    // Orders reference events and ticket types; CASCADE takes the lot.
+    // Orders reference events and ticket types; CASCADE takes the lot
+    // (the door tables are named anyway: their foreign keys are RESTRICT).
     // Settings too, so every run starts from the env fallbacks.
-    await sql`truncate table orders, order_events, tickets, promo_code_ticket_types, promo_codes, ticket_types, events, settings cascade`;
+    await sql`truncate table door_scans, door_passes, orders, order_events, tickets, promo_code_ticket_types, promo_codes, ticket_types, events, settings cascade`;
     const [admin] =
       await sql`select 1 as ok from users where email = ${env.E2E_ADMIN_EMAIL ?? 'admin@example.com'}`;
     if (!admin) {

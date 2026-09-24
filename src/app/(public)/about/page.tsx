@@ -32,8 +32,9 @@ export default async function AboutPage() {
         <h2>How tickets work here</h2>
         <ul>
           <li>
-            <strong>Named tickets.</strong> Every ticket carries a name and a code. The door works
-            from a printed list — no app, no scanner, nothing to install.
+            <strong>Named tickets.</strong> Every ticket carries a name, a code and a QR. At the
+            door the QR is scanned — from your phone or from paper, nothing to install. If your
+            phone dies, your name and code are enough.
           </li>
           <li>
             <strong>Paid by bKash.</strong> You send the money from your own bKash and paste the

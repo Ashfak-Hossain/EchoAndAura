@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { ORDER_REFERENCE_ALPHABET } from '@/server/lib/order-reference';
+import { TICKET_CODE_LENGTH, TICKET_CODE_PREFIX } from './ticket-code-format';
 
 /**
  * Public ticket code, e.g. `TKT-4H8ZP2XQ`: read out at the door, printed on
@@ -9,9 +10,7 @@ import { ORDER_REFERENCE_ALPHABET } from '@/server/lib/order-reference';
  * database; the fulfilment service retries the whole transaction on the
  * (astronomically rare) collision.
  */
-export const TICKET_CODE_PREFIX = 'TKT-';
-export const TICKET_CODE_LENGTH = 8;
-export const TICKET_CODE_PATTERN = /^TKT-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
+export { TICKET_CODE_LENGTH, TICKET_CODE_PATTERN, TICKET_CODE_PREFIX } from './ticket-code-format';
 
 export function generateTicketCode(random: (max: number) => number = randomInt): string {
   let body = '';

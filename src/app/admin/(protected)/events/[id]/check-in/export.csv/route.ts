@@ -11,10 +11,11 @@ import { formatInTimeZone } from 'date-fns-tz';
 export const dynamic = 'force-dynamic';
 
 /**
- * B11 "Export CSV": the door list as a download — the same search and
- * order as the page, plus an empty `checked_in` column to tick in a
- * spreadsheet. A route handler is its own endpoint, so the admin check is
- * here, not only in the layout (ADR-017).
+ * B11 "Export CSV": the door list as a download — the same search, filter
+ * and order as the page. `checked_in` holds the gate check-in (Dhaka time
+ * and gate, ADR-030), empty for those not yet in, so the sheet can still
+ * be ticked by hand. A route handler is its own endpoint, so the admin
+ * check is here, not only in the layout (ADR-017).
  */
 export async function GET(
   request: Request,
@@ -27,6 +28,7 @@ export async function GET(
   const input = checkInQuerySchema.parse({
     q: search.get('q') ?? undefined,
     sort: search.get('sort') ?? undefined,
+    show: search.get('show') ?? undefined,
   });
 
   let list;
@@ -43,12 +45,19 @@ export async function GET(
     r.ticketTypeName,
     r.code,
     r.orderReference,
-    '',
+    r.ticket.checkedInAt
+      ? `${formatInTimeZone(r.ticket.checkedInAt, DHAKA_TZ, 'yyyy-MM-dd HH:mm')} · ${r.ticket.checkedInBy ?? ''}`
+      : '',
   ]);
 
   // The term is usually an attendee's name: log that a filter was used, not what.
   logger.info(
-    { actor: admin.email, eventId: id, rows: body.length, filtered: Boolean(input.q) },
+    {
+      actor: admin.email,
+      eventId: id,
+      rows: body.length,
+      filtered: Boolean(input.q) || input.show !== 'all',
+    },
     'check-in list exported',
   );
   const stamp = formatInTimeZone(new Date(), DHAKA_TZ, 'yyyyMMdd-HHmm');

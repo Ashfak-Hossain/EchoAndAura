@@ -7,6 +7,7 @@ import {
   OrderStatusConflictError,
   SoldOutError,
   TicketCancelledError,
+  TicketCheckedInError,
   TicketCodeCollisionError,
   TicketNotFoundError,
   TicketTypeNotFoundError,
@@ -427,6 +428,11 @@ export function createFulfilmentService({
         // A ticket on some other order is "not found" here, never touched.
         if (!ticket || ticket.orderId !== orderId) throw new TicketNotFoundError(ticketId);
         if (ticket.status === 'cancelled') throw new TicketCancelledError(ticket.code);
+        // ADR-030: the holder walked in. Cancelling would put a seat back on
+        // sale with its occupant inside — undo the check-in first, on purpose.
+        if (ticket.checkedInAt) {
+          throw new TicketCheckedInError(ticket.code, ticket.checkedInAt, ticket.checkedInBy ?? '');
+        }
 
         const cancelled = await tickets.cancel(ticketId, tx);
         if (!cancelled) throw new TicketCancelledError(ticket.code);

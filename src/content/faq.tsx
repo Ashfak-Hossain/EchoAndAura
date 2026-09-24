@@ -48,8 +48,8 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
       <p>
         Yes. Every ticket carries a name, and you can change it on the ticket page (the link in your
         tickets email) until registration closes {REGISTRATION_CLOSES_DAYS_BEFORE} days before the
-        event. After that the door list is printed and the names are fixed. The person at the door
-        needs the name and the ticket code, nothing else.
+        event. After that the names are fixed. At the door they need the ticket — its QR, or the
+        ticket code — nothing else.
       </p>
     ),
   },
@@ -58,9 +58,22 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
     question: 'Do I need to print anything?',
     answer: (
       <p>
-        No. Show the ticket on your phone, or just give your name and ticket code — the door works
-        from a printed list, not a scanner. A printable PDF is on every ticket page for people who
-        prefer paper.
+        No. Show the QR on your phone and it is scanned at the door. No signal, or a flat battery?
+        Give your ticket code, or your name — then staff ask for the last 3 digits of the phone
+        number that bought the ticket. A printable PDF is on every ticket page for people who prefer
+        paper.
+      </p>
+    ),
+  },
+  {
+    id: 'screenshot',
+    question: 'Can someone get in with a screenshot of my ticket?',
+    answer: (
+      <p>
+        Only if they get to the door before you. Each ticket admits one person, once — the first
+        scan wins and every later scan is turned away, with the name on the ticket shown to the
+        staff. So keep your ticket to yourself: don&apos;t post it online, and send each friend only
+        their own ticket.
       </p>
     ),
   },
