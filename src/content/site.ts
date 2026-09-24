@@ -30,10 +30,9 @@ export const ORGANIZER_NAME = 'Raj';
 /** Reply-time promise on the contact card. */
 export const REPLY_PROMISE = 'replies within a day';
 
-/** "Last updated" per policy page — bump when the wording changes. */
+/** "Last updated" per policy page — bump when the wording changes. (About shows none.) */
 export const LAST_UPDATED = {
-  about: new Date('2026-09-24T00:00:00+06:00'),
-  terms: new Date('2026-09-24T00:00:00+06:00'),
-  privacy: new Date('2026-09-24T00:00:00+06:00'),
-  refund: new Date('2026-09-20T00:00:00+06:00'),
+  terms: new Date('2026-09-25T00:00:00+06:00'),
+  privacy: new Date('2026-09-25T00:00:00+06:00'),
+  refund: new Date('2026-09-25T00:00:00+06:00'),
 } as const;

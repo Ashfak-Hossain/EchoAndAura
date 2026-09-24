@@ -1,5 +1,20 @@
 import Link from 'next/link';
 import type { FaqItem } from '@/components/public/faq-accordion';
+
+/**
+ * Canvas 5 (A7.4): the questions grouped by what people are doing. Ids are
+ * jump-link anchors (`/faq#paying-by-bkash`) — the topics are navigation,
+ * not filters. The page lists topics in this order.
+ */
+export const FAQ_TOPICS = [
+  { id: 'tickets-and-entry', label: 'Tickets & entry' },
+  { id: 'paying-by-bkash', label: 'Paying by bKash' },
+  { id: 'orders-and-holds', label: 'Orders & holds' },
+  { id: 'changes-and-refunds', label: 'Changes & refunds' },
+] as const;
+export type FaqTopicId = (typeof FAQ_TOPICS)[number]['id'];
+
+export type FaqEntry = FaqItem & { topic: FaqTopicId };
 import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
 
 /**
@@ -8,9 +23,10 @@ import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
  * them as permanent once published. A function of the verification promise
  * (B14 settings) so the FAQ quotes what the organizer actually promised.
  */
-export const faqItems = (verificationPromise: string): FaqItem[] => [
+export const faqItems = (verificationPromise: string): FaqEntry[] => [
   {
     id: 'when-do-tickets-arrive',
+    topic: 'tickets-and-entry',
     question: 'How long until my tickets arrive?',
     answer: (
       <p>
@@ -22,6 +38,7 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'wrong-trxid',
+    topic: 'paying-by-bkash',
     question: 'I typed the wrong TrxID. What now?',
     answer: (
       <>
@@ -43,6 +60,7 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'someone-else',
+    topic: 'changes-and-refunds',
     question: 'Can someone else use my ticket?',
     answer: (
       <p>
@@ -55,6 +73,7 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'print',
+    topic: 'tickets-and-entry',
     question: 'Do I need to print anything?',
     answer: (
       <p>
@@ -67,18 +86,20 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'screenshot',
-    question: 'Can someone get in with a screenshot of my ticket?',
+    topic: 'tickets-and-entry',
+    question: 'Can I show a screenshot of my ticket?',
     answer: (
       <p>
-        Only if they get to the door before you. Each ticket admits one person, once — the first
-        scan wins and every later scan is turned away, with the name on the ticket shown to the
-        staff. So keep your ticket to yourself: don&apos;t post it online, and send each friend only
-        their own ticket.
+        Yes. A screenshot of the QR scans the same as the ticket page. Each ticket admits one
+        person, once — the first scan wins — so do not post or share it: if a copy is scanned before
+        you arrive, the ticket has already been used. To pass a ticket on, send it to that one
+        person and change the name on its ticket page.
       </p>
     ),
   },
   {
     id: 'no-card-payment',
+    topic: 'paying-by-bkash',
     question: 'Why is there no card payment?',
     answer: (
       <p>
@@ -91,6 +112,7 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'hold-expired',
+    topic: 'orders-and-holds',
     question: 'My hold expired but I sent the money',
     answer: (
       <p>
@@ -104,6 +126,7 @@ export const faqItems = (verificationPromise: string): FaqItem[] => [
   },
   {
     id: 'find-my-order',
+    topic: 'orders-and-holds',
     question: 'I closed the page. How do I get back to my order?',
     answer: (
       <p>

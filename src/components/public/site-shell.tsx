@@ -59,7 +59,7 @@ export function SiteShell({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur print:hidden">
         <div className="mx-auto flex h-15 max-w-360 items-center justify-between px-4 lg:h-18 lg:px-16">
           <Link
             href="/"
@@ -104,7 +104,7 @@ export function SiteShell({
 
       <div className="flex flex-1 flex-col">{children}</div>
 
-      <footer className="bg-foreground text-[#c9c3b7]">
+      <footer className="bg-foreground text-[#c9c3b7] print:hidden">
         <div className="mx-auto flex max-w-360 flex-col gap-8 px-4 pt-10 pb-6 lg:gap-10 lg:px-16 lg:pt-14 lg:pb-7">
           <div className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-[5fr_2fr_2fr_3fr] lg:gap-10">
             <div className="col-span-2 flex flex-col gap-4 lg:col-span-1">
