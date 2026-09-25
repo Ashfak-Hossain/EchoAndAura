@@ -34,6 +34,20 @@ export function publicVenue(event: VenueFields): PublicVenue {
   return { text: event.venue, isPrivate: false, mapsQuery: event.venue };
 }
 
+/**
+ * The city for compact meta ("Dhaka" on a past-event tile): the last
+ * comma-separated part of the public venue text. Built on `publicVenue`,
+ * so a private venue only ever yields its area. Null when there is no
+ * comma — a lone "The Attic" is a room, not a city.
+ */
+export function venueCity(event: VenueFields): string | null {
+  const text = publicVenue(event).text;
+  if (!text) return null;
+  const comma = text.lastIndexOf(',');
+  if (comma === -1) return null;
+  return text.slice(comma + 1).trim() || null;
+}
+
 /** One line for cards and headers: "Tejgaon, Dhaka · Exact venue is sent with your tickets". */
 export function publicVenueLine(event: VenueFields): string | null {
   const v = publicVenue(event);

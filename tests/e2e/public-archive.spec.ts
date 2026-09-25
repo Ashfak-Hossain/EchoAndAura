@@ -67,7 +67,8 @@ test.describe('archive (A6)', () => {
     await page.goto('/');
     await expect(
       page
-        .getByRole('navigation', { name: 'Site pages' })
+        .getByRole('contentinfo')
+        .getByRole('navigation', { name: 'Tickets' })
         .getByRole('link', { name: 'Past events' }),
     ).toHaveAttribute('href', '/archive');
     await page.getByRole('link', { name: /see all past events/i }).click();

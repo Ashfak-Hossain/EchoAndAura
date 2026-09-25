@@ -1,55 +1,79 @@
 import Link from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
+import { venueCity } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import { DHAKA_TZ } from '@/lib/time';
-import { SectionHeading } from './section-heading';
+import { cn } from '@/lib/utils';
+import { SectionHeading, sectionLink } from './section-heading';
+
+/** A past show's meta, "Aug 2026 · Chattogram"; just the month when the venue names no city. */
+export function monthAndCity(event: HomeEvent['event']): string {
+  const month = formatInTimeZone(event.startsAt, DHAKA_TZ, 'MMM yyyy');
+  const city = venueCity(event);
+  return city ? `${month} · ${city}` : month;
+}
+
+/** Desktop shows one row of four; phones get the whole read (six) in the strip. */
+const DESKTOP_PAST_ITEMS = 4;
 
 /**
- * A1 "Past events": proof the shows are real, even on the dormant page.
- * Four small grey covers (2-up on phones); each links to the event's page,
- * which stays live after archiving (ADR-009). Attendance counts arrive
- * with the Phase 6 reports; "See all past events" goes to the A6 archive.
+ * N9 "Past events": proof the shows are real, even between shows. In full
+ * colour; each links to the event's page, which stays live after archiving
+ * (ADR-009). Four columns from lg; on phones a sideways scroll-snap strip
+ * of 240px items that runs to the screen's edges, snapping to the gutter.
  */
 export function PastStrip({ events }: { events: HomeEvent[] }) {
   if (events.length === 0) return null;
   return (
-    <section aria-labelledby="past-heading" className="flex flex-col gap-4 lg:gap-6">
-      <SectionHeading
-        id="past-heading"
-        aside={
-          <Link
-            href="/archive"
-            className="text-sm text-muted-foreground hover:underline lg:text-[15px]"
+    <section aria-labelledby="past-heading" className="pt-16 lg:pt-24">
+      {/* The strip scrolls under the gutters, so the gutters live inside. */}
+      <div className="mx-auto flex w-full max-w-360 flex-col gap-6">
+        <div className="px-4 lg:px-16">
+          <SectionHeading
+            id="past-heading"
+            aside={
+              <Link href="/archive" className={sectionLink}>
+                See all past events →
+              </Link>
+            }
           >
-            See all past events →
-          </Link>
-        }
-      >
-        Past events
-      </SectionHeading>
-      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
-        {events.map(({ event, coverUrl }) => (
-          <li key={event.id}>
-            <Link
-              href={`/events/${event.slug}`}
-              className="flex flex-col gap-2.5 rounded-xl focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none"
+            Past events
+          </SectionHeading>
+        </div>
+        {/* The vertical padding keeps the focus ring inside the scroller's clip. */}
+        <ul className="-my-2 grid snap-x snap-mandatory scroll-px-4 auto-cols-60 grid-flow-col gap-4 overflow-x-auto px-4 py-2 lg:grid-flow-row lg:grid-cols-4 lg:overflow-visible lg:px-16">
+          {events.map(({ event, coverUrl }, i) => (
+            <li
+              key={event.id}
+              className={cn('min-w-0 snap-start', i >= DESKTOP_PAST_ITEMS && 'lg:hidden')}
             >
-              <div className="aspect-[16/10] w-full overflow-hidden rounded-xl bg-[#2a2a2a]">
+              <Link
+                href={`/events/${event.slug}`}
+                className="flex flex-col gap-2 rounded-[8px] text-foreground hover:text-accent-ink"
+              >
                 {coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={coverUrl} alt="" className="size-full object-cover grayscale" />
-                ) : null}
-              </div>
-              <span className="font-heading text-[14px] leading-tight font-semibold text-pretty lg:text-[16px]">
-                {event.title}
-              </span>
-              <span className="text-[12px] text-muted-foreground tabular lg:text-[13px]">
-                {formatInTimeZone(event.startsAt, DHAKA_TZ, 'MMM yyyy')}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+                  <img
+                    src={coverUrl}
+                    alt=""
+                    width={1200}
+                    height={630}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-1200/630 w-full rounded-[8px] border border-border bg-[#e3ddd1] object-cover"
+                  />
+                ) : (
+                  <div className="aspect-1200/630 w-full rounded-[8px] border border-border bg-[#e3ddd1]" />
+                )}
+                <span className="text-base leading-[1.3] font-semibold text-pretty">
+                  {event.title}
+                </span>
+                <span className="text-sm text-muted-foreground tabular">{monthAndCity(event)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

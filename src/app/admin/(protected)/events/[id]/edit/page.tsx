@@ -13,6 +13,7 @@ import { formatDhakaLong, toDhakaInput } from '@/lib/time';
 import { type EditorTab, editorPath, isEditorTab } from '../editor-path';
 import { updateEventAction } from '../../actions';
 import { EventForm, type EventFormValues } from '../../event-form';
+import { presentingSponsorOptions } from '../../sponsor-options';
 import { CoverSection } from '../cover/cover-section';
 import { DatesInPlainWords } from '../dates-in-plain-words';
 import { StatusSection } from '../status/status-section';
@@ -69,7 +70,10 @@ export default async function EditEventPage({ params, searchParams }: Props) {
     registrationClosesAt: event.registrationClosesAt
       ? toDhakaInput(event.registrationClosesAt)
       : '',
+    presentingSponsorId: event.presentingSponsorId ?? '',
   };
+  // Only the Details tab has the form; the other tabs skip the query.
+  const sponsors = tab === 'details' ? await presentingSponsorOptions() : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -132,6 +136,7 @@ export default async function EditEventPage({ params, searchParams }: Props) {
             key={event.updatedAt.toISOString()}
             action={updateEventAction.bind(null, event.id)}
             defaultValues={defaultValues}
+            sponsors={sponsors}
             submitLabel="Save changes"
             saved={saved === '1'}
             publicUrl={`/events/${event.slug}`}

@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { events } from '@/db/schema';
-import { EventSlugTakenError } from '@/server/lib/errors';
+import { EventSlugTakenError, SponsorNotFoundError } from '@/server/lib/errors';
 import type { EventStatus } from '@/server/lib/event-status';
-import { isUniqueViolation } from '@/server/lib/pg-errors';
+import { isForeignKeyViolation, isUniqueViolation } from '@/server/lib/pg-errors';
 
 /**
  * The only module that touches Drizzle for `events` (architecture rule:
@@ -26,6 +26,7 @@ export type EventPatch = Partial<
     | 'endsAt'
     | 'registrationOpensAt'
     | 'registrationClosesAt'
+    | 'presentingSponsorId'
   >
 >;
 
@@ -35,9 +36,15 @@ export interface EventsRepository {
   listByStatus(statuses: EventStatus[]): Promise<EventRecord[]>;
   findById(id: string): Promise<EventRecord | null>;
   findBySlug(slug: string): Promise<EventRecord | null>;
-  /** @throws EventSlugTakenError when the slug is already in use. */
+  /**
+   * @throws EventSlugTakenError when the slug is already in use,
+   *   SponsorNotFoundError when the presenting sponsor does not exist.
+   */
   insert(values: NewEvent): Promise<EventRecord>;
-  /** Resolves null when no row has this id. @throws EventSlugTakenError */
+  /**
+   * Resolves null when no row has this id.
+   * @throws EventSlugTakenError, SponsorNotFoundError
+   */
   update(id: string, patch: EventPatch): Promise<EventRecord | null>;
   /**
    * Conditional status change: succeeds only if the row is still in `from`.
@@ -48,11 +55,19 @@ export interface EventsRepository {
   setImageKey(id: string, imageKey: string | null): Promise<EventRecord | null>;
 }
 
-// Slug uniqueness is enforced by the DB, never by a read-then-write check,
-// so the unique violation is where a duplicate surfaces.
-function rethrowSlugConflict(err: unknown, slug: string | undefined): never {
-  if (slug !== undefined && isUniqueViolation(err, 'events_slug_unique')) {
-    throw new EventSlugTakenError(slug);
+// Constraint names as generated in drizzle/0000_*.sql and 0021_*.sql.
+const SLUG_UNIQUE = 'events_slug_unique';
+const PRESENTING_SPONSOR_FK = 'events_presenting_sponsor_id_sponsors_id_fk';
+
+// Slug uniqueness and the presenting sponsor's existence are enforced by
+// the DB, never by a read-then-write check: a sponsor deleted while the
+// event form was open surfaces here, as the foreign-key violation.
+function rethrowWriteConflict(err: unknown, values: EventPatch): never {
+  if (values.slug !== undefined && isUniqueViolation(err, SLUG_UNIQUE)) {
+    throw new EventSlugTakenError(values.slug);
+  }
+  if (values.presentingSponsorId && isForeignKeyViolation(err, PRESENTING_SPONSOR_FK)) {
+    throw new SponsorNotFoundError(values.presentingSponsorId);
   }
   throw err;
 }
@@ -87,7 +102,7 @@ export const eventsRepository: EventsRepository = {
       if (!row) throw new Error('insert returned no row');
       return row;
     } catch (err: unknown) {
-      rethrowSlugConflict(err, values.slug);
+      rethrowWriteConflict(err, values);
     }
   },
 
@@ -100,7 +115,7 @@ export const eventsRepository: EventsRepository = {
         .returning();
       return row ?? null;
     } catch (err: unknown) {
-      rethrowSlugConflict(err, patch.slug);
+      rethrowWriteConflict(err, patch);
     }
   },
 

@@ -260,11 +260,7 @@ export function HistogramChart({
 }) {
   return (
     <ChartContainer config={histogramConfig} className={className}>
-      <BarChart
-        data={data}
-        margin={{ top: 6, right: 4, left: 4, bottom: 0 }}
-        barCategoryGap="22%"
-      >
+      <BarChart data={data} margin={{ top: 6, right: 4, left: 4, bottom: 0 }} barCategoryGap="22%">
         <XAxis
           dataKey="tick"
           tickLine={false}

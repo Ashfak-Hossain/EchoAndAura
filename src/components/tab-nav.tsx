@@ -47,7 +47,12 @@ export function TabNav({ items, active, label, variant = 'underline', className 
             >
               {item.label}
               {item.count !== undefined ? (
-                <span className={cn('tabular', isActive ? 'text-background/80' : 'text-muted-foreground')}>
+                <span
+                  className={cn(
+                    'tabular',
+                    isActive ? 'text-background/80' : 'text-muted-foreground',
+                  )}
+                >
                   {item.count}
                 </span>
               ) : null}
@@ -76,7 +81,7 @@ export function TabNav({ items, active, label, variant = 'underline', className 
           >
             {item.label}
             {item.count !== undefined ? (
-              <span className="tabular text-[#a8a29a]">{item.count}</span>
+              <span className="text-[#a8a29a] tabular">{item.count}</span>
             ) : null}
           </Link>
         );

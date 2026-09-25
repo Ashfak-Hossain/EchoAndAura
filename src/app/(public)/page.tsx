@@ -1,13 +1,16 @@
 import type { Metadata } from 'next';
 import { publicVenue } from '@/server/lib/venue';
+import { SupportedBy } from '@/components/public/sponsors/supported-by';
 import { getSiteSettings } from '@/lib/settings';
 import { buildHomeMetadata, siteUrl } from '@/lib/seo';
+import { getPublicSponsors } from '@/lib/sponsors';
+import { DormantHero } from './home/dormant-hero';
+import { FollowBlock } from './home/follow-block';
 import { Hero } from './home/hero';
+import { HowItWorks } from './home/how-it-works';
 import { loadHome } from './home/load';
-import { NoLiveEvent } from './home/no-live-event';
 import { PastStrip } from './home/past-strip';
-import { TrustPoints } from './home/trust-points';
-import { UpcomingRow } from './home/upcoming-row';
+import { UpcomingGrid } from './home/upcoming-grid';
 
 // No params, cookies or fetch here, so Next would otherwise prerender the
 // home page at build time with whatever the database held then. It must
@@ -29,28 +32,35 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-// A1 home. Hero is the soonest published event (or the dormant brand block);
-// everything below keeps the same order at every width — one column of
-// sections, never a directory.
+// A1 home (Canvas 6, H1–H3). The hero is the next show still taking
+// registrations, else the soonest one (plan decision 6); with no show at all,
+// the dormant band. Then the same order of sections at every width — one
+// column, never a directory. Each light section carries its own 96/64px top
+// padding and the spacer closes the last one.
+// `home-page` scopes the ADR-031 focus ring (globals.css).
 export default async function HomePage() {
-  const [home, settings] = await Promise.all([loadHome(), getSiteSettings()]);
+  const [home, settings, sponsors] = await Promise.all([
+    loadHome(),
+    getSiteSettings(),
+    getPublicSponsors(),
+  ]);
+  const { featured } = home;
   const facebook = settings.facebookPageUrl;
 
   return (
-    <div className="flex flex-1 flex-col">
-      {home.featured ? <Hero featured={home.featured} /> : <NoLiveEvent facebookUrl={facebook} />}
-
-      {home.alsoUpcoming.length > 0 ? (
-        <div className="mx-auto w-full max-w-360 px-4 py-8 lg:px-16 lg:py-16">
-          <UpcomingRow events={home.alsoUpcoming} />
-        </div>
-      ) : null}
-      <TrustPoints verificationPromise={settings.verificationPromise} />
-      {home.past.length > 0 ? (
-        <div className="mx-auto w-full max-w-360 px-4 py-8 lg:px-16 lg:py-16">
-          <PastStrip events={home.past} />
-        </div>
-      ) : null}
-    </div>
+    <main className="home-page flex flex-1 flex-col">
+      {featured ? (
+        <Hero featured={featured} now={new Date()} />
+      ) : (
+        <DormantHero lastShow={home.past[0] ?? null} facebookUrl={facebook} />
+      )}
+      <UpcomingGrid events={home.alsoUpcoming} upcomingTotal={home.upcomingTotal} />
+      <HowItWorks verificationPromise={settings.verificationPromise} />
+      <PastStrip events={home.past} />
+      <SupportedBy sponsors={sponsors} />
+      {/* The dormant band already leads with Facebook; say it once. */}
+      {featured && facebook ? <FollowBlock facebookUrl={facebook} /> : null}
+      <div aria-hidden="true" className="h-16 lg:h-24" />
+    </main>
   );
 }

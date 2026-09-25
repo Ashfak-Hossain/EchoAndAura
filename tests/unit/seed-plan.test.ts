@@ -1,7 +1,10 @@
 import { addHours } from 'date-fns';
 import { describe, expect, it } from 'vitest';
+import { sponsorFormSchema } from '@/lib/validation/sponsors';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
-import { buildSeedPlan } from '../../scripts/seed/plan';
+import { inspectLogo } from '@/server/lib/sponsor-logo';
+import { logoSvg, logoUpload } from '../../scripts/seed/logos';
+import { type SeedSponsor, buildSeedPlan } from '../../scripts/seed/plan';
 
 /**
  * The dev seed runs its plan through the real services, which refuse
@@ -121,7 +124,85 @@ describe.each(NOWS)('buildSeedPlan(%s)', (now) => {
     expect(eventOf('monsoon')).toMatchObject({ venueHidden: true, venueArea: 'Banani, Dhaka' });
   });
 
+  it('creates the presenter before the event that names it, and it is shown', () => {
+    expect(plan.sponsorsAt <= now).toBe(true);
+    const presented = plan.events.filter((e) => e.presenter);
+    expect(presented.map((e) => e.key)).toEqual(['live']);
+    for (const e of presented) {
+      const sponsor = plan.sponsors.find((s) => s.key === e.presenter);
+      expect(sponsor, e.key).toBeDefined();
+      // Only active sponsors reach the public list the event page reads.
+      expect(sponsor!.active).toBe(true);
+      expect(plan.sponsorsAt < e.createdAt).toBe(true);
+    }
+  });
+
   it('is deterministic for a given now', () => {
     expect(JSON.stringify(buildSeedPlan(now))).toBe(JSON.stringify(plan));
+  });
+});
+
+describe('seed sponsors', () => {
+  const { sponsors } = buildSeedPlan(NOWS[0]!);
+
+  it('has exactly one presenting partner, and it is active', () => {
+    const presenting = sponsors.filter((s) => s.level === 'presenting');
+    expect(presenting).toHaveLength(1);
+    expect(presenting[0]!.active).toBe(true);
+  });
+
+  it('covers what the pages must handle: a hidden partner, a dark tile, a tile without a link', () => {
+    expect(sponsors.filter((s) => s.level === 'partner')).toHaveLength(3);
+    expect(sponsors.filter((s) => s.level === 'supporter')).toHaveLength(4);
+    expect(sponsors.some((s) => s.level === 'partner' && !s.active)).toBe(true);
+    expect(sponsors.some((s) => s.tileTone === 'dark' && s.active)).toBe(true);
+    expect(sponsors.some((s) => s.websiteUrl === null && s.active)).toBe(true);
+  });
+
+  it('has unique keys and names (a rerun matches sponsors by name)', () => {
+    expect(new Set(sponsors.map((s) => s.key)).size).toBe(sponsors.length);
+    expect(new Set(sponsors.map((s) => s.name)).size).toBe(sponsors.length);
+  });
+
+  it('passes the admin form’s rules', () => {
+    for (const s of sponsors) {
+      const parsed = sponsorFormSchema.safeParse({
+        name: s.name,
+        websiteUrl: s.websiteUrl ?? '',
+        level: s.level,
+        tileTone: s.tileTone,
+        active: s.active,
+      });
+      expect(parsed.success, s.key).toBe(true);
+    }
+  });
+
+  it.each(sponsors.map((s) => [s.key, s] as const))(
+    '%s: the generated logo passes inspectLogo with the planned shape',
+    (_key, sponsor) => {
+      const { bytes, contentType } = logoUpload(sponsor);
+      expect(inspectLogo(bytes, contentType)).toEqual({
+        ok: true,
+        ext: 'svg',
+        width: Math.round(100 * sponsor.aspect),
+        height: 100,
+      });
+    },
+  );
+
+  it('escapes the wordmark, so any name makes a valid logo', () => {
+    const odd: SeedSponsor = {
+      ...sponsors[0]!,
+      name: 'Salt & Pepper <Bistro> "Café"',
+      wordmark: undefined,
+      aspect: 1,
+    };
+    const svg = logoSvg(odd);
+    expect(svg).toContain('SALT &#38; PEPPER &#60;BISTRO&#62; &#34;CAFÉ&#34;');
+    expect(inspectLogo(new TextEncoder().encode(svg), 'image/svg+xml')).toMatchObject({
+      ok: true,
+      width: 100,
+      height: 100,
+    });
   });
 });

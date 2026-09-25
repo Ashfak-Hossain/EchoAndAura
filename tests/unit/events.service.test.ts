@@ -7,6 +7,7 @@ import {
   EventSlugTakenError,
   EventStatusConflictError,
   InvalidEventTransitionError,
+  SponsorNotFoundError,
 } from '@/server/lib/errors';
 import type {
   EventPatch,
@@ -43,6 +44,7 @@ function fakeRepo(seed: EventRecord[] = []) {
     registrationClosesAt: values.registrationClosesAt ?? null,
     status: values.status ?? 'draft',
     imageKey: values.imageKey ?? null,
+    presentingSponsorId: values.presentingSponsorId ?? null,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     updatedAt: new Date('2026-01-01T00:00:00Z'),
   });
@@ -126,6 +128,9 @@ function fakeStorage(objects: Record<string, StoredObjectInfo> = {}) {
         key,
         expiresInSeconds: 300,
       };
+    },
+    async put({ key, body, contentType }) {
+      store.set(key, { contentType, size: body.byteLength });
     },
     async head(key) {
       return store.get(key) ?? null;
@@ -302,6 +307,69 @@ describe('eventsService.updateEvent / getEvent', () => {
     await expect(
       svc.updateEvent(second.id, { title: 'Second', slug: 'first', startsAt }),
     ).rejects.toBeInstanceOf(EventSlugTakenError);
+  });
+});
+
+// Canvas 6, N11: "Presented by" is one optional column on the event,
+// replaced by every save like the rest of the form.
+describe('eventsService — presenting sponsor', () => {
+  const KOLOROB = '5f0c7a8e-2b4d-4e61-9a3f-8c1d2e3f4a5b';
+  const MEGH = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d';
+
+  it('stores the presenter on create; none is null', async () => {
+    const { repo, rows } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+
+    const presented = await svc.createEvent({ title: 'A', startsAt, presentingSponsorId: KOLOROB });
+    expect(presented.presentingSponsorId).toBe(KOLOROB);
+    expect(rows.get(presented.id)?.presentingSponsorId).toBe(KOLOROB);
+
+    const plain = await svc.createEvent({ title: 'B', startsAt, presentingSponsorId: null });
+    expect(plain.presentingSponsorId).toBeNull();
+    expect((await svc.createEvent({ title: 'C', startsAt })).presentingSponsorId).toBeNull();
+  });
+
+  it('update replaces it: another sponsor, then None clears it', async () => {
+    const { repo } = fakeRepo();
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const created = await svc.createEvent({ title: 'A', startsAt, presentingSponsorId: KOLOROB });
+
+    const swapped = await svc.updateEvent(created.id, {
+      title: 'A',
+      startsAt,
+      presentingSponsorId: MEGH,
+    });
+    expect(swapped.presentingSponsorId).toBe(MEGH);
+
+    // Full-form replace: a save without a presenter ("None") clears it.
+    const cleared = await svc.updateEvent(created.id, { title: 'A', startsAt });
+    expect(cleared.presentingSponsorId).toBeNull();
+  });
+
+  // Failure path: the FK is the existence check (a sponsor deleted while the
+  // form was open); the service lets the repository's typed error through.
+  it('surfaces SponsorNotFoundError from the repository on create and update', async () => {
+    const { repo } = fakeRepo();
+    const refusing: EventsRepository = {
+      ...repo,
+      insert: (values) =>
+        values.presentingSponsorId
+          ? Promise.reject(new SponsorNotFoundError(values.presentingSponsorId))
+          : repo.insert(values),
+      update: (id, patch) =>
+        patch.presentingSponsorId
+          ? Promise.reject(new SponsorNotFoundError(patch.presentingSponsorId))
+          : repo.update(id, patch),
+    };
+    const svc = createEventsService(refusing, fakeTicketTypes(), fakeStorage().storage, clock);
+
+    await expect(
+      svc.createEvent({ title: 'A', startsAt, presentingSponsorId: KOLOROB }),
+    ).rejects.toBeInstanceOf(SponsorNotFoundError);
+    const created = await svc.createEvent({ title: 'B', startsAt });
+    await expect(
+      svc.updateEvent(created.id, { title: 'B', startsAt, presentingSponsorId: MEGH }),
+    ).rejects.toBeInstanceOf(SponsorNotFoundError);
   });
 });
 
@@ -534,25 +602,34 @@ describe('eventsService.getPublicEvent', () => {
 });
 
 describe('eventsService.getHomePage', () => {
-  const ticketTypesWithCapacity = (
-    capacity: Record<string, { total: number; sold: number; held: number; from: number | null }>,
-  ): TicketTypesRepository => ({
-    ...fakeTicketTypes(),
-    // One roll-up call for every event shown — the test asserts it is one.
-    capacityByEvent: vi.fn(async (ids: string[]) =>
-      ids
-        .filter((id) => id in capacity)
-        .map((id) => ({
-          eventId: id,
-          total: capacity[id]!.total,
-          sold: capacity[id]!.sold,
-          held: capacity[id]!.held,
-          fromPricePaisa: capacity[id]!.from,
-        })),
-    ),
+  let typeCount = 0;
+  const tt = (eventId: string, over: Partial<TicketTypeRecord> = {}): TicketTypeRecord => ({
+    id: `tt-${++typeCount}`,
+    eventId,
+    name: 'General',
+    pricePaisa: 120_000,
+    quantityTotal: 100,
+    quantitySold: 0,
+    quantityReserved: 0,
+    salesStartsAt: null,
+    salesEndsAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...over,
   });
 
-  const seed = (id: string, status: EventRecord['status'], startsAt: Date): EventRecord =>
+  // One ticket-types read for every event shown — the tests assert it is one.
+  const ticketTypesOf = (types: TicketTypeRecord[]): TicketTypesRepository => ({
+    ...fakeTicketTypes(),
+    listByEvents: vi.fn(async (ids: string[]) => types.filter((t) => ids.includes(t.eventId))),
+  });
+
+  const seed = (
+    id: string,
+    status: EventRecord['status'],
+    startsAt: Date,
+    over: Partial<EventRecord> = {},
+  ): EventRecord =>
     ({
       id,
       slug: id,
@@ -567,70 +644,156 @@ describe('eventsService.getHomePage', () => {
       imageKey: status === 'published' ? `events/${id}/cover-x.png` : null,
       createdAt: NOW,
       updatedAt: NOW,
+      ...over,
     }) as EventRecord;
 
-  it('decorates hero, also-upcoming and past with phase, price and cover in one capacity query', async () => {
+  it('decorates hero, also-upcoming and past with phase, offer and cover in one ticket-types query', async () => {
     const { repo } = fakeRepo([
       seed('soon', 'published', new Date('2026-10-01T13:00:00Z')),
       seed('later', 'published', new Date('2026-11-14T12:30:00Z')),
       seed('gone', 'archived', new Date('2026-03-01T13:00:00Z')),
       seed('draft', 'draft', new Date('2026-10-20T13:00:00Z')),
     ]);
-    const tt = ticketTypesWithCapacity({
-      soon: { total: 100, sold: 40, held: 10, from: 80_000 },
-      later: { total: 50, sold: 50, held: 0, from: 60_000 },
-    });
-    const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
+    const types = ticketTypesOf([
+      tt('soon', { pricePaisa: 80_000, quantityTotal: 60, quantitySold: 20, quantityReserved: 10 }),
+      tt('soon', { name: 'VIP', pricePaisa: 250_000, quantityTotal: 40, quantitySold: 20 }),
+      tt('later', { pricePaisa: 60_000, quantityTotal: 50, quantitySold: 50 }),
+      tt('draft', { pricePaisa: 1 }),
+    ]);
+    const svc = createEventsService(repo, types, fakeStorage().storage, clock);
 
     const home = await svc.getHomePage();
 
     expect(home.featured?.event.id).toBe('soon');
     expect(home.featured?.phase).toBe('open');
-    expect(home.featured?.fromPricePaisa).toBe(80_000);
+    expect(home.featured?.offer.fromPricePaisa).toBe(80_000);
+    expect(home.featured?.offer.fromTypeName).toBe('General');
+    // (60 − 20 − 10) + (40 − 20): stock left across every type.
     expect(home.featured?.availableTotal).toBe(50);
     expect(home.featured?.coverUrl).toBe('https://cdn.test/events/soon/cover-x.png');
 
     expect(home.alsoUpcoming.map((h) => h.event.id)).toEqual(['later']);
     expect(home.alsoUpcoming[0]?.phase).toBe('sold_out');
+    // Nothing left to buy: the card still quotes a price.
+    expect(home.alsoUpcoming[0]?.offer.fromPricePaisa).toBe(60_000);
+    expect(home.upcomingTotal).toBe(2);
 
     expect(home.past.map((h) => h.event.id)).toEqual(['gone']);
     expect(home.past[0]?.phase).toBe('past');
-    expect(home.past[0]?.fromPricePaisa).toBeNull();
+    expect(home.past[0]?.offer.fromPricePaisa).toBeNull();
+    expect(home.past[0]?.availableTotal).toBe(0);
 
-    expect(tt.capacityByEvent).toHaveBeenCalledTimes(1);
-    expect(tt.capacityByEvent).toHaveBeenCalledWith(['soon', 'later', 'gone']);
+    expect(types.listByEvents).toHaveBeenCalledTimes(1);
+    expect(types.listByEvents).toHaveBeenCalledWith(['soon', 'later', 'gone']);
+  });
+
+  it('names the Early Bird while it sells, by the rule the event page uses', async () => {
+    const startsAt = new Date('2026-10-20T13:00:00Z');
+    const { repo } = fakeRepo([
+      seed('eb', 'published', startsAt, {
+        registrationOpensAt: new Date('2026-09-01T00:00:00Z'),
+        registrationClosesAt: new Date('2026-10-15T13:00:00Z'),
+      }),
+    ]);
+    const types = ticketTypesOf([
+      tt('eb', { name: 'General', pricePaisa: 120_000 }),
+      tt('eb', {
+        name: 'Early Bird',
+        pricePaisa: 60_000,
+        salesEndsAt: new Date('2026-09-25T18:00:00Z'),
+      }),
+    ]);
+    const svc = createEventsService(repo, types, fakeStorage().storage, clock);
+
+    const { featured } = await svc.getHomePage();
+
+    expect(featured?.offer).toMatchObject({
+      fromPricePaisa: 60_000,
+      fromIsEarlyBird: true,
+      earlyBirdOnSale: true,
+      earlyBird: { name: 'Early Bird' },
+    });
+    expect(featured?.offer.highlightId).toBe(featured?.offer.earlyBird?.id);
+  });
+
+  it('features the next show still on sale over a sooner one whose registration closed', async () => {
+    const { repo } = fakeRepo([
+      // Starts in 3 days; registration closed yesterday (the 5-day gap).
+      seed('closed', 'published', new Date('2026-09-21T13:00:00Z'), {
+        registrationClosesAt: new Date('2026-09-17T13:00:00Z'),
+      }),
+      seed('open', 'published', new Date('2026-10-20T13:00:00Z')),
+    ]);
+    const svc = createEventsService(
+      repo,
+      ticketTypesOf([tt('closed'), tt('open')]),
+      fakeStorage().storage,
+      clock,
+    );
+
+    const home = await svc.getHomePage();
+
+    expect(home.featured?.event.id).toBe('open');
+    expect(home.featured?.phase).toBe('open');
+    expect(home.alsoUpcoming.map((h) => [h.event.id, h.phase])).toEqual([['closed', 'closed']]);
+    expect(home.upcomingTotal).toBe(2);
   });
 
   it('returns the dormant state when nothing is published and upcoming', async () => {
     const { repo } = fakeRepo([seed('gone', 'archived', new Date('2026-03-01T13:00:00Z'))]);
-    const svc = createEventsService(
-      repo,
-      ticketTypesWithCapacity({}),
-      fakeStorage().storage,
-      clock,
-    );
+    const svc = createEventsService(repo, ticketTypesOf([]), fakeStorage().storage, clock);
     const home = await svc.getHomePage();
     expect(home.featured).toBeNull();
     expect(home.alsoUpcoming).toEqual([]);
+    expect(home.upcomingTotal).toBe(0);
     expect(home.past).toHaveLength(1);
   });
 
-  it('getArchivePage: every past event newest first with its cover, no capacity query', async () => {
+  it('getUpcomingPage: every upcoming published event soonest first, uncapped, in one ticket-types query', async () => {
+    const upcoming = Array.from({ length: 8 }, (_, i) =>
+      seed(`u${i}`, 'published', new Date(Date.UTC(2026, 10, 30 - i, 13))),
+    );
+    const { repo } = fakeRepo([
+      ...upcoming,
+      seed('gone', 'archived', new Date('2026-03-01T13:00:00Z')),
+      seed('pulled', 'archived', new Date('2026-12-01T13:00:00Z')),
+      seed('draft', 'draft', new Date('2026-10-20T13:00:00Z')),
+    ]);
+    const types = ticketTypesOf([tt('u7', { pricePaisa: 50_000 }), tt('gone')]);
+    const svc = createEventsService(repo, types, fakeStorage().storage, clock);
+
+    const page = await svc.getUpcomingPage();
+
+    const ids = Array.from({ length: 8 }, (_, i) => `u${7 - i}`);
+    expect(page.map((h) => h.event.id)).toEqual(ids);
+    expect(page[0]).toMatchObject({
+      phase: 'open',
+      availableTotal: 100,
+      offer: { fromPricePaisa: 50_000 },
+      coverUrl: 'https://cdn.test/events/u7/cover-x.png',
+    });
+    // No ticket types yet: nothing to sell, no price.
+    expect(page[1]).toMatchObject({ availableTotal: 0, offer: { fromPricePaisa: null } });
+    expect(types.listByEvents).toHaveBeenCalledTimes(1);
+    expect(types.listByEvents).toHaveBeenCalledWith(ids);
+  });
+
+  it('getArchivePage: every past event newest first with its cover, no ticket-types query', async () => {
     const { repo } = fakeRepo([
       seed('soon', 'published', new Date('2026-10-01T13:00:00Z')),
       seed('spring', 'archived', new Date('2026-03-01T13:00:00Z')),
       seed('summer', 'published', new Date('2026-07-01T13:00:00Z')),
       seed('draft-old', 'draft', new Date('2025-01-01T13:00:00Z')),
     ]);
-    const tt = ticketTypesWithCapacity({});
-    const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
+    const types = ticketTypesOf([]);
+    const svc = createEventsService(repo, types, fakeStorage().storage, clock);
 
     const archive = await svc.getArchivePage();
 
     expect(archive.map((a) => a.event.id)).toEqual(['summer', 'spring']);
     expect(archive[0]?.coverUrl).toBe('https://cdn.test/events/summer/cover-x.png');
     expect(archive[1]?.coverUrl).toBeNull();
-    expect(tt.capacityByEvent).not.toHaveBeenCalled();
+    expect(types.listByEvents).not.toHaveBeenCalled();
   });
 });
 
@@ -652,6 +815,7 @@ describe('eventsService — private venue', () => {
       registrationClosesAt: new Date(startsAt.getTime() - 86_400_000),
       status: 'published',
       imageKey: null,
+      presentingSponsorId: null,
       createdAt: NOW,
       updatedAt: NOW,
     }) as EventRecord;
@@ -661,18 +825,25 @@ describe('eventsService — private venue', () => {
       privateEvent('soon', new Date('2026-10-01T13:00:00Z')),
       privateEvent('gone', new Date('2026-03-01T13:00:00Z')),
     ]);
-    const tt: TicketTypesRepository = { ...fakeTicketTypes(), capacityByEvent: async () => [] };
+    const tt: TicketTypesRepository = { ...fakeTicketTypes(), listByEvents: async () => [] };
     const svc = createEventsService(repo, tt, fakeStorage().storage, clock);
 
     const pub = await svc.getPublicEvent('soon');
     const home = await svc.getHomePage();
+    const upcoming = await svc.getUpcomingPage();
     const archive = await svc.getArchivePage();
-    for (const e of [pub.event, home.featured!.event, ...home.past.map((h) => h.event)]) {
+    for (const e of [
+      pub.event,
+      home.featured!.event,
+      ...home.past.map((h) => h.event),
+      ...upcoming.map((h) => h.event),
+    ]) {
       expect(e.venue).toBeNull();
       expect(e).toMatchObject({ venueHidden: true, venueArea: 'Tejgaon, Dhaka' });
     }
+    expect(upcoming).toHaveLength(1);
     expect(archive.map((a) => a.event.venue)).toEqual([null]);
-    expect(JSON.stringify({ pub, home, archive })).not.toContain('Warehouse 7');
+    expect(JSON.stringify({ pub, home, upcoming, archive })).not.toContain('Warehouse 7');
 
     expect((await svc.getEvent('soon')).venue).toBe(secret);
   });

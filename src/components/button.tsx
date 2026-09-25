@@ -21,7 +21,8 @@ export const buttonVariants = cva(
           'border-foreground bg-foreground text-background hover:border-[#33302a] hover:bg-[#33302a] disabled:bg-secondary',
         secondary:
           'border-border-strong bg-card text-foreground hover:bg-secondary disabled:bg-card',
-        ghost: 'border-transparent bg-transparent text-foreground hover:bg-secondary disabled:border-transparent',
+        ghost:
+          'border-transparent bg-transparent text-foreground hover:bg-secondary disabled:border-transparent',
         destructive:
           'border-destructive bg-destructive text-white hover:border-[#911d17] hover:bg-[#911d17] disabled:bg-secondary',
         cta: 'border-foreground bg-marigold text-foreground hover:bg-[#e2962c] disabled:bg-secondary',

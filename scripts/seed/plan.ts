@@ -2,15 +2,17 @@ import { addDays, addHours, addMinutes } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { takaToPaisa } from '@/server/lib/money';
 import { DHAKA_TZ } from '@/lib/time';
+import type { SponsorLevel, SponsorTileTone } from '@/server/repositories/sponsors.repository';
 import { PEOPLE, type Person, phoneFor } from './people';
 
 /**
  * The dev seed's data, as a pure function of "now": five events in every
- * public phase, their ticket types, three promo codes and ~150 orders, each
- * with a storyline and the moments it happens. Deterministic (seeded PRNG),
- * so every run tells the same story; relative to `now`, so it never goes
- * stale. No I/O — the runner executes it through the real services, and
- * tests/unit/seed-plan.test.ts proves every order is buyable when it is.
+ * public phase, their ticket types, three promo codes, eight sponsors and
+ * ~150 orders, each with a storyline and the moments it happens.
+ * Deterministic (seeded PRNG), so every run tells the same story; relative
+ * to `now`, so it never goes stale. No I/O — the runner executes it through
+ * the real services, and tests/unit/seed-plan.test.ts proves every order is
+ * buyable when it is.
  */
 
 export type Story =
@@ -49,7 +51,31 @@ export interface SeedEvent {
   archiveAt?: Date;
   /** Cover gradient hue, 0–360. */
   hue: number;
+  /** Sponsor key shown as "Presented by"; the sponsor must be active to show. */
+  presenter?: string;
   ticketTypes: SeedTicketType[];
+}
+
+/** The shapes the design's placeholder logos use (logos.ts draws them). */
+export type SponsorMark = 'bars' | 'circle' | 'square' | 'tri' | 'ring';
+
+export interface SeedSponsor {
+  key: string;
+  name: string;
+  /** Shorter wordmark text when the full name would be too small to read. */
+  wordmark?: string;
+  level: SponsorLevel;
+  tileTone: SponsorTileTone;
+  active: boolean;
+  /** Null: the tile is a plain logo, not a link. */
+  websiteUrl: string | null;
+  /** Logo width ÷ height: the generated SVG's viewBox is (100 × aspect) × 100. */
+  aspect: number;
+  mark: SponsorMark;
+  /** The mark's colour. */
+  colour: string;
+  /** The wordmark's colour; charcoal unless the logo is made for a dark tile. */
+  ink?: string;
 }
 
 export interface SeedPromo {
@@ -84,8 +110,12 @@ export interface SeedPlan {
   now: Date;
   /** Clock for creating the promo codes (before any order). */
   promosAt: Date;
+  /** Clock for creating the sponsors (before any event names a presenter). */
+  sponsorsAt: Date;
   events: SeedEvent[];
   promos: SeedPromo[];
+  /** In display order within each level: the service appends each one. */
+  sponsors: SeedSponsor[];
   orders: SeedOrder[];
 }
 
@@ -217,6 +247,7 @@ export function buildSeedPlan(now: Date): SeedPlan {
     ...schedule(12),
     createdAt: at(-10, 11),
     hue: 28,
+    presenter: 'kolorob',
     ticketTypes: [
       {
         key: 'early',
@@ -301,6 +332,106 @@ export function buildSeedPlan(now: Date): SeedPlan {
     ],
   };
   const events = [live, monsoon, poetry, winter, spring];
+
+  // --- Sponsors -----------------------------------------------------------
+  // The Canvas 6 design's sample sponsors (home-page.dc.html), picked for
+  // range: every level, logos from near-square to 7:1 (the tile formula's
+  // extremes), a hidden partner, a dark tile, and one with no website (a
+  // plain tile, not a link). Kolorob presents the live show.
+  const site = (k: string) => `https://${k}.example`;
+  const sponsors: SeedSponsor[] = [
+    {
+      key: 'kolorob',
+      name: 'Kolorob Audio',
+      level: 'presenting',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: site('kolorob'),
+      aspect: 3,
+      mark: 'bars',
+      colour: '#0F5B8C',
+    },
+    {
+      key: 'nodi',
+      name: 'Nodi Coffee Roasters',
+      wordmark: 'Nodi Coffee',
+      level: 'partner',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: site('nodi'),
+      aspect: 2.6,
+      mark: 'circle',
+      colour: '#6B3F1D',
+    },
+    {
+      key: 'parabaas',
+      name: 'Parabaas Printing House',
+      level: 'partner',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: site('parabaas'),
+      aspect: 7,
+      mark: 'square',
+      colour: '#B3261E',
+    },
+    {
+      key: 'megh',
+      name: 'Megh Stage Rentals',
+      wordmark: 'Megh Stage',
+      level: 'partner',
+      tileTone: 'light',
+      active: false,
+      websiteUrl: site('megh'),
+      aspect: 3.4,
+      mark: 'tri',
+      colour: '#1C1A17',
+    },
+    {
+      key: 'bhor',
+      name: 'Bhor FM',
+      level: 'supporter',
+      tileTone: 'dark',
+      active: true,
+      websiteUrl: site('bhor'),
+      aspect: 2,
+      mark: 'ring',
+      colour: '#EDA43C',
+      ink: '#FBFAF8',
+    },
+    {
+      key: 'ghuri',
+      name: 'Ghuri Studio',
+      level: 'supporter',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: site('ghuri'),
+      aspect: 2.4,
+      mark: 'tri',
+      colour: '#6B3FA0',
+    },
+    {
+      key: 'pakhi',
+      name: 'Pakhi Press',
+      level: 'supporter',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: null,
+      aspect: 1.2,
+      mark: 'circle',
+      colour: '#9A3412',
+    },
+    {
+      key: 'rongdhonu',
+      name: 'Rongdhonu Lights',
+      level: 'supporter',
+      tileTone: 'light',
+      active: true,
+      websiteUrl: site('rongdhonu'),
+      aspect: 4.5,
+      mark: 'ring',
+      colour: '#BE185D',
+    },
+  ];
 
   // --- Orders -------------------------------------------------------------
   const settled = addHours(now, -20); // an issued order was placed at least this long ago
@@ -408,7 +539,9 @@ export function buildSeedPlan(now: Date): SeedPlan {
   return {
     now,
     promosAt: at(-99, 12),
+    sponsorsAt: at(-40, 12),
     events,
+    sponsors,
     promos: [
       { code: 'DHAKA15', type: 'percentage', value: 15, active: true, restrictTo: [] },
       {

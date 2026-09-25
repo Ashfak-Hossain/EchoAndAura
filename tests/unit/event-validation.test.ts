@@ -35,6 +35,17 @@ describe('eventFormSchema', () => {
     expect(r.data.startsAt.toISOString()).toBe('2026-10-01T13:00:00.000Z');
   });
 
+  it('reads the presenting sponsor select: "None" and a missing field are null, a uuid is kept', () => {
+    const id = '0b8e2f4c-6a1d-4c3e-9f57-2d8a1b6c9e03';
+    const none = eventFormSchema.safeParse({ ...valid, presentingSponsorId: '' });
+    expect(none.success && none.data.presentingSponsorId).toBeNull();
+    // Null rather than undefined: the form is a full replace, so "None" clears it.
+    const missing = eventFormSchema.safeParse(valid);
+    expect(missing.success && missing.data.presentingSponsorId).toBeNull();
+    const picked = eventFormSchema.safeParse({ ...valid, presentingSponsorId: ` ${id} ` });
+    expect(picked.success && picked.data.presentingSponsorId).toBe(id);
+  });
+
   it('lower-cases an explicit slug', () => {
     const r = eventFormSchema.safeParse({ ...valid, slug: 'Launch-Night' });
     expect(r.success && r.data.slug).toBe('launch-night');
@@ -55,6 +66,15 @@ describe('eventFormSchema', () => {
     expect(firstMessage({ ...valid, startsAt: '' })).toBe('Enter a valid date and time');
     expect(firstMessage({ ...valid, startsAt: '2026-13-45T19:00' })).toBe(
       'Enter a valid date and time',
+    );
+  });
+
+  it('rejects a presenting sponsor that is not an id from the list', () => {
+    expect(firstMessage({ ...valid, presentingSponsorId: 'kolorob' })).toBe(
+      'Choose a presenting sponsor from the list',
+    );
+    expect(firstMessage({ ...valid, presentingSponsorId: '1; drop table events' })).toBe(
+      'Choose a presenting sponsor from the list',
     );
   });
 

@@ -14,6 +14,7 @@ import { ordersRepository } from '@/server/repositories/orders.repository';
 import { promoCodesRepository } from '@/server/repositories/promo-codes.repository';
 import { reportsRepository } from '@/server/repositories/reports.repository';
 import { settingsRepository } from '@/server/repositories/settings.repository';
+import { sponsorsRepository } from '@/server/repositories/sponsors.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
@@ -27,6 +28,7 @@ import { createDashboardService } from '@/server/services/dashboard.service';
 import { createDoorService } from '@/server/services/door.service';
 import { doorRepository } from '@/server/repositories/door.repository';
 import { createSettingsService } from '@/server/services/settings.service';
+import { createSponsorsService } from '@/server/services/sponsors.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
@@ -44,6 +46,7 @@ function lazyStorage(): ObjectStorage {
 
 export const storage: ObjectStorage = {
   createUploadUrl: (input) => lazyStorage().createUploadUrl(input),
+  put: (input) => lazyStorage().put(input),
   head: (key) => lazyStorage().head(key),
   delete: (key) => lazyStorage().delete(key),
   publicUrl: (key) => lazyStorage().publicUrl(key),
@@ -114,6 +117,14 @@ export const doorService = createDoorService({
   tickets: ticketsRepository,
   orders: ordersRepository,
   events: eventsRepository,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+// B15: sponsors. Logos are uploaded by the server before the transaction
+// and old ones deleted after it (Invariant 7).
+export const sponsorsService = createSponsorsService({
+  sponsors: sponsorsRepository,
+  storage,
   runInTransaction: (fn) => db.transaction(fn),
 });
 

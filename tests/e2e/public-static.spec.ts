@@ -19,10 +19,42 @@ test.describe('static pages (A7)', () => {
       expect(res?.status(), path).toBe(200);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     }
+    // Canvas 6 (N12): the footer groups its links into named navs. "Refund
+    // policy" is under both Help and Legal, so each link is looked up in one.
     await page.goto('/');
-    const footer = page.getByRole('navigation', { name: 'Site pages' });
-    for (const label of ['About', 'FAQ', 'Terms of sale', 'Privacy', 'Refund policy', 'Contact']) {
-      await expect(footer.getByRole('link', { name: label, exact: true })).toBeVisible();
+    const footer = page.getByRole('contentinfo');
+    const groups: [string, [string, string][]][] = [
+      [
+        'About',
+        [
+          ['About', '/about'],
+          ['Contact', '/contact'],
+        ],
+      ],
+      [
+        'Help',
+        [
+          ['FAQ', '/faq'],
+          ['Refund policy', '/refund'],
+        ],
+      ],
+      [
+        'Legal',
+        [
+          ['Terms of sale', '/terms'],
+          ['Privacy policy', '/privacy'],
+          ['Refund policy', '/refund'],
+        ],
+      ],
+    ];
+    for (const [nav, links] of groups) {
+      const group = footer.getByRole('navigation', { name: nav, exact: true });
+      for (const [label, href] of links) {
+        await expect(group.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+          'href',
+          href,
+        );
+      }
     }
   });
 

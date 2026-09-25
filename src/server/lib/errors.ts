@@ -366,3 +366,28 @@ export class DoorPassRevokedError extends DomainError {
     super(`Gate pass ${passId} was revoked`);
   }
 }
+
+export class SponsorNotFoundError extends DomainError {
+  constructor(public readonly sponsorId: string) {
+    super(`Sponsor ${sponsorId} not found`);
+  }
+}
+
+/** The logo failed `inspectLogo`; `reason` is the sentence the admin form shows. */
+export class SponsorLogoInvalidError extends DomainError {
+  constructor(public readonly reason: string) {
+    super(reason);
+  }
+}
+
+/**
+ * The one-presenting-partner index refused a write. Every sponsor write
+ * takes the same advisory lock and demotes the old presenting partner
+ * first, so this is the backstop for a writer that skipped it — the admin
+ * reloads and sees who is presenting now.
+ */
+export class SponsorPresentingConflictError extends DomainError {
+  constructor() {
+    super('Another sponsor is already the presenting partner');
+  }
+}

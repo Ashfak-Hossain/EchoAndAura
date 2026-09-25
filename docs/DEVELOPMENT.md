@@ -31,17 +31,20 @@ closing soon with a **private venue**, one sold out, one not open yet, one
 past and archived — plus ~155 orders in every state (issued, awaiting
 verification, awaiting payment with one hold ending within 2 hours,
 rejected, expired, a cancelled ticket, comps) and the promo codes DHAKA15,
-VIP500 and EARLYFRIENDS. Dates are relative to today, so it never goes
-stale; covers are generated (sharp). Everything goes through the real
+VIP500 and EARLYFRIENDS. It also adds eight sponsors across the three
+levels (one hidden, one on a dark tile, one without a website) with
+generated SVG wordmark logos, and the open event is "Presented by" the
+presenting partner. Dates are relative to today, so it never goes stale;
+covers are generated (sharp). Everything goes through the real
 services, so every counter and audit row is genuine; only the timestamps
 are backdated so reports show weeks of history. Buyers are `@example.com`
 and email hooks are off — nothing is ever sent.
 
 - `pnpm db:seed` — adds whatever is missing; an event already seeded is
-  skipped with its orders.
+  skipped with its orders, a sponsor with the same name is kept.
 - `pnpm db:seed --reset` — first **empties** events, ticket types, orders,
-  tickets, promo codes, gate passes and door scans (users, sessions and
-  settings stay). Refused
+  tickets, promo codes, gate passes, door scans and sponsors, and removes
+  their cover and logo objects (users, sessions and settings stay). Refused
   unless the database is local and not `_e2e`, and `APP_ENV`/`NODE_ENV`
   are not production or staging (`scripts/seed/guard.ts`).
 - Settings are written only when none are saved yet.

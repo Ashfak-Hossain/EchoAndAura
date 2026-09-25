@@ -31,6 +31,11 @@ and this file is stale.
 - Check-in at the gate: door phones scan the ticket QR with a per-gate pass
   (first scan wins, name search as a fallback); the printed/exported list is
   the backup ([ADR-030](DECISIONS.md)). Offline scanning is the next slice
+- Sponsors, managed by the admin: one presenting partner, partners and
+  supporters, each with an uploaded SVG or PNG logo and an optional
+  website, shown on the home page ("Supported by") and in the site footer;
+  hidden sponsors are kept but not shown. An event can name one presenting
+  sponsor, shown on its page as "Presented by" ([ADR-032](DECISIONS.md))
 
 ## Explicit out-of-scope
 

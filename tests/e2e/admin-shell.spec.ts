@@ -35,9 +35,10 @@ test.describe('admin shell (B2)', () => {
       'href',
       '/admin/orders',
     );
-    // Every section is live now (Promo codes B10, Reports B12, Settings B14).
+    // Every section is live now (Promo codes B10, Sponsors B15, Reports B12, Settings B14).
     for (const [label, href] of [
       ['Promo codes', '/admin/promo-codes'],
+      ['Sponsors', '/admin/sponsors'],
       ['Reports', '/admin/reports'],
       ['Settings', '/admin/settings'],
     ] as const) {

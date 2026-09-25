@@ -82,7 +82,7 @@ test.describe('private venue (ADR-029)', () => {
     );
     await expect(page.getByTestId('event-venue-line')).toContainText(AREA);
     await expect(page.getByRole('link', { name: /Maps/ })).toHaveCount(0);
-    for (const url of [`/events/${slug}`, `/events/${slug}/register`, '/', '/archive']) {
+    for (const url of [`/events/${slug}`, `/events/${slug}/register`, '/', '/events', '/archive']) {
       expect(await rawHtml(page, url), url).not.toContain('Warehouse 7');
     }
 

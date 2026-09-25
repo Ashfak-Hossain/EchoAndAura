@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { VENUE_PRIVATE_NOTE, forPublic, publicVenue, publicVenueLine } from '@/server/lib/venue';
+import {
+  VENUE_PRIVATE_NOTE,
+  forPublic,
+  publicVenue,
+  publicVenueLine,
+  venueCity,
+} from '@/server/lib/venue';
 import { eventFormSchema } from '@/lib/validation/events';
 
 /**
@@ -56,6 +62,28 @@ describe('publicVenue / publicVenueLine', () => {
     expect(publicVenueLine({ ...hidden, venueArea: null })).toBe(VENUE_PRIVATE_NOTE);
     expect(publicVenue({ venue: null, venueHidden: false, venueArea: null }).text).toBeNull();
     expect(publicVenueLine({ venue: null, venueHidden: false, venueArea: null })).toBeNull();
+  });
+});
+
+describe('venueCity', () => {
+  it('a public venue gives the last comma part, trimmed', () => {
+    expect(venueCity(shown)).toBe('Dhaka');
+    expect(venueCity({ ...shown, venue: 'Bayside Hall, Khulshi,  Chattogram ' })).toBe(
+      'Chattogram',
+    );
+  });
+
+  it('a private venue only ever yields its area', () => {
+    expect(venueCity(hidden)).toBe('Dhaka');
+    // The hidden venue has a comma of its own; it must never be read.
+    expect(venueCity({ ...hidden, venueArea: 'Tejgaon' })).toBeNull();
+    expect(venueCity({ ...hidden, venueArea: null })).toBeNull();
+  });
+
+  it('no comma, a trailing comma, or no venue is nothing', () => {
+    expect(venueCity({ ...shown, venue: 'The Attic' })).toBeNull();
+    expect(venueCity({ ...shown, venue: 'The Attic, ' })).toBeNull();
+    expect(venueCity({ venue: null, venueHidden: false, venueArea: null })).toBeNull();
   });
 });
 

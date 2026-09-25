@@ -26,6 +26,7 @@ const event: EventRecord = {
   registrationClosesAt: new Date('2026-09-26T13:00:00Z'),
   status: 'published',
   imageKey: null,
+  presentingSponsorId: null,
   createdAt: NOW,
   updatedAt: NOW,
 };

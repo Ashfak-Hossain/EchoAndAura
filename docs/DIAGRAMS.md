@@ -25,6 +25,7 @@ erDiagram
     events ||--o{ door_passes : "gates of"
     door_passes ||--o{ door_scans : logs
     tickets |o--o{ door_scans : "scanned as"
+    sponsors |o--o{ events : presents
 
     events {
         uuid id PK
@@ -34,6 +35,7 @@ erDiagram
         timestamptz registration_opens_at
         timestamptz registration_closes_at
         event_status status
+        uuid presenting_sponsor_id FK
     }
     ticket_types {
         uuid id PK
@@ -109,11 +111,25 @@ erDiagram
         door_scan_method method
         timestamptz received_at
     }
+    sponsors {
+        uuid id PK
+        text name
+        text website_url
+        sponsor_level level
+        text logo_key UK
+        double logo_width
+        double logo_height
+        sponsor_tile_tone tile_tone
+        boolean active
+        int position
+    }
 ```
 
 Money is `bigint` paisa (Invariant 1); `orders.bkash_trx_id` is UNIQUE
 (Invariant 3); `ticket_types` carries a CHECK that
 `quantity_total − quantity_sold − quantity_reserved >= 0` (Invariant 2 backstop).
+A partial unique index on `sponsors.level` allows one presenting partner;
+deleting a sponsor sets `events.presenting_sponsor_id` to null (ADR-032).
 
 ---
 

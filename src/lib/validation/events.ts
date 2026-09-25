@@ -75,6 +75,15 @@ export const eventFormSchema = z
     endsAt: optionalDhakaDateTime,
     registrationOpensAt: optionalDhakaDateTime,
     registrationClosesAt: optionalDhakaDateTime,
+    // <select>: "" is the "None" option. Null, not undefined — the form is a
+    // full replace, so choosing None clears the presenter.
+    presentingSponsorId: z
+      .string()
+      .trim()
+      .transform((v) => (v === '' ? undefined : v))
+      .optional()
+      .pipe(z.uuid({ error: 'Choose a presenting sponsor from the list' }).optional())
+      .transform((v) => v ?? null),
   })
   .superRefine((v, ctx) => {
     // Ticket holders are promised the venue; a private one must exist.

@@ -6,6 +6,7 @@ import { promoDiscountPerTicket, type PromoType } from '@/server/lib/promo';
 import type { PromoPickerGroup } from '@/server/services/promo-codes.service';
 import { Button } from '@/components/button';
 import { Field, FieldHint, FormAlert } from '@/components/form-field';
+import { SegmentedControl } from '@/components/segmented-control';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,11 @@ interface Props {
 }
 
 const TAKA = /^\d{1,7}(?:\.\d{1,2})?$/;
+
+const TYPE_OPTIONS = [
+  ['percentage', 'Percentage'],
+  ['fixed', 'Fixed ৳'],
+] as const;
 
 /**
  * B10 "New promo code" sheet body. Uncontrolled where it can be; the few
@@ -143,37 +149,7 @@ function PromoCodeFields({
 
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 text-sm font-medium">Type</legend>
-          <div
-            className="inline-flex w-fit rounded-md border border-input bg-card p-0.5"
-            role="radiogroup"
-          >
-            {(
-              [
-                ['percentage', 'Percentage'],
-                ['fixed', 'Fixed ৳'],
-              ] as const
-            ).map(([v, label]) => (
-              <label
-                key={v}
-                className={cn(
-                  'cursor-pointer rounded-[5px] px-3.5 py-1.5 text-[13px] font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-ring',
-                  type === v
-                    ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                )}
-              >
-                <input
-                  type="radio"
-                  name="type"
-                  value={v}
-                  checked={type === v}
-                  onChange={() => setType(v)}
-                  className="sr-only"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+          <SegmentedControl name="type" value={type} options={TYPE_OPTIONS} onChange={setType} />
         </fieldset>
 
         <div className="flex flex-col gap-2">

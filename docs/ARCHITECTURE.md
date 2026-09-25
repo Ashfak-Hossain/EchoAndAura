@@ -109,7 +109,9 @@ sessions can't race each other.
 Entities and their relationships, not full DDL (that lives in `drizzle/`,
 generated — never hand-edited):
 
-- **events** — one event, has many `ticket_types`
+- **events** — one event, has many `ticket_types`; `image_key` names its
+  cover in object storage; `presenting_sponsor_id` optionally names the
+  sponsor shown as "Presented by" (`ON DELETE SET NULL`)
 - **ticket_types** — belongs to an event; holds `quantity_total`,
   `quantity_sold`, `quantity_reserved`; may have its own sales window (Early
   Bird is a row here, not a price-change rule)
@@ -126,6 +128,16 @@ generated — never hand-edited):
   working window is derived from the event's dates, never stored
 - **door_scans** — append-only log of every answered gate scan, keyed by the
   phone's `scan_id` (UNIQUE) so a retried request replays its answer
+- **sponsors** — shown on the home page and in the footer; a `level`
+  (presenting, partner, supporter — at most one presenting, by a partial
+  unique index), a dense `position` within the level, `active`, a light or
+  dark `tile_tone`, and `logo_key` plus the logo's measured width and
+  height (ADR-032)
+
+Images live in object storage (R2; MinIO locally), and rows store keys,
+never URLs. Event covers are uploaded by the browser with a presigned PUT
+(ADR-007). Sponsor logos go through the server, which checks the file
+first and stores it as a download-only attachment (ADR-032).
 
 ## Directory-structure rationale
 

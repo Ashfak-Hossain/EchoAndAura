@@ -209,10 +209,15 @@ any origin by default, so no CORS setup is needed locally.
    ]
    ```
 
-Uploads never pass through the Next.js server: the server presigns a PUT
-bound to the validated type and size, the browser uploads, and the server
-verifies the stored object before recording its key
-(see [DECISIONS.md — ADR-007](DECISIONS.md)).
+Event cover uploads never pass through the Next.js server: the server
+presigns a PUT bound to the validated type and size, the browser uploads,
+and the server verifies the stored object before recording its key
+(see [DECISIONS.md — ADR-007](DECISIONS.md)). Sponsor logos are the
+exception ([ADR-032](DECISIONS.md)): SVG or PNG files of at most 512 KB,
+which the server receives, inspects and writes itself with
+`ObjectStorage.put`, under an immutable key and served as an attachment.
+The same Object Read & Write token covers those writes; the CORS policy
+above is only needed for the browser's cover PUT.
 
 ### Manual bKash — Phase 3
 

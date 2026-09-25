@@ -55,6 +55,7 @@ const view: EmailView = {
     registrationClosesAt: new Date('2026-09-26T17:59:00Z'),
     status: 'published',
     imageKey: null,
+    presentingSponsorId: null,
     createdAt: T0,
     updatedAt: T0,
   },

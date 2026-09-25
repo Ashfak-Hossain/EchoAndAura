@@ -47,6 +47,7 @@ export function event(over: Partial<EventRecord> = {}): EventRecord {
     registrationClosesAt: new Date('2026-09-26T13:00:00Z'),
     status: 'published',
     imageKey: null,
+    presentingSponsorId: null,
     createdAt: T0,
     updatedAt: T0,
     ...over,

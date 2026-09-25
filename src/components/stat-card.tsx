@@ -31,7 +31,7 @@ export function StatCard({ label, value, detail, detailTone = 'muted', urgent, c
       <span className={cn('text-[13px] font-medium', urgent ? '' : 'text-muted-foreground')}>
         {label}
       </span>
-      <span className="font-heading tabular text-4xl leading-none font-semibold">{value}</span>
+      <span className="font-heading text-4xl leading-none font-semibold tabular">{value}</span>
       {detail ? (
         <span
           className={cn(

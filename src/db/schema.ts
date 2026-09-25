@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  doublePrecision,
   index,
   integer,
   pgEnum,
@@ -36,6 +37,11 @@ export const ticketStatus = pgEnum('ticket_status', ['issued', 'cancelled']);
 // Personal accounts receive by "Send Money" and have limits; a merchant
 // account receives by "Payment". The buyer-facing wording follows it.
 export const bkashAccountType = pgEnum('bkash_account_type', ['personal', 'merchant']);
+// Declaration order is display order: Postgres sorts an enum by it, so
+// `ORDER BY level` lists presenting → partner → supporter.
+export const sponsorLevel = pgEnum('sponsor_level', ['presenting', 'partner', 'supporter']);
+// The tile behind the logo: dark for white or light-coloured marks.
+export const sponsorTileTone = pgEnum('sponsor_tile_tone', ['light', 'dark']);
 
 // ---------------------------------------------------------------------------
 // Events
@@ -69,6 +75,12 @@ export const events = pgTable(
     // a URL: the public URL is derived at render time, so moving buckets or
     // changing the public domain never touches rows.
     imageKey: text('image_key'),
+    // Optional "Presented by" line on the event page (Canvas 6, N11). SET
+    // NULL: deleting a sponsor drops the line, never the event. A hidden
+    // sponsor stays linked but is not shown (the page reads active ones only).
+    presentingSponsorId: uuid('presenting_sponsor_id').references(() => sponsors.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -76,6 +88,9 @@ export const events = pgTable(
     // A private venue that does not exist would make "sent with your
     // tickets" a lie: ticket holders must get one.
     check('events_hidden_venue_set', sql`NOT ${t.venueHidden} OR ${t.venue} IS NOT NULL`),
+    // The FK's ON DELETE SET NULL scans events by this column on every
+    // sponsor delete.
+    index('events_presenting_sponsor_id_idx').on(t.presentingSponsorId),
   ],
 );
 
@@ -431,6 +446,49 @@ export const doorScans = pgTable(
     index('door_scans_pass_id_idx').on(t.passId, t.receivedAt),
     index('door_scans_event_id_idx').on(t.eventId),
     index('door_scans_ticket_id_idx').on(t.ticketId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Sponsors — "Supported by" on the home page and in the footer (B15)
+// ---------------------------------------------------------------------------
+
+export const sponsors = pgTable(
+  'sponsors',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // Also the logo's alt text: screen readers read it out.
+    name: text('name').notNull(),
+    // NULL: the logo is shown without a link.
+    websiteUrl: text('website_url'),
+    level: sponsorLevel('level').notNull(),
+    // Object-storage key (sponsors/<id>/logo-x.svg), not a URL — like
+    // events.image_key. A fresh key per upload, so a key names one file.
+    logoKey: text('logo_key').notNull().unique(),
+    // The logo's intrinsic shape, measured by the server on upload: the
+    // tile sizing formula (lib/sponsor-fit.ts) needs its aspect ratio.
+    // Double precision because an SVG viewBox can be fractional.
+    logoWidth: doublePrecision('logo_width').notNull(),
+    logoHeight: doublePrecision('logo_height').notNull(),
+    tileTone: sponsorTileTone('tile_tone').notNull().default('light'),
+    // Hidden sponsors are kept (and keep their place) but never shown.
+    active: boolean('active').notNull().default(true),
+    // 1…n within the level, kept dense by the service on every write.
+    // Not unique: a renumber rewrites several rows in one statement, and a
+    // UNIQUE (level, position) would trip mid-statement on a swap.
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // One presenting partner at a time, whatever code path writes. The
+    // service demotes the old one first; this is the backstop.
+    uniqueIndex('sponsors_one_presenting')
+      .on(t.level)
+      .where(sql`${t.level} = 'presenting'`),
+    check('sponsors_logo_width_positive', sql`${t.logoWidth} > 0`),
+    check('sponsors_logo_height_positive', sql`${t.logoHeight} > 0`),
+    check('sponsors_position_positive', sql`${t.position} >= 1`),
   ],
 );
 

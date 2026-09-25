@@ -1,23 +1,25 @@
 /**
- * Dev seed: `pnpm db:seed [--reset]`. Builds five believable Dhaka events
- * and ~150 orders in every state THROUGH THE REAL SERVICES, so counters,
- * audit rows, CHECKs and invariants hold by construction. A movable clock is
+ * Dev seed: `pnpm db:seed [--reset]`. Builds five believable Dhaka events,
+ * eight sponsors and ~150 orders in every state THROUGH THE REAL SERVICES,
+ * so counters, audit rows, CHECKs and invariants hold by construction. A movable clock is
  * each service's `now`; email hooks are no-ops (nothing is queued or sent).
  * The one seed-only step is backdating created_at columns afterwards, so
  * the reports read as weeks of history rather than one spike today.
  *
  * Refuses anything but a local dev database (guard.ts). `--reset` empties
- * events, orders, tickets and promo codes first; users and settings stay.
+ * events, orders, tickets, promo codes and sponsors first; users and
+ * settings stay.
  */
 import { addHours, addSeconds } from 'date-fns';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, queryClient } from '@/db/client';
-import { events, orderEvents, orders, promoCodes, tickets } from '@/db/schema';
+import { events, orderEvents, orders, promoCodes, sponsors, tickets } from '@/db/schema';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { promoCodesRepository } from '@/server/repositories/promo-codes.repository';
 import { settingsRepository } from '@/server/repositories/settings.repository';
+import { sponsorsRepository } from '@/server/repositories/sponsors.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
@@ -25,12 +27,14 @@ import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
 import { createPromoCodesService } from '@/server/services/promo-codes.service';
+import { createSponsorsService } from '@/server/services/sponsors.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import { createS3ObjectStorage, readStorageEnv } from '@/server/storage/object-storage';
 import { isRejectionReason } from '@/server/lib/rejection-reasons';
 import { siteUrl } from '@/lib/env.public';
 import { renderCover } from './covers';
 import { SeedTargetError, assertSeedTarget } from './guard';
+import { logoUpload } from './logos';
 import { buildSeedPlan, type SeedOrder } from './plan';
 
 const ACTOR = process.env.SEED_ACTOR ?? 'admin@example.com';
@@ -81,15 +85,22 @@ async function main(): Promise<void> {
     runInTransaction,
     now,
   });
+  const sponsorsService = createSponsorsService({
+    sponsors: sponsorsRepository,
+    storage,
+    runInTransaction,
+    now,
+  });
 
   console.log(`Seeding ${target.database} on ${target.host}${reset ? ' (reset)' : ''}…`);
 
   if (reset) {
-    const keys = (await db.select({ key: events.imageKey }).from(events))
-      .map((r) => r.key)
-      .filter((k): k is string => k !== null);
+    const keys = [
+      ...(await db.select({ key: events.imageKey }).from(events)).map((r) => r.key),
+      ...(await db.select({ key: sponsors.logoKey }).from(sponsors)).map((r) => r.key),
+    ].filter((k): k is string => k !== null);
     await db.execute(
-      sql`TRUNCATE door_scans, door_passes, order_events, tickets, orders, promo_code_ticket_types, promo_codes, ticket_types, events`,
+      sql`TRUNCATE door_scans, door_passes, order_events, tickets, orders, promo_code_ticket_types, promo_codes, ticket_types, events, sponsors`,
     );
     // After the rows are gone; an orphaned object is harmless, a dangling key is not.
     let removed = 0;
@@ -102,7 +113,7 @@ async function main(): Promise<void> {
       }
     }
     console.log(
-      `  reset: emptied events, orders, tickets, promo codes; ${removed} cover objects removed`,
+      `  reset: emptied events, orders, tickets, promo codes, sponsors; ${removed} cover and logo objects removed`,
     );
   }
 
@@ -124,6 +135,38 @@ async function main(): Promise<void> {
     );
     console.log('  settings: demo organizer details saved (edit them at /admin/settings)');
   }
+
+  // --- Sponsors: before the events, so the live one can name its presenter ---
+  // Matched by name, so a rerun without --reset adds only what is missing.
+  const sponsorIds = new Map<string, string>(); // plan key → id
+  const existingSponsors = (await sponsorsService.listForAdmin()).flatMap((g) => g.sponsors);
+  let sponsorsAdded = 0;
+  clock = plan.sponsorsAt;
+  for (const s of plan.sponsors) {
+    const existing = existingSponsors.find((x) => x.name === s.name);
+    if (existing) {
+      sponsorIds.set(s.key, existing.id);
+      continue;
+    }
+    // Bytes in, as the admin form sends them: the service inspects the SVG,
+    // reads its shape and stores it before writing the row.
+    const row = await sponsorsService.create(
+      {
+        name: s.name,
+        websiteUrl: s.websiteUrl,
+        level: s.level,
+        tileTone: s.tileTone,
+        active: s.active,
+        logo: logoUpload(s),
+      },
+      ACTOR,
+    );
+    sponsorIds.set(s.key, row.id);
+    sponsorsAdded++;
+  }
+  console.log(
+    `  sponsors: ${sponsorsAdded} added${sponsorsAdded < plan.sponsors.length ? `, ${plan.sponsors.length - sponsorsAdded} already there` : ''}`,
+  );
 
   // --- Events, ticket types, covers, publish ---------------------------------
   const eventIds = new Map<string, string>();
@@ -153,6 +196,8 @@ async function main(): Promise<void> {
       endsAt: e.endsAt,
       registrationOpensAt: e.registrationOpensAt,
       registrationClosesAt: e.registrationClosesAt,
+      // Set at creation: nothing later in the seed replaces the whole event.
+      presentingSponsorId: e.presenter ? sponsorIds.get(e.presenter) : undefined,
     });
     eventIds.set(e.key, created.id);
     for (const t of e.ticketTypes) {
@@ -352,6 +397,14 @@ async function main(): Promise<void> {
   for (const e of plan.events) console.log(`  ${e.title.padEnd(40)} ${base}/events/${e.slug}`);
   console.log('');
   console.log('  Promo codes: DHAKA15 (15%), VIP500 (৳500 off VIP), EARLYFRIENDS (off)');
+  const hidden = plan.sponsors.filter((s) => !s.active).map((s) => s.name);
+  console.log(
+    `  Sponsors: ${plan.sponsors.length} at ${base}/admin/sponsors${hidden.length ? ` (hidden: ${hidden.join(', ')})` : ''}`,
+  );
+  for (const e of plan.events.filter((x) => x.presenter)) {
+    const presenter = plan.sponsors.find((s) => s.key === e.presenter);
+    if (presenter) console.log(`  ${e.title} is presented by ${presenter.name}`);
+  }
   console.log(`  Admin actions are recorded as ${ACTOR}. No admin yet? pnpm admin:create`);
 }
 

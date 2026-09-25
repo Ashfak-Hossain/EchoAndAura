@@ -231,6 +231,7 @@ describe('defaultReportEvent', () => {
       registrationClosesAt: null,
       status: 'published',
       imageKey: null,
+      presentingSponsorId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       ...over,
