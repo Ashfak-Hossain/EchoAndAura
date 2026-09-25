@@ -136,8 +136,13 @@ generated — never hand-edited):
 
 Images live in object storage (R2; MinIO locally), and rows store keys,
 never URLs. Event covers are uploaded by the browser with a presigned PUT
-(ADR-007). Sponsor logos go through the server, which checks the file
-first and stores it as a download-only attachment (ADR-032).
+(ADR-007). Pages show covers through Next's image optimizer
+(`/_next/image`). It fetches the original from the storage host, and only
+from there, then serves a WebP resized for each placement. The results are
+cached on disk under `.next-build/cache/images` (ADR-033). Open Graph tags
+keep the raw storage URL. Sponsor logos go through the server, which checks
+the file first and stores it as a download-only attachment (ADR-032). They
+are drawn with a plain `<img>`.
 
 ## Directory-structure rationale
 

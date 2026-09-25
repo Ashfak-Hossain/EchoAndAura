@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eventsService } from '@/server/container';
@@ -140,10 +141,18 @@ export default async function PublicEventPage({ params }: Props) {
           className={cn('relative aspect-16/10 w-full bg-[#1a2a20] lg:hidden', past && 'grayscale')}
         >
           {coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            // Both covers span the viewport: one `sizes`, so one srcset,
+            // so the browser picks the same file for both and fetches it
+            // once, although one of the two is display:none (ADR-033).
+            // Each is the largest paint at its width, so neither is lazy.
+            <Image
               src={coverUrl}
               alt=""
+              width={1200}
+              height={630}
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
               className="size-full object-cover"
               data-testid="event-cover-mobile"
             />
@@ -151,10 +160,14 @@ export default async function PublicEventPage({ params }: Props) {
         </div>
         <div aria-hidden="true" className="absolute inset-0 hidden lg:block">
           {coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={coverUrl}
               alt=""
+              width={1200}
+              height={630}
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
               className={cn('size-full object-cover opacity-90', past && 'grayscale')}
               data-testid="event-cover"
             />

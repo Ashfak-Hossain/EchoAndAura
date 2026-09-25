@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BrandMark } from '@/components/public/brand-mark';
@@ -59,10 +60,12 @@ export default async function AboutPage() {
 
       <figure data-testid="about-cover">
         {withCover?.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={withCover.coverUrl}
             alt={`Cover of ${withCover.event.title}`}
+            width={1200}
+            height={630}
+            sizes="100vw"
             className="h-55 w-full border-y border-border object-cover lg:h-120"
           />
         ) : (

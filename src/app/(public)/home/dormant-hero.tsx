@@ -1,6 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { HomeEvent } from '@/server/services/events.service';
-import { CoverPlaceholder, bandCover } from './cover-placeholder';
+import { BAND_COVER_SIZES, CoverPlaceholder, bandCover } from './cover-placeholder';
 import { FacebookIcon } from './icons';
 import { monthAndCity } from './past-strip';
 
@@ -32,7 +33,7 @@ export function DormantHero({
           </p>
           <h1
             id="dormant-title"
-            className="text-[30px] leading-[1.05] font-bold tracking-[-0.025em] text-balance text-[#fbfaf8] lg:text-[48px]"
+            className="text-[30px] leading-[1.05] font-bold tracking-tight text-balance text-[#fbfaf8] lg:text-[48px]"
           >
             No shows on sale right now.
           </h1>
@@ -71,15 +72,16 @@ export function DormantHero({
         {lastShow ? (
           <Link
             href={`/events/${lastShow.event.slug}`}
-            className="group order-first flex min-w-0 flex-col gap-3 rounded-lg lg:order-none"
+            className="group order-first flex min-w-0 flex-col gap-3 rounded-lg lg:order-0"
           >
             {lastShow.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={lastShow.coverUrl}
                 alt=""
                 width={1200}
                 height={630}
+                sizes={BAND_COVER_SIZES}
+                loading="eager"
                 fetchPriority="high"
                 className={`${bandCover} object-cover`}
               />
@@ -94,7 +96,7 @@ export function DormantHero({
             </span>
           </Link>
         ) : (
-          <CoverPlaceholder className="order-first lg:order-none" />
+          <CoverPlaceholder className="order-first lg:order-0" />
         )}
       </div>
     </section>

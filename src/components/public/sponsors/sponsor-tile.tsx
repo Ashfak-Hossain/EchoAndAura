@@ -54,8 +54,8 @@ export function SponsorLogo({
     '--lh': `${lg.h}px`,
   };
   return (
-    // Plain <img>: logos live on the storage host, which next/image's
-    // allow-list does not know, and they are drawn at a computed size.
+    // Plain <img>, unlike covers (ADR-033): logos are small, often SVG
+    // (which the optimizer refuses), and drawn at a computed size.
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={sponsor.logoUrl}

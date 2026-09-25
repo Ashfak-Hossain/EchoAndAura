@@ -1,4 +1,10 @@
 import type { NextConfig } from 'next';
+import { coverImagesConfig } from './src/lib/image-config';
+
+const covers = coverImagesConfig();
+if (covers.remotePatterns.length === 0) {
+  console.warn('R2_PUBLIC_URL is not set: event covers will not load from this build.');
+}
 
 const nextConfig: NextConfig = {
   // `next dev` and `next build` must never share a folder: a build (verify,
@@ -12,6 +18,17 @@ const nextConfig: NextConfig = {
   // tunnel (a real certificate, which the camera needs); `next dev` blocks
   // other hosts by default. Dev-only: production ignores this setting.
   allowedDevOrigins: ['*.trycloudflare.com'],
+  // ADR-033: event covers go through the optimizer, which may fetch only
+  // from the storage host (built from R2_PUBLIC_URL at build time).
+  images: {
+    ...covers,
+    // Every upload gets a new key (coverImageKey), so a URL's bytes never
+    // change: a long cache can't serve a stale cover.
+    minimumCacheTTL: 31 * 24 * 60 * 60,
+    // The defaults without 3840: covers are ~1200 wide, and a 4K variant
+    // of a 5 MB source would cost CPU for no visible gain.
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+  },
   headers() {
     return Promise.resolve([
       {

@@ -7,6 +7,7 @@ import type { HomeEvent } from '@/server/services/events.service';
 import { EventCard } from '@/components/public/event-card';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { event } from './helpers/fake-db';
+import { coverSources } from './helpers/next-image';
 
 const offer = (over: Partial<OfferSummary> = {}): OfferSummary => ({
   fromPricePaisa: 60_000,
@@ -48,6 +49,15 @@ describe('EventCard (N8)', () => {
     expect(out).toContain('From ৳600.00');
     expect(out).toMatch(/<img[^>]*loading="lazy"/);
     expect(out).toContain('alt=""');
+    // Through the optimizer (ADR-033): a srcset, and a column-sized pick.
+    expect(coverSources(out)).toEqual(['https://cdn.test/events/ev-1/cover-x.png']);
+    expect(out).toMatch(/srcSet="\/_next\/image\?url=[^"]*&amp;w=640&amp;q=75 640w/);
+    expect(out).toContain('sizes="(min-width: 1440px) 656px, (min-width: 768px) 50vw, 100vw"');
+  });
+
+  it('the wide card asks for its 7fr cover column, not half the page', () => {
+    const out = html(createElement(EventCard, { item: item(), variant: 'wide' }));
+    expect(out).toContain('sizes="(min-width: 1440px) 764px, (min-width: 1024px) 55vw, 100vw"');
   });
 
   it('says "Early Bird on sale" while the Early Bird sells', () => {

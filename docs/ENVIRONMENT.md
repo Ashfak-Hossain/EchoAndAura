@@ -219,6 +219,20 @@ which the server receives, inspects and writes itself with
 The same Object Read & Write token covers those writes; the CORS policy
 above is only needed for the browser's cover PUT.
 
+**Covers are displayed through Next's image optimizer**
+([ADR-033](DECISIONS.md)). The optimizer's allow-list is built from
+`R2_PUBLIC_URL`, so:
+
+- `R2_PUBLIC_URL` must be set **at build time** (`pnpm build`), not only at
+  runtime. The allow-list is baked into the build, so changing the bucket or
+  domain means a rebuild. A build with `APP_ENV=staging` or `production` and
+  no `R2_PUBLIC_URL` fails. Any other build warns, and its covers won't load.
+- Deployments must keep `.next-build/cache/images` between releases, as a
+  volume or a persistent directory. That is where resized covers are cached;
+  without it, every cover is re-encoded after each deploy.
+- With MinIO on `localhost`, the optimizer is allowed to fetch from a local
+  address. Against R2 it never is.
+
 ### Manual bKash — Phase 3
 
 - `BKASH_RECEIVE_NUMBER`: the organizer's bKash number, shown to buyers on the

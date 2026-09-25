@@ -43,17 +43,21 @@ test.describe('admin event cover image', () => {
     const img = page.getByTestId('cover-image');
     await expect(img).toBeVisible();
 
-    // The image is served by object storage (MinIO locally), not by Next.
-    const firstSrc = await img.getAttribute('src');
+    // The object lives in storage (MinIO locally); the page shows it through
+    // Next's optimizer, which names it in `url` (ADR-033).
+    const storedUrl = async () =>
+      new URL((await img.getAttribute('src'))!, 'http://x').searchParams.get('url')!;
+    const firstSrc = await storedUrl();
     expect(firstSrc).toMatch(/^http:\/\/localhost:9000\/.+\/events\/[0-9a-f-]{36}\/cover-.+\.png$/);
-    const served = await page.request.get(firstSrc!);
+    const served = await page.request.get(firstSrc);
     expect(served.status()).toBe(200);
     expect(served.headers()['content-type']).toBe('image/png');
 
-    // Replace: a new key, and the old object is gone.
+    // Replace: a new key (so no cached copy of the old one can show), and
+    // the old object is gone.
     await page.getByTestId('cover-file').setInputFiles(fixture('cover.png'));
-    await expect(img).not.toHaveAttribute('src', firstSrc!);
-    await expect.poll(async () => (await page.request.get(firstSrc!)).status()).toBe(404);
+    await expect.poll(storedUrl).not.toBe(firstSrc);
+    await expect.poll(async () => (await page.request.get(firstSrc)).status()).toBe(404);
 
     // Remove.
     await page.getByRole('button', { name: /remove cover image/i }).click();

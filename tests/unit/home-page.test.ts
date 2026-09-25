@@ -9,6 +9,7 @@ import type { HomeEvent } from '@/server/services/events.service';
 import type { SiteSettings } from '@/server/services/settings.service';
 import { HOLD_HOURS } from '@/content/site';
 import { event, ticketType } from './helpers/fake-db';
+import { coverSources } from './helpers/next-image';
 
 // The countdown island asks the router for a refresh at zero.
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -26,6 +27,7 @@ vi.mock('@/server/container', () => ({
 const { Hero } = await import('@/app/(public)/home/hero');
 const { Countdown, countdownLabel, countdownParts } = await import('@/app/(public)/home/countdown');
 const { DormantHero } = await import('@/app/(public)/home/dormant-hero');
+const { BAND_COVER_SIZES } = await import('@/app/(public)/home/cover-placeholder');
 const { UpcomingGrid } = await import('@/app/(public)/home/upcoming-grid');
 const { HowItWorks, howItWorksSteps } = await import('@/app/(public)/home/how-it-works');
 const { PastStrip } = await import('@/app/(public)/home/past-strip');
@@ -94,8 +96,12 @@ describe('Hero (N7)', () => {
       ['/events/winter-night-dhaka/register', 'Get tickets'],
       ['/events/winter-night-dhaka', 'Event details →'],
     ]);
-    expect(out).toMatch(/<img [^>]*fetchPriority="high"[^>]*data-testid="hero-cover"/i);
+    const cover = /<img [^>]*data-testid="hero-cover"[^>]*>/.exec(out)?.[0] ?? '';
+    expect(cover).toContain('fetchPriority="high"');
     expect(out).not.toContain('loading="lazy"');
+    // Through the optimizer (ADR-033), sized to the band's cover column.
+    expect(coverSources(out)).toEqual(['https://cdn.test/events/ev-1/cover-a.png']);
+    expect(cover).toContain(`sizes="${BAND_COVER_SIZES}"`);
   });
 
   it('closing soon: says so twice (chip and sentence) and still sells', () => {
@@ -279,7 +285,7 @@ describe('DormantHero', () => {
       ['/events/monsoon-session', 'Last show · Aug 2026 · ChattogramMonsoon Session'],
     ]);
     expect(out).toMatch(/<a [^>]*target="_blank"/);
-    expect(out).toContain('src="https://cdn.test/events/ev-past/cover-b.png"');
+    expect(coverSources(out)).toEqual(['https://cdn.test/events/ev-past/cover-b.png']);
   });
 
   it('without a Facebook URL there is no Facebook button', () => {
@@ -386,6 +392,10 @@ describe('PastStrip (N9)', () => {
     expect(text(out)).toContain('Aug 2026 · Chattogram');
     expect(out).toMatch(/Room only<\/span><span[^>]*>Aug 2026<\/span>/);
     expect(out).not.toContain('grayscale');
+    expect(coverSources(out)).toHaveLength(6);
+    expect(coverSources(out).every((src) => src?.startsWith('https://cdn.test/'))).toBe(true);
+    // 240px strip items on phones: never fetched at full width, and lazy.
+    expect(out).toMatch(/<img [^>]*loading="lazy"[^>]*sizes="[^"]*, 240px"/);
     expect(out.match(/<li class="[^"]*lg:hidden/g)).toHaveLength(2);
     expect(out).toContain('snap-x');
   });
@@ -439,10 +449,12 @@ describe('HomePage (H1)', () => {
     const out = await page();
     expect(out.match(/<main /g)).toHaveLength(1);
     expect(out).toContain('<main class="home-page ');
-    // React hoists a preload for the high-priority hero cover.
-    expect(out).toMatch(
-      /<link rel="preload" as="image" href="[^"]*cover-a\.png" fetchPriority="high"/,
-    );
+    // React hoists a preload for the high-priority hero cover: the
+    // optimizer's srcset, with the band's sizes (ADR-033).
+    const preload = /<link rel="preload" as="image"[^>]*>/.exec(out)?.[0] ?? '';
+    expect(preload).toContain('fetchPriority="high"');
+    expect(preload).toMatch(/imageSrcSet="\/_next\/image\?url=[^"]*cover-a\.png/);
+    expect(preload).toContain(`imageSizes="${BAND_COVER_SIZES}"`);
     const positions = order(out, [
       'hero-title',
       'upcoming-heading',

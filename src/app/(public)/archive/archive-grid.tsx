@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { publicVenue } from '@/server/lib/venue';
@@ -49,8 +50,15 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
                 >
                   <div className="aspect-16/10 w-full overflow-hidden rounded-xl bg-[#2a2a2a]">
                     {coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coverUrl} alt="" className="size-full object-cover grayscale" />
+                      // Two columns on phones, four of the 1440 wrap from lg.
+                      <Image
+                        src={coverUrl}
+                        alt=""
+                        width={1200}
+                        height={630}
+                        sizes="(min-width: 1440px) 316px, (min-width: 1024px) 22vw, 50vw"
+                        className="size-full object-cover grayscale"
+                      />
                     ) : null}
                   </div>
                   <span className="font-heading text-[14px] leading-tight font-semibold text-pretty lg:text-[16px]">

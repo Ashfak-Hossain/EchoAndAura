@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { eventsService, ticketTypesService } from '@/server/container';
 import { type EventStatus, allowedEventTransitions } from '@/server/lib/event-status';
 import { PUBLISH_CHECKS, describePublishProblem } from '@/server/lib/publish-readiness';
@@ -122,8 +123,14 @@ export async function StatusSection({ event }: { event: EventRecord }) {
         <CardContent className="px-6 pt-4 pb-6">
           <div className="overflow-hidden rounded-lg border border-border">
             {coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverUrl} alt="" className="aspect-1200/630 w-full object-cover" />
+              <Image
+                src={coverUrl}
+                alt=""
+                width={1200}
+                height={630}
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="aspect-1200/630 w-full object-cover"
+              />
             ) : (
               <div className="flex aspect-1200/630 items-center justify-center bg-secondary text-sm text-muted-foreground">
                 No cover image yet

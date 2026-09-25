@@ -254,7 +254,7 @@ export function SponsorForm({ action, initial, sponsor, presenting, levelCounts 
             />
             <span className="flex h-14 w-22 shrink-0 items-center justify-center rounded-lg border border-border bg-card">
               {logo ? (
-                // Plain <img>: a blob: preview or the storage host.
+                // Plain <img>: a blob: preview or a stored logo (ADR-033).
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logo.src} alt="" className="block max-h-10 max-w-18" />
               ) : null}

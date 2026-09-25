@@ -158,8 +158,8 @@ function Thumb({ sponsor: s, tone }: { sponsor: AdminSponsor; tone: 'light' | 'd
       )}
       style={{ width: box.w, height: box.h }}
     >
-      {/* Decorative: the name sits beside it. Plain <img> — the storage
-          host is env-defined, so next/image's allow-list would have to follow it. */}
+      {/* Decorative: the name sits beside it. Plain <img> — a small logo,
+          often SVG (which the optimizer refuses), at its fitted size (ADR-033). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={s.logoUrl} alt="" className="block" style={{ width: size.w, height: size.h }} />
     </span>

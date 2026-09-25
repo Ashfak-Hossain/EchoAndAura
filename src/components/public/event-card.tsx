@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { formatBDT } from '@/server/lib/money';
 import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
@@ -24,6 +25,15 @@ function LockIcon() {
     </svg>
   );
 }
+
+/**
+ * Cover widths for next/image's `sizes` (ADR-033). A card is one of two
+ * (md) or up to three (lg) columns of the 1440 wrap; half the viewport
+ * covers both without a separate rule per grid. The wide card's cover is
+ * the 7fr of 7fr/5fr from lg.
+ */
+const CARD_COVER_SIZES = '(min-width: 1440px) 656px, (min-width: 768px) 50vw, 100vw';
+const WIDE_COVER_SIZES = '(min-width: 1440px) 764px, (min-width: 1024px) 55vw, 100vw';
 
 /**
  * N8 event card (Canvas 6): the whole card is one link to the event page —
@@ -63,14 +73,14 @@ export function EventCard({
       )}
     >
       {/* The card clips the cover, so it has no radius of its own. */}
-      <div className="aspect-[1200/630] w-full shrink-0 bg-[#e3ddd1]">
+      <div className="aspect-1200/630 w-full shrink-0 bg-[#e3ddd1]">
         {coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={coverUrl}
             alt=""
-            loading="lazy"
-            decoding="async"
+            width={1200}
+            height={630}
+            sizes={wide ? WIDE_COVER_SIZES : CARD_COVER_SIZES}
             className="size-full object-cover"
           />
         ) : null}

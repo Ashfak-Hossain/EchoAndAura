@@ -83,7 +83,10 @@ test.describe('upcoming events (/events)', () => {
     await expect(card).toContainText('1 Nov 2030, 19:00 (Dhaka)');
     await expect(card).toContainText('Bayside Hall, Khulshi, Chattogram');
     await expect(card).toContainText('From ৳600.00');
-    await expect(card.locator('img')).toHaveAttribute('src', /\/cover-.+\.png$/);
+    // Through the optimizer (ADR-033): the stored cover, in several widths.
+    const cover = card.locator('img');
+    await expect(cover).toHaveAttribute('src', /^\/_next\/image\?url=[^&]*cover-.+\.png&w=/);
+    await expect(cover).toHaveAttribute('srcset', /640w,.*1080w/);
 
     await card.click();
     await expect(page).toHaveURL(new RegExp(`/events/${slug}$`));

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { HERO_EYEBROW, heroCopy } from '@/server/lib/hero-copy';
 import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
@@ -5,7 +6,7 @@ import type { HomeEvent } from '@/server/services/events.service';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { formatDhakaLong } from '@/lib/time';
 import { Countdown } from './countdown';
-import { CoverPlaceholder, bandCover } from './cover-placeholder';
+import { BAND_COVER_SIZES, CoverPlaceholder, bandCover } from './cover-placeholder';
 import { LockIcon } from './icons';
 
 /** Buttons on the charcoal band: 52px; on phones the first one stretches (N7 btnFlex). */
@@ -129,13 +130,15 @@ export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
         {/* Cover first on phones, right column from lg. */}
         <div className="order-first min-w-0 lg:order-0">
           {coverUrl ? (
-            // The page's largest paint: fetched first, never lazy.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            // The page's largest paint, already in the server HTML: fetched
+            // first, never lazy (next/image defaults to lazy).
+            <Image
               src={coverUrl}
               alt=""
               width={1200}
               height={630}
+              sizes={BAND_COVER_SIZES}
+              loading="eager"
               fetchPriority="high"
               data-testid="hero-cover"
               className={`${bandCover} object-cover`}

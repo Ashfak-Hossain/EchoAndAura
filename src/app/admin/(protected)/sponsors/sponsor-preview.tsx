@@ -107,8 +107,9 @@ function Logo({ logo, box }: { logo: PreviewLogo | null; box: LogoBox }) {
   if (!logo) return null;
   const size = fitLogo(logo.width / logo.height, box);
   const style: CSSProperties = { width: size.w, height: size.h };
-  // Plain <img>: a blob: preview or the storage host, neither of which
-  // next/image's allow-list knows. Decorative here — the name is the label.
+  // Plain <img>: a blob: preview, or a small logo (often SVG, which the
+  // optimizer refuses) drawn at its exact fitted size (ADR-033).
+  // Decorative here — the name is the label.
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={logo.src} alt="" className="block" style={style} />;
 }

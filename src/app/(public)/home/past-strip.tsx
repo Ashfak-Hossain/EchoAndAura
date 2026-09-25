@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { venueCity } from '@/server/lib/venue';
@@ -52,14 +53,13 @@ export function PastStrip({ events }: { events: HomeEvent[] }) {
                 className="flex flex-col gap-2 rounded-[8px] text-foreground hover:text-accent-ink"
               >
                 {coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  // 240px items on phones; four columns of the 1440 wrap from lg.
+                  <Image
                     src={coverUrl}
                     alt=""
                     width={1200}
                     height={630}
-                    loading="lazy"
-                    decoding="async"
+                    sizes="(min-width: 1440px) 316px, (min-width: 1024px) 22vw, 240px"
                     className="aspect-1200/630 w-full rounded-[8px] border border-border bg-[#e3ddd1] object-cover"
                   />
                 ) : (

@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { eventsService } from '@/server/container';
 import type { EventRecord } from '@/server/repositories/events.repository';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,12 +20,15 @@ export function CoverSection({ event }: { event: EventRecord }) {
         </CardHeader>
         <CardContent className="px-6 pt-4 pb-6">
           {url ? (
-            // Plain <img>: the storage host is env-defined, so next/image's
-            // remotePatterns allow-list would need to follow it.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            // Optimised like the public covers (ADR-033); every upload is a
+            // new key, so a replaced cover can never show a cached old one.
+            <Image
               src={url}
               alt={`Cover image for ${event.title}`}
+              width={1200}
+              height={630}
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              loading="eager"
               data-testid="cover-image"
               className="aspect-video w-full rounded-lg border border-border object-cover"
             />
