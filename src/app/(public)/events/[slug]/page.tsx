@@ -324,9 +324,13 @@ export default async function PublicEventPage({ params }: Props) {
         </aside>
       </div>
 
-      {/* Mobile sticky CTA bar */}
+      {/* Mobile sticky CTA bar. The price sits beside a plain "Register"
+          only while open. Closing soon, the button carries the count
+          ("Register — 31 tickets left") and needs the whole row, with the
+          close time under it (A2 closing-soon frame); beside the price it
+          pushed a 390px page sideways. */}
       <div className="sticky bottom-0 mt-auto flex items-center gap-3 border-t border-border bg-background/95 px-4 pt-3 pb-5 shadow-[0_-4px_12px_rgb(28_26_23/0.08)] backdrop-blur lg:hidden">
-        {offer.fromPricePaisa !== null && selling ? (
+        {offer.fromPricePaisa !== null && phase === 'open' ? (
           <div className="flex shrink-0 flex-col">
             <span className="text-[15px] font-bold tabular">
               from {formatBDT(offer.fromPricePaisa)}
@@ -338,7 +342,10 @@ export default async function PublicEventPage({ params }: Props) {
             ) : null}
           </div>
         ) : null}
-        <div className="flex flex-1 flex-col gap-2">{cta}</div>
+        {/* min-w-0: however long the label, the bar never widens the page. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2" data-testid="mobile-cta">
+          {cta}
+        </div>
       </div>
     </article>
   );
