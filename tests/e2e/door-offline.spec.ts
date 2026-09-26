@@ -118,15 +118,23 @@ test.describe('gate scanner offline (ADR-034)', () => {
     // Offline again, a scan, then End session: it warns before losing it,
     // and sends it first once the signal is back.
     await contextA.setOffline(true);
+    // Synced, maybe re-listed since: this gate still knows it let them in.
+    const remembered = await typeCode(phoneA, codes[0]!);
+    await expect(remembered).toHaveAttribute('data-result', 'already_in');
+    await expect(remembered).toHaveAttribute('data-offline', 'true');
+    await dismiss(phoneA);
     await expect(await typeCode(phoneA, codes[1]!)).toHaveAttribute('data-result', 'admitted');
     await expect(phoneA.getByTestId('door-result')).toBeHidden({ timeout: 5_000 });
     await phoneA.getByRole('button', { name: 'End session' }).click();
     await expect(
-      phoneA.getByRole('button', { name: /1 not sent — tap to end anyway/ }),
+      phoneA.getByRole('button', { name: /2 not sent — tap to end anyway/ }),
     ).toBeVisible();
     await contextA.setOffline(false);
     await phoneA.getByRole('button', { name: /tap to end anyway/ }).click();
-    await expect(phoneA.getByRole('heading', { name: 'Enter the gate code' })).toBeVisible();
+    // It sends the outbox first (waiting for a send already in flight).
+    await expect(phoneA.getByRole('heading', { name: 'Enter the gate code' })).toBeVisible({
+      timeout: 20_000,
+    });
 
     await page.goto(checkInUrl);
     await expect(page.getByTestId('checked-in-count')).toHaveText('3 of 3 checked in');

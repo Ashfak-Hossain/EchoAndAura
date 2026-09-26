@@ -163,6 +163,8 @@ export function Scanner({
   const [undoFor, setUndoFor] = useState<RecentRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  /** The second tap: sending what is left, then signing out. */
+  const [closing, setClosing] = useState(false);
 
   const ios = useSyncExternalStore(
     subscribeNever,
@@ -508,8 +510,8 @@ export function Scanner({
       setNotice(
         outcome === 'done'
           ? `Check-in undone for ${scan.attendeeName ?? 'that ticket'}.`
-          : outcome === 'sending'
-            ? 'That scan is being sent right now — try the undo again in a moment.'
+          : outcome === 'sent'
+            ? 'That scan may already be recorded — once the signal is back, undo it from Last scans here.'
             : 'Too late to undo that one here — the organizer can.',
       );
       return;
@@ -538,9 +540,13 @@ export function Scanner({
       setTimeout(() => setEnding(false), 4_000);
       return;
     }
-    // Last chance to send what was scanned offline.
+    if (closing) return;
+    setClosing(true);
+    // Last chance to send what was scanned offline — waits for a send
+    // already in flight, which can take a few seconds.
     await offline.sync();
     const reply = await doorApi.signOut();
+    setClosing(false);
     // The cookie is httpOnly: only the server can end the session.
     if (!reply.ok) {
       setEnding(false);
@@ -562,7 +568,8 @@ export function Scanner({
       at: p.scannedAt,
       attendeeName: p.attendeeName ?? null,
       ticketTypeName: p.ticketTypeName ?? null,
-      undoable: p.verdict === 'admitted' && Date.parse(p.scannedAt) >= undoFrom,
+      // Once sent (even unanswered) only the online undo is safe: see use-offline.
+      undoable: p.verdict === 'admitted' && !p.attempted && Date.parse(p.scannedAt) >= undoFrom,
       offline: true,
     })),
     ...status.recent,
@@ -607,11 +614,15 @@ export function Scanner({
           onClick={endSession}
           className="h-10 shrink-0 rounded-lg border border-white/25 px-3 text-sm text-white/85"
         >
-          {ending
+          {closing
             ? pending.length > 0
-              ? `${pending.length} not sent — tap to end anyway`
-              : 'Tap again to end'
-            : 'End session'}
+              ? 'Sending, then ending…'
+              : 'Ending…'
+            : ending
+              ? pending.length > 0
+                ? `${pending.length} not sent — tap to end anyway`
+                : 'Tap again to end'
+              : 'End session'}
         </button>
       </header>
 

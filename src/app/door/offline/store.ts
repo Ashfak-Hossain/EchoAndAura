@@ -26,6 +26,11 @@ export interface OutboxItem {
   verdict: DoorVerdict;
   /** The online request this scan replaced, when that one got no answer. */
   supersedesScanId?: string;
+  /**
+   * Sent at least once, answered or not (ADR-034). It may already stand on
+   * the server, so the phone never undoes it locally any more.
+   */
+  attempted?: boolean;
   /** For this phone's own screen: whom it was, and its "already in" mark. */
   ticketId?: string;
   attendeeName?: string;

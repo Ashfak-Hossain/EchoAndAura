@@ -1974,6 +1974,24 @@ knowing who came in, where and when.
 - **A reload with no signal still fails.** There is no service worker
   yet, so the tab must stay open. That is Slice B2.
 
+**Review fixes (2026-09-26):**
+
+- **The stored time of an offline scan is the clamped one**, not the phone's
+  raw clock. A future-dated admit could otherwise hold the door's 2-minute
+  undo open indefinitely.
+- **A scan the phone has sent is never undone locally again**, even when the
+  send got no answer: its ADMIT may already stand, and a re-send as
+  `undone` under the same `scanId` cannot take it back. The server checks
+  this too: a replay whose `door_verdict` differs from the stored one
+  answers `scan_id_conflict`, not the stored ADMIT.
+- **A phone's own "already in" mark is dropped only by a list read after
+  the server is known to have had it** (sync confirmed, plus 15 s for clock
+  correction). It is never dropped by when the person walked in. The list's
+  "as of" is taken before its database read.
+- **`sync()` waits for a send already in flight** instead of skipping it.
+  Otherwise End session could sign out under that send, and its scans
+  would come back 401 and be lost.
+
 **Revisit when:** Slice B2 (a service worker so `/door` loads offline); an
 event large enough that the per-minute list matters; or the organizer
 wants double entries to alert someone live.

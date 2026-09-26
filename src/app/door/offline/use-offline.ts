@@ -8,9 +8,10 @@ import {
   judgeOffline,
   offlineDigest,
 } from '@/server/lib/door-offline';
-import { DOOR_UNDO_WINDOW_MS, SCAN_INPUT_MAX } from '@/server/lib/door-rules';
+import { SCAN_INPUT_MAX } from '@/server/lib/door-rules';
 import { parseScanToken } from '@/server/lib/scan-token';
 import { type SyncScan, type WireScanResult, type WireSearchResult, doorApi } from '../door-api';
+import { type OfflineUndo, listCovers, localUndo } from './rules';
 import { type OfflineStore, type OutboxItem, type StoredList, openOfflineStore } from './store';
 
 /**
@@ -30,13 +31,20 @@ const SYNC_BATCH = 50;
 const SEARCH_LIMIT = 10;
 
 interface Mark {
-  /** Corrected clock, ms. */
+  /** When they were checked in (corrected clock, ms) — what the screen says. */
   at: number;
   gate: string;
   byThisPhone: boolean;
+  /**
+   * When the server is known to have had this check-in (corrected clock,
+   * ms); null while it is still in the outbox. A new list drops the mark
+   * only if the list was read after this — never by `at`, which for an
+   * offline admit can be long before the server heard of it.
+   */
+  knownSince: number | null;
 }
 
-export type OfflineUndo = 'done' | 'sending' | 'not_found';
+export type { OfflineUndo } from './rules';
 
 export interface OfflineApi {
   /** A list is here and usable: offline answers are possible. */
@@ -92,7 +100,8 @@ export function useOffline({
   const marks = useRef(new Map<string, Mark>());
   const outbox = useRef<OutboxItem[]>([]);
   const inFlight = useRef(new Set<string>());
-  const syncingRef = useRef(false);
+  /** The send in progress: a second caller waits for it, never skips it. */
+  const running = useRef<Promise<boolean> | null>(null);
   const listing = useRef(false);
 
   /** What the screen shows — refreshed from the refs whenever they change. */
@@ -121,13 +130,17 @@ export function useOffline({
       list.current = stored;
       index.current = new Map(stored.list.entries.map((e) => [e.d, e]));
       const since = Date.parse(stored.list.serverTime);
-      for (const [id, m] of marks.current) if (m.at <= since) marks.current.delete(id);
+      for (const [id, m] of marks.current) {
+        if (listCovers(m.knownSince, since)) marks.current.delete(id);
+      }
+      // Still in the outbox: the server has not got them, so no list knows.
       for (const item of outbox.current) {
         if (item.verdict === 'admitted' && item.ticketId) {
           marks.current.set(item.ticketId, {
             at: Date.parse(item.scannedAt),
             gate,
             byThisPhone: true,
+            knownSince: null,
           });
         }
       }
@@ -156,15 +169,26 @@ export function useOffline({
     }
   }, [adopt, onSignedOut]);
 
-  const sync = useCallback(async (): Promise<boolean> => {
-    if (syncingRef.current || !store.current) return false;
+  const sendOutbox = useCallback(async (): Promise<boolean> => {
+    if (!store.current) return false;
     if (outbox.current.length === 0) return true;
-    syncingRef.current = true;
     setSyncing(true);
     try {
       while (outbox.current.length > 0) {
-        const batch = outbox.current.slice(0, SYNC_BATCH);
+        // Marked before it leaves: a request that times out may still have
+        // landed, so from now on this scan must never be undone locally —
+        // its ADMIT may already stand on the server (ADR-034). Taken, marked
+        // and put in flight in ONE synchronous step, before any await: an
+        // undo tapped during the storage writes below must already see it
+        // as sent, never be overwritten by a stale copy.
+        const batch = outbox.current
+          .slice(0, SYNC_BATCH)
+          .map((item): OutboxItem => (item.attempted ? item : { ...item, attempted: true }));
+        const byId = new Map(batch.map((b) => [b.scanId, b]));
+        outbox.current = outbox.current.map((i) => byId.get(i.scanId) ?? i);
         for (const item of batch) inFlight.current.add(item.scanId);
+        // Persisted too, so a reload keeps the "sent" mark.
+        await Promise.all(batch.map((item) => store.current?.putOutbox(item)));
         const reply = await doorApi.sync(
           batch.map((item): SyncScan => ({
             scanId: item.scanId,
@@ -180,7 +204,20 @@ export function useOffline({
         for (const item of batch) inFlight.current.delete(item.scanId);
         if (reply.ok || reply.kind === 'refused') {
           const ids = batch.map((i) => i.scanId);
-          if (!reply.ok) {
+          if (reply.ok) {
+            // The server has these now: a list read after this may forget them.
+            const known = now();
+            for (const item of batch) {
+              const mark = item.ticketId ? marks.current.get(item.ticketId) : undefined;
+              if (mark && mark.knownSince === null) mark.knownSince = known;
+            }
+            const lost = reply.data.results.filter((r) => r.result === 'scan_id_conflict').length;
+            if (lost > 0) {
+              setProblem(
+                `${lost} offline ${lost === 1 ? 'scan' : 'scans'} did not match what the server already had — tell the organizer.`,
+              );
+            }
+          } else {
             // Never expected (the phone builds valid scans); a batch the
             // server refuses would otherwise block the outbox all night.
             setProblem(
@@ -198,10 +235,26 @@ export function useOffline({
       }
       return true;
     } finally {
-      syncingRef.current = false;
       setSyncing(false);
     }
-  }, [bump, onSignedOut]);
+  }, [bump, now, onSignedOut]);
+
+  /**
+   * Send the outbox. A caller that arrives mid-send WAITS for it, then sends
+   * whatever is left: End session must never sign out (deleting the pass
+   * cookie) under a sync still in flight — that sync would come back 401
+   * and its scans would be lost.
+   */
+  const sync = useCallback(async (): Promise<boolean> => {
+    while (running.current) await running.current;
+    const run = sendOutbox();
+    running.current = run;
+    try {
+      return await run;
+    } finally {
+      running.current = null;
+    }
+  }, [sendOutbox]);
 
   // Load what this phone kept, then fetch a fresh list.
   useEffect(() => {
@@ -292,7 +345,7 @@ export function useOffline({
           : {}),
       };
       if (j.verdict === 'admitted' && entry) {
-        marks.current.set(entry.id, { at, gate, byThisPhone: true });
+        marks.current.set(entry.id, { at, gate, byThisPhone: true, knownSince: null });
       }
       outbox.current = [...outbox.current, item];
       await store.current.putOutbox(item);
@@ -325,6 +378,8 @@ export function useOffline({
         at: result.at ? Date.parse(result.at) : now(),
         gate: result.gate ?? gate,
         byThisPhone: result.result === 'admitted' || result.byThisPass === true,
+        // An online answer: the server has it as of now.
+        knownSince: now(),
       });
     },
     [findEntry, gate, now],
@@ -340,10 +395,8 @@ export function useOffline({
   const undo = useCallback(
     async (scanId: string): Promise<OfflineUndo> => {
       const item = outbox.current.find((i) => i.scanId === scanId);
-      if (!item || item.verdict !== 'admitted' || !store.current) return 'not_found';
-      // Already on its way as an ADMIT: once it lands, the online undo applies.
-      if (inFlight.current.has(scanId)) return 'sending';
-      if (now() - Date.parse(item.scannedAt) > DOOR_UNDO_WINDOW_MS) return 'not_found';
+      const outcome = localUndo(item, now(), inFlight.current.has(scanId));
+      if (!item || outcome !== 'done' || !store.current) return outcome;
       const undone: OutboxItem = { ...item, verdict: 'undone' };
       outbox.current = outbox.current.map((i) => (i.scanId === scanId ? undone : i));
       if (item.ticketId) marks.current.delete(item.ticketId);

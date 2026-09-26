@@ -643,6 +643,33 @@ describe('doorService offline sync (ADR-034)', () => {
     expect(db.state.tickets[1]!.checkedInAt).toEqual(new Date(NOW.getTime() - 3 * HOUR));
   });
 
+  it('stores the clamped time on the scan, so a future phone clock cannot hold the undo open', async () => {
+    const { svc, fake, ctx, tickets, clock } = await setup();
+    const item = offline(tickets[0]!.code, 'admitted', new Date(clock.at.getTime() + 10 * HOUR));
+    await svc.scan(await ctx(CODE_A), item);
+    expect(fake.scans.at(-1)!.scannedAt).toEqual(clock.at);
+
+    clock.at = new Date(clock.at.getTime() + 3 * MIN);
+    await expect(svc.undoOwnAdmit(await ctx(CODE_A), item.scanId, 'mis_tap')).rejects.toThrow(
+      CheckInUndoRefusedError,
+    );
+    const status = await svc.status(await ctx(CODE_A));
+    expect(status.recent[0]!.undoable).toBe(false);
+  });
+
+  it('never replays an ADMIT to a re-sent scan whose verdict changed (a lost undo is loud)', async () => {
+    const { svc, db, ctx, tickets, clock } = await setup();
+    const item = offline(tickets[0]!.code, 'admitted', clock.at);
+    await svc.scan(await ctx(CODE_A), item);
+    const resent = await svc.scan(await ctx(CODE_A), {
+      ...item,
+      offline: { verdict: 'undone' },
+    });
+    expect(resent.result).toBe('scan_id_conflict');
+    // The ADMIT stands: the phone must take it back with the online undo.
+    expect(db.state.tickets[0]!.checkedInScanId).toBe(item.scanId);
+  });
+
   it('records a double entry when the ticket was already in: nothing checked in twice', async () => {
     const { svc, db, ctx, tickets, clock } = await setup();
     await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code)); // Gate A, online
@@ -786,6 +813,19 @@ describe('doorService.offlineList (ADR-034)', () => {
     expect(json).not.toContain('TKT-');
     expect(json).not.toContain('8801712345678');
     expect(json).not.toContain('nusrat@example.com');
+  });
+
+  it('stamps the list as of BEFORE its read, never after', async () => {
+    const { svc, fake, ctx, clock } = await setup();
+    const before = clock.at;
+    const read = fake.door.offlineList;
+    fake.door.offlineList = async (eventId) => {
+      // A slow read: the clock moves on while it runs.
+      clock.at = new Date(clock.at.getTime() + 30_000);
+      return read(eventId);
+    };
+    const list = await svc.offlineList(await ctx(CODE_A));
+    expect(list.serverTime).toBe(before.toISOString());
   });
 
   it('salts every download afresh, so two lists never share a hash', async () => {

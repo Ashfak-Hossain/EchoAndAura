@@ -256,9 +256,15 @@ export function createDoorService({
   const secondsSince = (at: Date) =>
     Math.max(0, Math.floor((now().getTime() - at.getTime()) / 1000));
 
-  /** The log row a replay must match: same pass, same thing scanned. */
+  /**
+   * The log row a replay must match: same pass, same thing scanned — and,
+   * for an offline scan, the same verdict. A phone that re-sends a scan as
+   * UNDONE after its ADMIT already landed must hear so, not get the ADMIT
+   * replayed as if its undo had been recorded (ADR-034).
+   */
   function sameScan(ctx: DoorContext, item: ScanItem, stored: DoorScanRecord): boolean {
     if (stored.passId !== ctx.pass.id) return false;
+    if ((item.offline?.verdict ?? null) !== stored.doorVerdict) return false;
     if (item.ticketId) {
       return (
         stored.ticketId === item.ticketId ||
@@ -330,6 +336,13 @@ export function createDoorService({
       input = scanLogInput(raw, code);
       ticket = code ? await door.findTicket({ code }) : null;
     }
+    // An offline scan happened when the phone says (corrected), clamped to
+    // [doors open, now]: never in the future — the door's undo window is
+    // measured from it — and never before the gate could admit anyone.
+    const offlineAt =
+      offline && item.scannedAt
+        ? clampOfflineTime(item.scannedAt, ctx.window.validFrom, now())
+        : undefined;
     const log: Omit<NewDoorScan, 'result'> = {
       scanId: item.scanId,
       passId: ctx.pass.id,
@@ -338,7 +351,7 @@ export function createDoorService({
       input,
       method: item.method,
       mode: offline ? 'offline' : practice ? 'practice' : 'online',
-      scannedAt: item.scannedAt ?? null,
+      scannedAt: offlineAt ?? item.scannedAt ?? null,
       doorVerdict: offline?.verdict ?? null,
       supersedesScanId: offline?.supersedesScanId ?? null,
     };
@@ -403,14 +416,7 @@ export function createDoorService({
     const gate = ctx.pass.label;
     // An offline admit happened when the phone says (corrected, clamped),
     // not when signal came back. An online one: the database clock.
-    const by = {
-      gate,
-      scanId: item.scanId,
-      at:
-        offline && item.scannedAt
-          ? clampOfflineTime(item.scannedAt, ctx.window.validFrom, now())
-          : undefined,
-    };
+    const by = { gate, scanId: item.scanId, at: offlineAt };
     return runInTransaction(async (tx) => {
       // Pass first, ticket second (the same order as revoke-and-undo): a
       // revoke waits for this scan, or this scan sees the revoke.
@@ -731,6 +737,10 @@ export function createDoorService({
      * why a name-search admit needs signal.
      */
     async offlineList(ctx: DoorContext): Promise<OfflineList> {
+      // Taken BEFORE the read: the list may say "as of" no later than what
+      // it saw. The phone drops its own "already in" marks by this time, so
+      // a stamp taken after the read could erase a sync the read missed.
+      const asOf = now();
       const rows = await door.offlineList(ctx.event.id);
       const salt = listSalt();
       const entries = await Promise.all(
@@ -751,7 +761,7 @@ export function createDoorService({
         eventId: ctx.event.id,
         passId: ctx.pass.id,
         salt,
-        serverTime: now().toISOString(),
+        serverTime: asOf.toISOString(),
         validFrom: ctx.window.validFrom.toISOString(),
         validUntil: ctx.window.validUntil.toISOString(),
         entries,
