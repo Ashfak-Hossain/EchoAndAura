@@ -159,8 +159,8 @@ export async function GatePasses({
                           <li>
                             Open the pass where there is signal: the phone downloads the ticket
                             list, so it keeps scanning if the signal drops, and sends those scans
-                            when it is back. Keep the page open — without signal it cannot be
-                            reloaded.
+                            when it is back. Once opened with signal, the page also reloads
+                            without it.
                           </li>
                           <li>
                             Treat the code like a key: anyone with it can check tickets in at this

@@ -169,6 +169,12 @@ are drawn with a plain `<img>`.
   `services/events.service.ts` → `app/admin/(protected)/events/actions.ts`)
   is the reference implementation — see
   [DECISIONS.md — ADR-005](DECISIONS.md).
+- **The door phone is the only offline client.** `src/app/door/offline/`
+  holds the phone-side pieces: the ticket list and outbox in IndexedDB
+  (ADR-034), and a service worker scoped to `/door` that reopens a saved
+  copy of the page without signal (ADR-035). The worker is bundled on its
+  own (`pnpm sw:build` → `public/door/sw.js`) and never caches the door
+  API. The rest of the site has no worker.
 - **`src/components/ui/` is shadcn-generated** and excluded from hand-editing
   by `.claude/settings.json` — regenerate via the CLI instead.
 

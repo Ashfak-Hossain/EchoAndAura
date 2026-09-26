@@ -1,22 +1,13 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
-  dhaka,
   dismiss,
   issuedOrder,
   newGatePass,
+  openDoors,
   publishedEvent,
   signIn,
   typeCode,
 } from './door-helpers';
-
-/** The organizer moves the start to an hour ago: doors are open. */
-async function openDoors(page: Page, id: string) {
-  await page.goto(`/admin/events/${id}/edit`);
-  await page.getByLabel(/^Starts at/).fill(dhaka(new Date(Date.now() - 60 * 60_000)));
-  await page.getByLabel(/^Registration closes/).fill(dhaka(new Date(Date.now() - 2 * 60 * 60_000)));
-  await page.getByRole('button', { name: /save changes/i }).click();
-  await expect(page).toHaveURL(/\?saved=1/);
-}
 
 test.describe('gate scanner offline (ADR-034)', () => {
   test('answers from the list without signal, sends the outbox, and shows the double entry', async ({

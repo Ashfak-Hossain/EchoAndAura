@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { type WireStatus, doorApi } from './door-api';
 import { DoorSetup, OpenInBrowser } from './door-setup';
+import { forgetPageOffline } from './offline/keep-page';
 import { inAppBrowser, subscribeNever } from './platform';
 import { Scanner } from './scanner';
 
@@ -37,6 +38,13 @@ export function DoorApp({ initial }: { initial: DoorInitial | null }) {
   useEffect(() => {
     scannerUp.current = initial !== null && !signedOut;
   }, [initial, signedOut]);
+  // The server rendered this page signed out (the pass expired or was
+  // revoked): a copy saved for a reload without signal is of a session
+  // that is over (ADR-035). Copies are saved only by a signed-in scanner,
+  // so this is the server talking.
+  useEffect(() => {
+    if (initial === null) void forgetPageOffline();
+  }, [initial]);
 
   const signedIn = useCallback(() => {
     setSignedOut(false);

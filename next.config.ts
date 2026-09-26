@@ -45,6 +45,17 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // ADR-035: the door's service worker (built into public/door/). It
+        // lives in /door/ but controls the /door page itself, one level up,
+        // which the browser allows only when the script says so. Always
+        // revalidated: a fix to the worker must reach phones at once.
+        source: '/door/sw.js',
+        headers: [
+          { key: 'Service-Worker-Allowed', value: '/door' },
+          { key: 'Cache-Control', value: 'no-cache' },
+        ],
+      },
+      {
         // Self-hosted decoder; the version is in the filename.
         source: '/vendor/:file*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],

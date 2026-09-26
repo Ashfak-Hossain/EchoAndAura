@@ -18,7 +18,9 @@ import {
   type WireStatus,
   doorApi,
 } from './door-api';
+import { loadQrDetector } from './decoder';
 import { DoorSearch } from './door-search';
+import { forgetPageOffline, keepPageOffline } from './offline/keep-page';
 import { type OfflineApi, useOffline } from './offline/use-offline';
 import { isIos, subscribeNever } from './platform';
 import { AUTO_DISMISS_MS, type Overlay, ResultOverlay, viewOf } from './result-overlay';
@@ -47,6 +49,10 @@ import { useFeedback } from './use-feedback';
  * skip the network until a status ping gets through, and the queue is sent.
  * A name-search admit still needs signal: its phone digits are checked
  * only on the server.
+ *
+ * ADR-035: once a status ping gets through, the page saves a copy of
+ * itself (and the decoder) so it reloads without signal. A page whose
+ * first ping gets no answer — likely that saved copy — starts offline.
  */
 
 const SEEN_WINDOW_MS = 1_500;
@@ -183,6 +189,8 @@ export function Scanner({
   const modalOpen = useRef(false);
   /** Only the newest status reply may land (they can resolve out of order). */
   const statusSeq = useRef(0);
+  /** A status ping got through on this page (so it is signed in and online). */
+  const pinged = useRef(false);
 
   const { unlock, play } = useFeedback();
 
@@ -192,7 +200,7 @@ export function Scanner({
   const onSignedOut = useCallback(
     (message: string) => {
       void (async () => {
-        const unsent = (await offlineRef.current?.clear()) ?? 0;
+        const [unsent = 0] = await Promise.all([offlineRef.current?.clear(), forgetPageOffline()]);
         onSessionOver(
           unsent > 0
             ? `${message} ${unsent} offline ${unsent === 1 ? 'scan' : 'scans'} from this phone could not be sent — tell the organizer.`
@@ -226,6 +234,15 @@ export function Scanner({
       setStatus(reply.data);
       setOnline(true);
       goOffline(false);
+      if (!pinged.current) {
+        pinged.current = true;
+        // The decoder first, so the saved copy holds it: a reload without
+        // signal must still be able to start the camera. Failing to load
+        // it here costs nothing — Start tries again.
+        void loadQrDetector()
+          .catch(() => undefined)
+          .then(() => keepPageOffline());
+      }
       // Signal is back: send what was scanned without it, then show the
       // counts and last scans with those scans in them.
       const off = offlineRef.current;
@@ -237,6 +254,10 @@ export function Scanner({
       onSignedOut(reply.message);
     } else if (reply.kind === 'network') {
       setOnline(false);
+      // Never reached the server on this page — most likely it is the
+      // saved copy, opened without signal: the first person in the queue
+      // must not wait out a request that cannot answer.
+      if (!pinged.current) goOffline(true);
     }
   }, [onSignedOut, goOffline]);
 
@@ -575,6 +596,7 @@ export function Scanner({
     ...status.recent,
   ];
   const listTime = offline.listAt ? formatDhakaClock(new Date(offline.listAt)) : null;
+  const countsTime = formatDhakaClock(new Date(status.serverTime));
 
   return (
     <main
@@ -634,7 +656,8 @@ export function Scanner({
         >
           {offline.ready
             ? `OFFLINE — answering from the ticket list of ${listTime}. Scans are sent when the signal is back.`
-            : 'OFFLINE — no ticket list on this phone. Use the printed list.'}
+            : 'OFFLINE — no ticket list on this phone. Use the printed list.'}{' '}
+          <span className="font-normal">Counts as of {countsTime}.</span>
         </p>
       ) : null}
       {offline.problem ? (

@@ -36,7 +36,7 @@ const DOOR_STAFF_SEE: [string, string][] = [
   ],
   [
     'The ticket list kept on a door phone',
-    'Attendee names and ticket types, so the gate keeps working without signal — ticket codes only in scrambled form, and deleted from the phone when its session ends',
+    'Attendee names and ticket types, and a saved copy of the gate page with its last scans, so the gate keeps working without signal — ticket codes only in scrambled form, and all of it deleted from the phone when its session ends',
   ],
   ['Printed backup list', 'Attendee names, ticket types, ticket codes and order references'],
 ];

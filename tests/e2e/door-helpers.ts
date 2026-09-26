@@ -124,3 +124,12 @@ export async function dismiss(door: Page) {
   }
   await expect(result).toBeHidden();
 }
+
+/** The organizer moves the start to an hour ago: doors are open. */
+export async function openDoors(page: Page, id: string) {
+  await page.goto(`/admin/events/${id}/edit`);
+  await page.getByLabel(/^Starts at/).fill(dhaka(new Date(Date.now() - 60 * 60_000)));
+  await page.getByLabel(/^Registration closes/).fill(dhaka(new Date(Date.now() - 2 * 60 * 60_000)));
+  await page.getByRole('button', { name: /save changes/i }).click();
+  await expect(page).toHaveURL(/\?saved=1/);
+}

@@ -15,8 +15,10 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Personal working notes (git-ignored) may contain third-party exports.
     'notes/**',
-    // Build artifacts (the esbuild worker bundle) and local email previews.
+    // Build artifacts (the esbuild worker bundle, the door service worker)
+    // and local email previews.
     'dist/**',
+    'public/door/**',
     'tmp/**',
   ]),
 ]);
