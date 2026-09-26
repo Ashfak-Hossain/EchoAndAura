@@ -90,6 +90,7 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
           return {
             pass: { ...pass },
             scans: own.length,
+            offlineScans: own.filter((s) => s.mode === 'offline').length,
             admitted: admits.length,
             searchAdmits: admits.filter((s) => s.method === 'search').length,
             lastScanAt: own.at(-1)?.receivedAt ?? null,
@@ -107,6 +108,8 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
         priorCheckedInAt: null,
         priorCheckedInBy: null,
         scannedAt: null,
+        doorVerdict: null,
+        supersedesScanId: null,
         receivedAt: clock(),
         ...values,
       };
@@ -149,9 +152,13 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
       );
     },
     async recentScans(passId, limit) {
+      // Newest first by when it happened, like the repository.
+      const when = (s: DoorScanRecord) =>
+        (s.mode === 'offline' && s.scannedAt ? s.scannedAt : s.receivedAt).getTime();
       return scans
         .filter((s) => s.passId === passId)
         .reverse()
+        .sort((a, b) => when(b) - when(a))
         .slice(0, limit)
         .map((s) => {
           // Same event only, like the repository's join.
@@ -161,6 +168,50 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
             attendeeName: t?.attendeeName ?? null,
             ticketTypeName: t ? (db.state.types.get(t.ticketTypeId)?.name ?? null) : null,
             stillCheckedInByThisScan: t?.checkedInScanId === s.scanId,
+          };
+        });
+    },
+    async offlineList(eventId) {
+      return db.state.tickets
+        .filter((t) => t.eventId === eventId)
+        .sort((a, b) => a.attendeeName.localeCompare(b.attendeeName) || a.position - b.position)
+        .map((t) => ({
+          id: t.id,
+          code: t.code,
+          status: t.status,
+          attendeeName: t.attendeeName,
+          ticketTypeName: db.state.types.get(t.ticketTypeId)?.name ?? '',
+          position: t.position,
+          orderQuantity: db.state.orders.find((o) => o.id === t.orderId)?.quantity ?? 0,
+          checkedInAt: t.checkedInAt,
+          checkedInBy: t.checkedInBy,
+        }));
+    },
+    async offlineConflicts(eventId) {
+      // Mirrors the repository, including the superseded-request exclusion.
+      return scans
+        .filter(
+          (s) =>
+            s.eventId === eventId &&
+            s.mode === 'offline' &&
+            s.doorVerdict === 'admitted' &&
+            s.result !== 'admitted' &&
+            scans.find((x) => x.scanId === s.supersedesScanId)?.result !== 'admitted',
+        )
+        .map((s) => {
+          const t = db.state.tickets.find((x) => x.id === s.ticketId && x.eventId === s.eventId);
+          return {
+            scanId: s.scanId,
+            gate: passes.find((p) => p.id === s.passId)?.label ?? '',
+            result: s.result,
+            scannedAt: s.scannedAt,
+            receivedAt: s.receivedAt,
+            ticketId: s.ticketId,
+            orderId: t?.orderId ?? null,
+            attendeeName: t?.attendeeName ?? null,
+            ticketTypeName: t ? (db.state.types.get(t.ticketTypeId)?.name ?? null) : null,
+            priorCheckedInAt: s.priorCheckedInAt,
+            priorCheckedInBy: s.priorCheckedInBy,
           };
         });
     },

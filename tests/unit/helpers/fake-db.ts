@@ -350,11 +350,11 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       row.updatedAt = NOW;
       return { ...row };
     }),
-    checkIn: vi.fn(async (id, { gate, scanId }, tx) => {
+    checkIn: vi.fn(async (id, { gate, scanId, at }, tx) => {
       expect(tx).toBe(TX);
       const row = state.tickets.find((t) => t.id === id);
       if (!row || row.status !== 'issued' || row.checkedInAt) return null;
-      Object.assign(row, { checkedInAt: NOW, checkedInBy: gate, checkedInScanId: scanId });
+      Object.assign(row, { checkedInAt: at ?? NOW, checkedInBy: gate, checkedInScanId: scanId });
       return { ...row };
     }),
     undoCheckIn: vi.fn(async (id, tx, scanId) => {

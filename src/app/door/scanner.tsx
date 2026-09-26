@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { formatDhakaClock } from '@/lib/time';
 import { cn } from '@/lib/utils';
-import { DOOR_UNDO_REASONS, type DoorUndoReason, SCAN_INPUT_MAX } from '@/server/lib/door-rules';
+import {
+  DOOR_UNDO_REASONS,
+  DOOR_UNDO_WINDOW_MS,
+  type DoorUndoReason,
+  SCAN_INPUT_MAX,
+} from '@/server/lib/door-rules';
 import { parseScanToken } from '@/server/lib/scan-token';
 import type { ScanMethod } from '@/server/services/door.service';
 import {
@@ -14,6 +19,7 @@ import {
   doorApi,
 } from './door-api';
 import { DoorSearch } from './door-search';
+import { type OfflineApi, useOffline } from './offline/use-offline';
 import { isIos, subscribeNever } from './platform';
 import { AUTO_DISMISS_MS, type Overlay, ResultOverlay, viewOf } from './result-overlay';
 import { type CameraProblem, useCamera } from './use-camera';
@@ -35,6 +41,12 @@ import { useFeedback } from './use-feedback';
  * attempt did land, the server replays it instead of a false ALREADY IN.
  * A replayed ADMIT is green only for the Retry button (same person, still
  * there); from a fresh read it is amber, because it could be someone else.
+ *
+ * ADR-034: with no answer, a code read is judged from the phone's offline
+ * list instead ("offline" on the answer) and queued; from then on scans
+ * skip the network until a status ping gets through, and the queue is sent.
+ * A name-search admit still needs signal: its phone digits are checked
+ * only on the server.
  */
 
 const SEEN_WINDOW_MS = 1_500;
@@ -66,7 +78,19 @@ const RESULT_LABEL: Record<string, string> = {
   unknown: 'Not valid',
   practice_ok: 'Practice',
   phone_mismatch: 'Digits did not match',
+  turned_away: 'Turned away (offline)',
 };
+
+/** What an offline scan waiting in the outbox shows in "Last scans here". */
+const VERDICT_LABEL: Record<string, string> = {
+  admitted: 'Admitted · offline, not sent yet',
+  refused: 'Turned away · offline, not sent yet',
+  practice: 'Practice · offline, not sent yet',
+  undone: 'Undone · offline, not sent yet',
+};
+
+/** A row of "Last scans here": the server's, or one still in the outbox. */
+type RecentRow = WireRecentScan & { offline?: boolean };
 
 const PROBLEM_TEXT: Record<CameraProblem, { title: string; ios: string; other: string }> = {
   denied: {
@@ -119,19 +143,24 @@ function prune(map: Map<string, number>, olderThan: number): void {
 }
 
 export function Scanner({
+  passId,
   initial,
-  onSignedOut,
+  onSignedOut: onSessionOver,
 }: {
+  passId: string;
   initial: WireStatus;
   onSignedOut: (message: string) => void;
 }) {
   const [status, setStatus] = useState(initial);
   const [online, setOnline] = useState(true);
+  /** No answer lately: scans are judged from the list until a ping gets through. */
+  const [offlineMode, setOfflineMode] = useState(false);
+  const offlineModeRef = useRef(false);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<'none' | 'type' | 'search' | 'checklist'>('none');
   const [typed, setTyped] = useState('');
-  const [undoFor, setUndoFor] = useState<WireRecentScan | null>(null);
+  const [undoFor, setUndoFor] = useState<RecentRow | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
 
@@ -155,19 +184,59 @@ export function Scanner({
 
   const { unlock, play } = useFeedback();
 
+  // The session is over (401, or End session): wipe the offline list and
+  // outbox, and say so if scans never reached the server.
+  const offlineRef = useRef<OfflineApi | null>(null);
+  const onSignedOut = useCallback(
+    (message: string) => {
+      void (async () => {
+        const unsent = (await offlineRef.current?.clear()) ?? 0;
+        onSessionOver(
+          unsent > 0
+            ? `${message} ${unsent} offline ${unsent === 1 ? 'scan' : 'scans'} from this phone could not be sent — tell the organizer.`
+            : message,
+        );
+      })();
+    },
+    [onSessionOver],
+  );
+  const offline = useOffline({ passId, gate: status.gate, onSignedOut });
+  useEffect(() => {
+    offlineRef.current = offline;
+  });
+  // The hook's functions are stable; the object around them is not. The
+  // scan path must only depend on stable ones, or the handheld-scanner
+  // listener would re-subscribe on every render and drop a code mid-read.
+  const { answer: judgeOffline, learn: learnOnline, now: correctedNow } = offline;
+
+  const goOffline = useCallback((on: boolean) => {
+    offlineModeRef.current = on;
+    setOfflineMode(on);
+  }, []);
+
   const refresh = useCallback(async () => {
     const seq = ++statusSeq.current;
+    const sentAt = Date.now();
     const reply = await doorApi.status();
     if (seq !== statusSeq.current) return;
     if (reply.ok) {
+      offlineRef.current?.learnServerTime(reply.data.serverTime, sentAt, Date.now());
       setStatus(reply.data);
       setOnline(true);
+      goOffline(false);
+      // Signal is back: send what was scanned without it, then show the
+      // counts and last scans with those scans in them.
+      const off = offlineRef.current;
+      if (off && off.pending.length > 0 && (await off.sync())) {
+        const again = await doorApi.status();
+        if (again.ok && seq === statusSeq.current) setStatus(again.data);
+      }
     } else if (reply.kind === 'signed_out') {
       onSignedOut(reply.message);
     } else if (reply.kind === 'network') {
       setOnline(false);
     }
-  }, [onSignedOut]);
+  }, [onSignedOut, goOffline]);
 
   const show = useCallback(
     (next: Overlay) => {
@@ -187,24 +256,55 @@ export function Scanner({
     setOverlay(null);
   }, []);
 
+  /** Judge a code read from the offline list; false when there is no usable list. */
+  const answerOffline = useCallback(
+    async (scan: PendingScan, supersedes?: string): Promise<boolean> => {
+      if (scan.input === undefined || scan.method === 'search') return false;
+      const result = await judgeOffline(scan.input, scan.method, supersedes);
+      if (!result) return false;
+      failed.current.delete(scan.key);
+      retryScan.current = null;
+      show({ kind: 'result', result, offline: true });
+      return true;
+    },
+    [judgeOffline, show],
+  );
+
   const send = useCallback(
     async (scan: PendingScan, viaRetry = false) => {
       busyRef.current = true;
       activeKey.current = scan.key;
       setBusy(true);
+      const done = () => {
+        busyRef.current = false;
+        setBusy(false);
+      };
+      // Known to be offline: straight to the list, no 4 s wait per person.
+      if (offlineModeRef.current && (await answerOffline(scan))) {
+        done();
+        return;
+      }
       const reply = await doorApi.scan({
         scanId: scan.scanId,
         method: scan.method,
         input: scan.input,
         ticketId: scan.ticketId,
         phoneLast3: scan.phoneLast3,
-        scannedAt: new Date().toISOString(),
+        scannedAt: new Date(correctedNow()).toISOString(),
       });
-      busyRef.current = false;
-      setBusy(false);
+      // No answer: judge it offline, naming this request — if it did land,
+      // the server knows the offline admit is the same person.
+      if (!reply.ok && reply.kind === 'network' && (await answerOffline(scan, scan.scanId))) {
+        done();
+        setOnline(false);
+        goOffline(true);
+        return;
+      }
+      done();
 
       if (reply.ok) {
         setOnline(true);
+        goOffline(false);
         failed.current.delete(scan.key);
         retryScan.current = null;
         const result: WireScanResult | undefined = reply.data.results[0];
@@ -213,6 +313,7 @@ export function Scanner({
           return;
         }
         show({ kind: 'result', result, viaRetry });
+        void learnOnline({ raw: scan.input, ticketId: scan.ticketId }, result);
         void refresh();
         return;
       }
@@ -235,7 +336,7 @@ export function Scanner({
       setOnline(false);
       show({ kind: 'not_recorded', canRetry: true });
     },
-    [onSignedOut, refresh, show],
+    [onSignedOut, refresh, show, answerOffline, correctedNow, learnOnline, goOffline],
   );
 
   const submit = useCallback(
@@ -399,8 +500,20 @@ export function Scanner({
     return () => document.removeEventListener('keydown', onKey);
   }, [touchCamera, submit]);
 
-  async function undo(scan: WireRecentScan, reason: DoorUndoReason) {
+  async function undo(scan: RecentRow, reason: DoorUndoReason) {
     setUndoFor(null);
+    if (scan.offline) {
+      // Not sent yet: it goes to the server as "undone" — never checked in.
+      const outcome = await offline.undo(scan.scanId);
+      setNotice(
+        outcome === 'done'
+          ? `Check-in undone for ${scan.attendeeName ?? 'that ticket'}.`
+          : outcome === 'sending'
+            ? 'That scan is being sent right now — try the undo again in a moment.'
+            : 'Too late to undo that one here — the organizer can.',
+      );
+      return;
+    }
     const reply = await doorApi.undo(scan.scanId, reason);
     if (reply.ok) {
       // A retry of the undone scan must not reuse its id (it would replay).
@@ -425,6 +538,8 @@ export function Scanner({
       setTimeout(() => setEnding(false), 4_000);
       return;
     }
+    // Last chance to send what was scanned offline.
+    await offline.sync();
     const reply = await doorApi.signOut();
     // The cookie is httpOnly: only the server can end the session.
     if (!reply.ok) {
@@ -436,9 +551,30 @@ export function Scanner({
   }
 
   const doorsOpen = formatDhakaClock(new Date(status.validFrom));
+  const pending = offline.pending;
+  // The outbox's scans (newest first) above the server's own list.
+  const undoFrom = offline.now() - DOOR_UNDO_WINDOW_MS;
+  const recent: RecentRow[] = [
+    ...[...pending].reverse().map((p) => ({
+      scanId: p.scanId,
+      result: p.verdict,
+      method: p.method,
+      at: p.scannedAt,
+      attendeeName: p.attendeeName ?? null,
+      ticketTypeName: p.ticketTypeName ?? null,
+      undoable: p.verdict === 'admitted' && Date.parse(p.scannedAt) >= undoFrom,
+      offline: true,
+    })),
+    ...status.recent,
+  ];
+  const listTime = offline.listAt ? formatDhakaClock(new Date(offline.listAt)) : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">
+    <main
+      className="mx-auto flex w-full max-w-lg flex-1 flex-col"
+      // How many tickets the offline list holds (e2e waits on it).
+      data-offline-list={offline.ready ? offline.size : undefined}
+    >
       <header className="flex items-start justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold text-white">{status.event.title}</p>
@@ -449,13 +585,21 @@ export function Scanner({
               {status.checkedIn} / {status.issued} in
             </span>
             <span aria-hidden>·</span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1" data-testid="door-online">
               <span
                 aria-hidden
                 className={cn('size-2 rounded-full', online ? 'bg-[#4ade80]' : 'bg-[#f87171]')}
               />
               {online ? 'Online' : 'Offline'}
             </span>
+            {pending.length > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                <span className="tabular" data-testid="door-pending">
+                  {offline.syncing ? 'sending' : `${pending.length} to send`}
+                </span>
+              </>
+            ) : null}
           </p>
         </div>
         <button
@@ -463,9 +607,30 @@ export function Scanner({
           onClick={endSession}
           className="h-10 shrink-0 rounded-lg border border-white/25 px-3 text-sm text-white/85"
         >
-          {ending ? 'Tap again to end' : 'End session'}
+          {ending
+            ? pending.length > 0
+              ? `${pending.length} not sent — tap to end anyway`
+              : 'Tap again to end'
+            : 'End session'}
         </button>
       </header>
+
+      {offlineMode ? (
+        <p
+          role="status"
+          data-testid="door-offline"
+          className="bg-[#b86a00] px-4 py-2 text-center text-sm font-semibold text-white"
+        >
+          {offline.ready
+            ? `OFFLINE — answering from the ticket list of ${listTime}. Scans are sent when the signal is back.`
+            : 'OFFLINE — no ticket list on this phone. Use the printed list.'}
+        </p>
+      ) : null}
+      {offline.problem ? (
+        <p role="status" className="bg-[#b3261e] px-4 py-2 text-sm text-white">
+          {offline.problem}
+        </p>
+      ) : null}
 
       {status.practice ? (
         <p
@@ -618,11 +783,11 @@ export function Scanner({
         <h2 className="pb-2 text-xs font-semibold tracking-widest text-white/50 uppercase">
           Last scans here
         </h2>
-        {status.recent.length === 0 ? (
+        {recent.length === 0 ? (
           <p className="py-3 text-sm text-white/50">Nothing scanned at this gate yet.</p>
         ) : (
           <ul className="flex flex-col divide-y divide-white/10">
-            {status.recent.map((r) => (
+            {recent.map((r) => (
               <li key={r.scanId} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-[15px] text-white">
@@ -631,7 +796,7 @@ export function Scanner({
                   <p className="text-xs text-white/55">
                     {formatDhakaClock(new Date(r.at))}
                     {r.ticketTypeName ? ` · ${r.ticketTypeName}` : ''} ·{' '}
-                    {RESULT_LABEL[r.result] ?? r.result}
+                    {(r.offline ? VERDICT_LABEL[r.result] : RESULT_LABEL[r.result]) ?? r.result}
                   </p>
                 </div>
                 {r.undoable ? (
@@ -652,6 +817,8 @@ export function Scanner({
       {panel === 'search' ? (
         <DoorSearch
           busy={busy}
+          offlineMode={offlineMode}
+          searchOffline={offline.search}
           onAdmit={admitFromSearch}
           onClose={() => setPanel('none')}
           onSignedOut={onSignedOut}

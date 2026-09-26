@@ -147,6 +147,15 @@ open one event's **Details** tab and set **Starts at** to an hour ago and
 home-page hero). Put it back afterwards, or re-seed with
 `pnpm db:seed --reset`.
 
+**Offline (ADR-034).** Open the pass with signal, wait a moment (the phone
+downloads the ticket list), then switch on airplane mode — keep the tab
+open: without a service worker (Slice B2) the page cannot be reloaded
+offline. Scans answer with "offline" on them and the header counts
+"N to send"; turn signal back on and they go out within 15 s. A ticket
+admitted offline at one gate and online at another shows under **Double
+entries** on the check-in page. On a laptop, Chrome DevTools → Network →
+Offline does the same; `tests/e2e/door-offline.spec.ts` covers it.
+
 ## The quality gate
 
 `pnpm verify` runs typecheck → lint → unit tests → build. **Nothing merges unless

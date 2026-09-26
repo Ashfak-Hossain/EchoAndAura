@@ -43,10 +43,12 @@ export interface TicketsRepository {
    * ADR-030 gate check-in, one conditional UPDATE: only an `issued` ticket
    * not yet checked in. Null when it is not — exactly one of any number of
    * concurrent scans wins, the way inventory holds do (Invariant 2).
+   * `at` is for a synced offline admit (ADR-034): when the person actually
+   * walked in, already clamped by the service. Default: the database clock.
    */
   checkIn(
     id: string,
-    by: { gate: string; scanId: string },
+    by: { gate: string; scanId: string; at?: Date },
     tx: DbExecutor,
   ): Promise<TicketRecord | null>;
   /**
@@ -125,11 +127,11 @@ export const ticketsRepository: TicketsRepository = {
     return row ?? null;
   },
 
-  async checkIn(id, { gate, scanId }, tx) {
+  async checkIn(id, { gate, scanId, at }, tx) {
     const [row] = await tx
       .update(tickets)
       .set({
-        checkedInAt: sql`clock_timestamp()`,
+        checkedInAt: at ?? sql`clock_timestamp()`,
         checkedInBy: gate,
         checkedInScanId: scanId,
         updatedAt: sql`now()`,

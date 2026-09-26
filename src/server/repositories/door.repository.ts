@@ -66,9 +66,47 @@ export interface DoorSearchRow {
   phoneOnFile: boolean;
 }
 
+/**
+ * One ticket on a door phone's offline list (ADR-034). The code is here
+ * only so the service can hash it — it never leaves the server in clear.
+ */
+export interface OfflineListRow {
+  id: string;
+  code: string;
+  status: 'issued' | 'cancelled';
+  attendeeName: string;
+  ticketTypeName: string;
+  position: number;
+  orderQuantity: number;
+  checkedInAt: Date | null;
+  checkedInBy: string | null;
+}
+
+/**
+ * A double entry (ADR-034): an offline door showed ADMIT, and when its scan
+ * reached the server the ticket was already in (or cancelled).
+ */
+export interface OfflineConflictRow {
+  scanId: string;
+  gate: string;
+  result: DoorScanRecord['result'];
+  /** The offline phone's (corrected) clock when it admitted. */
+  scannedAt: Date | null;
+  receivedAt: Date;
+  ticketId: string | null;
+  orderId: string | null;
+  attendeeName: string | null;
+  ticketTypeName: string | null;
+  /** The check-in that beat it: when and at which gate. */
+  priorCheckedInAt: Date | null;
+  priorCheckedInBy: string | null;
+}
+
 export interface PassListRow {
   pass: DoorPassRecord;
   scans: number;
+  /** Scans that were made offline and synced later (ADR-034). */
+  offlineScans: number;
   admitted: number;
   searchAdmits: number;
   lastScanAt: Date | null;
@@ -119,6 +157,14 @@ export interface DoorRepository {
     limit: number,
   ): Promise<DoorSearchRow[]>;
   recentScans(passId: string, limit: number): Promise<RecentScanRow[]>;
+  /** Every ticket of the event, all statuses — the door phone's offline list. */
+  offlineList(eventId: string): Promise<OfflineListRow[]>;
+  /**
+   * Offline admits that found the ticket already in or cancelled, oldest
+   * first. Not a double entry: an offline admit that replaced an online
+   * request which itself admitted (the same person — the answer was lost).
+   */
+  offlineConflicts(eventId: string): Promise<OfflineConflictRow[]>;
   counts(eventId: string): Promise<{ issued: number; checkedIn: number }>;
   /** Tickets still checked in by one of this pass's scans (revoke-and-undo). */
   ticketsCheckedInByPass(
@@ -136,6 +182,7 @@ function escapeLike(term: string): string {
 }
 
 const checkingScan = aliasedTable(doorScans, 'checking_scan');
+const supersededScan = aliasedTable(doorScans, 'superseded_scan');
 
 export const doorRepository: DoorRepository = {
   async insertPass(values) {
@@ -182,6 +229,7 @@ export const doorRepository: DoorRepository = {
       .select({
         pass: doorPasses,
         scans: count(doorScans.id),
+        offlineScans: sql<number>`(count(*) filter (where ${doorScans.mode} = 'offline'))::int`,
         admitted: sql<number>`(count(*) filter (where ${doorScans.result} = 'admitted'))::int`,
         searchAdmits: sql<number>`(count(*) filter (where ${doorScans.result} = 'admitted' and ${doorScans.method} = 'search'))::int`,
         lastScanAt: max(doorScans.receivedAt),
@@ -279,12 +327,75 @@ export const doorRepository: DoorRepository = {
       )
       .leftJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
       .where(eq(doorScans.passId, passId))
-      .orderBy(desc(doorScans.receivedAt))
+      // When it happened: a synced offline scan by the phone's (corrected)
+      // clock, so an hour of offline scans lands where it belongs.
+      .orderBy(
+        desc(
+          sql`CASE WHEN ${doorScans.mode} = 'offline' THEN coalesce(${doorScans.scannedAt}, ${doorScans.receivedAt}) ELSE ${doorScans.receivedAt} END`,
+        ),
+        desc(doorScans.receivedAt),
+      )
       .limit(limit);
     return rows.map(({ checkedInScanId, ...r }) => ({
       ...r,
       stillCheckedInByThisScan: checkedInScanId === r.scan.scanId,
     }));
+  },
+
+  offlineList(eventId) {
+    return db
+      .select({
+        id: tickets.id,
+        code: tickets.code,
+        status: tickets.status,
+        attendeeName: tickets.attendeeName,
+        ticketTypeName: ticketTypes.name,
+        position: tickets.position,
+        orderQuantity: orders.quantity,
+        checkedInAt: tickets.checkedInAt,
+        checkedInBy: tickets.checkedInBy,
+      })
+      .from(tickets)
+      .innerJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
+      .innerJoin(orders, eq(orders.id, tickets.orderId))
+      .where(eq(tickets.eventId, eventId))
+      .orderBy(asc(tickets.attendeeName), asc(tickets.position));
+  },
+
+  offlineConflicts(eventId) {
+    return db
+      .select({
+        scanId: doorScans.scanId,
+        gate: doorPasses.label,
+        result: doorScans.result,
+        scannedAt: doorScans.scannedAt,
+        receivedAt: doorScans.receivedAt,
+        ticketId: doorScans.ticketId,
+        orderId: tickets.orderId,
+        attendeeName: tickets.attendeeName,
+        ticketTypeName: ticketTypes.name,
+        priorCheckedInAt: doorScans.priorCheckedInAt,
+        priorCheckedInBy: doorScans.priorCheckedInBy,
+      })
+      .from(doorScans)
+      .innerJoin(doorPasses, eq(doorPasses.id, doorScans.passId))
+      .leftJoin(
+        tickets,
+        and(eq(tickets.id, doorScans.ticketId), eq(tickets.eventId, doorScans.eventId)),
+      )
+      .leftJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
+      .leftJoin(supersededScan, eq(supersededScan.scanId, doorScans.supersedesScanId))
+      .where(
+        and(
+          eq(doorScans.eventId, eventId),
+          eq(doorScans.mode, 'offline'),
+          eq(doorScans.doorVerdict, 'admitted'),
+          sql`${doorScans.result} <> 'admitted'`,
+          // The online request this scan replaced did admit: same person.
+          sql`${supersededScan.result} IS DISTINCT FROM 'admitted'`,
+        ),
+      )
+      .orderBy(asc(doorScans.receivedAt));
   },
 
   async counts(eventId) {

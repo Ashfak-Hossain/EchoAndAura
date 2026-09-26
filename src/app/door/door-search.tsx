@@ -11,14 +11,23 @@ import { type WireSearchResult, doorApi } from './door-api';
  * the ticket and type what they hear; the server checks them. The digits
  * are never on this screen — an impostor could read them off it — and
  * these admits have their own, tighter rate budget.
+ *
+ * ADR-034: without signal the search runs on the phone's offline list, so
+ * staff can still see who someone is and whether they are in — but cannot
+ * admit by name, because only the server can check the digits.
  */
 export function DoorSearch({
   busy,
+  offlineMode,
+  searchOffline,
   onAdmit,
   onClose,
   onSignedOut,
 }: {
   busy: boolean;
+  /** Known to be offline: search the phone's list, not the server. */
+  offlineMode: boolean;
+  searchOffline: (term: string) => Promise<WireSearchResult[] | null>;
   /** `phoneLast3`: what the person said; omitted only for a comp (no phone on file). */
   onAdmit: (row: WireSearchResult, phoneLast3?: string) => void;
   onClose: () => void;
@@ -26,6 +35,8 @@ export function DoorSearch({
 }) {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<WireSearchResult[] | null>(null);
+  /** The rows came from the offline list: nobody can be admitted from them. */
+  const [local, setLocal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<WireSearchResult | null>(null);
   const [digits, setDigits] = useState('');
@@ -34,18 +45,29 @@ export function DoorSearch({
     const term = q.trim();
     if (term.length < 2) return;
     let live = true;
+    const fromList = async (): Promise<boolean> => {
+      const found = await searchOffline(term);
+      if (!live || found === null) return false;
+      setRows(found);
+      setLocal(true);
+      setError(null);
+      return true;
+    };
     const timer = setTimeout(async () => {
+      if (offlineMode && (await fromList())) return;
       const reply = await doorApi.search(term);
       if (!live) return;
       if (reply.ok) {
         setRows(reply.data.results);
+        setLocal(false);
         setError(null);
       } else if (reply.kind === 'signed_out') {
         onSignedOut(reply.message);
       } else if (reply.kind === 'slow') {
         setError(`Slow down — wait ${reply.retryAfter} s.`);
       } else if (reply.kind === 'network') {
-        setError('No connection. Use the printed list if it does not come back.');
+        if (await fromList()) return;
+        if (live) setError('No connection. Use the printed list if it does not come back.');
       } else {
         setError(reply.message);
       }
@@ -54,7 +76,7 @@ export function DoorSearch({
       live = false;
       clearTimeout(timer);
     };
-  }, [q, onSignedOut]);
+  }, [q, onSignedOut, offlineMode, searchOffline]);
 
   if (confirming) {
     return (
@@ -152,6 +174,16 @@ export function DoorSearch({
           {error}
         </p>
       ) : null}
+      {local && rows !== null ? (
+        <p
+          role="status"
+          data-testid="door-search-offline"
+          className="rounded-lg bg-[#b86a00] px-3 py-2 text-[15px] text-white"
+        >
+          Offline — from this phone&apos;s ticket list. Admitting by name needs signal: use the
+          printed list.
+        </p>
+      ) : null}
       <ul className="-mx-1 flex flex-1 flex-col gap-2 overflow-y-auto px-1">
         {rows?.length === 0 ? (
           <li className="py-6 text-center text-white/60">No one by that name for this event.</li>
@@ -164,7 +196,7 @@ export function DoorSearch({
             <li key={row.ticketId}>
               <button
                 type="button"
-                disabled={cancelled || inside}
+                disabled={cancelled || inside || local}
                 onClick={() => {
                   setDigits('');
                   setConfirming(row);
@@ -183,6 +215,8 @@ export function DoorSearch({
                     In {formatDhakaClock(new Date(inAt))}
                     {row.checkedInBy ? ` · ${row.checkedInBy}` : ''}
                   </span>
+                ) : local ? (
+                  <span className="text-[15px] font-semibold text-[#8fd6ae]">Not in yet</span>
                 ) : (
                   <span className="text-[15px] font-semibold text-[#8fd6ae]">
                     Not in yet — tap to admit

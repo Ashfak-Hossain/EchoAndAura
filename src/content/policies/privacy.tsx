@@ -34,6 +34,10 @@ const DOOR_STAFF_SEE: [string, string][] = [
     'The last 3 digits of the phone that bought the ticket',
     'Never shown — when they look someone up by name they ask for them, and the system checks them',
   ],
+  [
+    'The ticket list kept on a door phone',
+    'Attendee names and ticket types, so the gate keeps working without signal — ticket codes only in scrambled form, and deleted from the phone when its session ends',
+  ],
   ['Printed backup list', 'Attendee names, ticket types, ticket codes and order references'],
 ];
 

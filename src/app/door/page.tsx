@@ -15,6 +15,7 @@ export default async function DoorPage() {
       passId: ctx.pass.id,
       status: {
         ...status,
+        serverTime: status.serverTime.toISOString(),
         recent: status.recent.map((r) => ({ ...r, at: r.at.toISOString() })),
         event: { title: ctx.event.title, startsAt: ctx.event.startsAt.toISOString() },
         gate: ctx.pass.label,

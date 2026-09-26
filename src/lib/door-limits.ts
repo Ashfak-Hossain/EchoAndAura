@@ -21,6 +21,14 @@ export const DOOR_LIMITS = {
   searchAdmit: { scope: 'door-search-admit:pass', limit: 20, windowSeconds: 60 },
   /** Name searches, per pass. */
   search: { scope: 'door-search:pass', limit: 60, windowSeconds: 60 },
+  /**
+   * ADR-034 offline sync requests (up to 50 scans each), per pass. Counted
+   * apart from `scan`: a phone back from an hour offline must be able to
+   * empty its outbox without starving its own live scans.
+   */
+  sync: { scope: 'door-sync:pass', limit: 30, windowSeconds: 60 },
+  /** Offline list downloads, per pass (the phone refreshes about once a minute). */
+  list: { scope: 'door-list:pass', limit: 10, windowSeconds: 60 },
 } as const;
 
 export function createDoorLimiter(store: RateLimitStore = redisRateLimitStore()): RateLimiter {

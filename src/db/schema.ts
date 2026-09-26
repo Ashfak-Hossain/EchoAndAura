@@ -385,9 +385,18 @@ export const doorScanResult = pgEnum('door_scan_result', [
   // A name-search admit whose 3 phone digits did not match the buying
   // phone: refused, and logged so repeated guessing shows up (ADR-030).
   'phone_mismatch',
+  // ADR-034: an OFFLINE door turned the person away (its list was stale, or
+  // it undid its own admit) though the server would have admitted them.
+  // Logged only — nobody walked in, so nothing is checked in.
+  'turned_away',
 ]);
 export const doorScanMethod = pgEnum('door_scan_method', ['qr', 'typed', 'search']);
 export const doorScanMode = pgEnum('door_scan_mode', ['online', 'offline', 'practice']);
+// ADR-034: what an OFFLINE door phone showed the person, judged from its
+// downloaded list. Recorded, never trusted — `result` is the server's own
+// answer, and an offline `admitted` whose result is not `admitted` is a
+// double entry the organizer sees on the check-in page.
+export const doorVerdict = pgEnum('door_verdict', ['admitted', 'refused', 'practice', 'undone']);
 
 // One pass per gate per event. The code is the bearer secret a door phone
 // signs in with (~59 bits, so guessing is not a practical attack); it is
@@ -441,11 +450,25 @@ export const doorScans = pgTable(
     receivedAt: timestamp('received_at', { withTimezone: true })
       .notNull()
       .default(sql`clock_timestamp()`),
+    // Offline scans only (ADR-034): what the door showed. Set exactly when
+    // mode = 'offline' (CHECK below).
+    doorVerdict: doorVerdict('door_verdict'),
+    // An offline scan that replaced an online request which got no answer:
+    // that request's scan id. If IT checked the ticket in, the offline admit
+    // is the same person, not a double entry.
+    supersedesScanId: uuid('supersedes_scan_id'),
   },
   (t) => [
     index('door_scans_pass_id_idx').on(t.passId, t.receivedAt),
     index('door_scans_event_id_idx').on(t.eventId),
     index('door_scans_ticket_id_idx').on(t.ticketId),
+    index('door_scans_offline_event_idx')
+      .on(t.eventId)
+      .where(sql`${t.mode} = 'offline'`),
+    check(
+      'door_scans_verdict_offline',
+      sql`(${t.mode} = 'offline') = (${t.doorVerdict} IS NOT NULL)`,
+    ),
   ],
 );
 

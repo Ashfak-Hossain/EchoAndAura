@@ -26,12 +26,16 @@ import { createInventoryService } from '@/server/services/inventory.service';
  * told ALREADY IN, and the run finishes (every statement inside a scan
  * transaction is bound to it, so twelve scans on a 10-connection pool
  * cannot starve it). Plus a same-scan-id race, check-in racing cancel,
- * and the CHECK constraints as the backstop.
+ * and the CHECK constraints as the backstop. ADR-034: offline syncs racing
+ * live scans and each other, the double-entry query, the verdict CHECK.
  */
 describe('doorService (Postgres)', () => {
   const eventId = randomUUID();
   const typeId = randomUUID();
   const orderId = randomUUID();
+  // The offline fixtures ride a second order: an order holds at most 10.
+  const offlineOrderId = randomUUID();
+  const OFFLINE_FROM = 7;
   const ACTOR = 'raj@example.com';
   // Codes from the unambiguous alphabet: a 4-char tag keeps runs apart.
   const tag = randomUUID()
@@ -48,12 +52,27 @@ describe('doorService (Postgres)', () => {
     // 8 letters of the code alphabet: also parses as a ticket code.
     'Mahmudur Search',
     'Revoke Race',
+    // ADR-034 offline sync.
+    'Offline Race',
+    'Two Phones',
+    'Offline Time',
+    'Superseded',
   ];
   // Letters from the ticket alphabet only (no I, L, O, 0, 1) — anything
   // else is, correctly, NOT A VALID TICKET to the scanner.
-  const codes = ['RUSH', 'TWNS', 'RACE', 'PASS', 'CHCK', 'NAME', 'RVKE'].map(
-    (c) => `TKT-${c}${tag}`,
-  );
+  const codes = [
+    'RUSH',
+    'TWNS',
+    'RACE',
+    'PASS',
+    'CHCK',
+    'NAME',
+    'RVKE',
+    'FFRC',
+    'TWPH',
+    'FTME',
+    'SPRS',
+  ].map((c) => `TKT-${c}${tag}`);
   // Another event with one ticket, for the wrong-event scan.
   const otherEventId = randomUUID();
   const otherTypeId = randomUUID();
@@ -114,22 +133,37 @@ describe('doorService (Postgres)', () => {
       eventId,
       ticketTypeId: typeId,
       reference: `EA-DR${tag}`.slice(0, 9),
-      quantity: names.length,
+      quantity: OFFLINE_FROM,
       unitPricePaisa: 120_000,
-      subtotalPaisa: 120_000 * names.length,
-      totalPaisa: 120_000 * names.length,
+      subtotalPaisa: 120_000 * OFFLINE_FROM,
+      totalPaisa: 120_000 * OFFLINE_FROM,
       buyerName: 'Door Test',
       buyerEmail: `door.${orderId}@example.com`,
+      buyerPhone: '+8801712345678',
+      status: 'issued',
+    });
+    const offlineCount = names.length - OFFLINE_FROM;
+    await db.insert(schema.orders).values({
+      id: offlineOrderId,
+      eventId,
+      ticketTypeId: typeId,
+      reference: `EA-DF${tag}`.slice(0, 9),
+      quantity: offlineCount,
+      unitPricePaisa: 120_000,
+      subtotalPaisa: 120_000 * offlineCount,
+      totalPaisa: 120_000 * offlineCount,
+      buyerName: 'Door Offline',
+      buyerEmail: `door.${offlineOrderId}@example.com`,
       buyerPhone: '+8801712345678',
       status: 'issued',
     });
     await db.insert(schema.tickets).values(
       names.map((attendeeName, i) => ({
         id: ticketIds[i]!,
-        orderId,
+        orderId: i < OFFLINE_FROM ? orderId : offlineOrderId,
         eventId,
         ticketTypeId: typeId,
-        position: i + 1,
+        position: i < OFFLINE_FROM ? i + 1 : i - OFFLINE_FROM + 1,
         attendeeName,
         code: codes[i]!,
       })),
@@ -185,6 +219,7 @@ describe('doorService (Postgres)', () => {
     await db.delete(schema.doorScans).where(eq(schema.doorScans.eventId, eventId));
     await db.delete(schema.doorPasses).where(eq(schema.doorPasses.eventId, eventId));
     await db.delete(schema.orders).where(eq(schema.orders.id, orderId)); // tickets, audit cascade
+    await db.delete(schema.orders).where(eq(schema.orders.id, offlineOrderId));
     await db.delete(schema.ticketTypes).where(eq(schema.ticketTypes.eventId, eventId));
     await db.delete(schema.events).where(eq(schema.events.id, eventId));
     await db.delete(schema.orders).where(eq(schema.orders.id, otherOrderId));
@@ -377,5 +412,114 @@ describe('doorService (Postgres)', () => {
 
     const passes = await door.listPasses((await eventsRepository.findById(eventId))!);
     expect(passes.find((p) => p.pass.label === 'Gate L')?.state).toBe('revoked');
+  });
+  describe('offline sync (ADR-034)', () => {
+    let gateC: DoorContext;
+    let gateD: DoorContext;
+    const offline = (
+      ctx: DoorContext,
+      input: string,
+      scannedAt = new Date(),
+      extra: { supersedesScanId?: string } = {},
+    ) =>
+      door.scan(ctx, {
+        scanId: randomUUID(),
+        input,
+        method: 'qr',
+        scannedAt,
+        offline: { verdict: 'admitted', ...extra },
+      });
+
+    beforeAll(async () => {
+      // Own gates, so the offline scans never reorder Gate A/B's recent list.
+      const c = await door.createPass(eventId, 'Gate C', ACTOR);
+      const d = await door.createPass(eventId, 'Gate D', ACTOR);
+      gateC = (await door.authenticate(c.code))!;
+      gateD = (await door.authenticate(d.code))!;
+    });
+
+    it('an offline sync racing a live scan of the same ticket: exactly one check-in', async () => {
+      const [live, synced] = await Promise.all([
+        scan(gateC, codes[7]!),
+        offline(gateD, codes[7]!, new Date(Date.now() - 60_000)),
+      ]);
+      const results = [live.result, synced.result].sort();
+      expect(results).toEqual(['admitted', 'already_in']);
+      const conflicts = await door.offlineConflicts(eventId);
+      const mine = conflicts.filter((c) => c.ticketId === ticketIds[7]);
+      // A double entry only if the offline admit is the one that lost.
+      expect(mine).toHaveLength(synced.result === 'admitted' ? 0 : 1);
+    }, 30_000);
+
+    it('two offline phones syncing one ticket at once: one check-in, one double entry', async () => {
+      const [c, d] = await Promise.all([offline(gateC, codes[8]!), offline(gateD, codes[8]!)]);
+      expect([c.result, d.result].sort()).toEqual(['admitted', 'already_in']);
+      const t = await ticketRow(8);
+      const winner = c.result === 'admitted' ? c : d;
+      expect(t.checkedInScanId).toBe(winner.scanId);
+
+      const conflicts = (await door.offlineConflicts(eventId)).filter(
+        (x) => x.ticketId === ticketIds[8],
+      );
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0]).toMatchObject({
+        attendeeName: 'Two Phones',
+        result: 'already_in',
+        priorGate: winner.gate,
+        orderId: offlineOrderId,
+      });
+    }, 30_000);
+
+    it('dates an offline check-in when the door admitted, not when it synced', async () => {
+      const when = new Date(Date.now() - 20 * 60_000);
+      expect((await offline(gateC, codes[9]!, when)).result).toBe('admitted');
+      expect((await ticketRow(9)).checkedInAt?.getTime()).toBe(when.getTime());
+      const [row] = await db
+        .select()
+        .from(schema.doorScans)
+        .where(eq(schema.doorScans.ticketId, ticketIds[9]!));
+      expect(row).toMatchObject({ mode: 'offline', doorVerdict: 'admitted', scannedAt: when });
+    });
+
+    it('is not a double entry when the replaced online request itself admitted', async () => {
+      const lost = randomUUID();
+      expect((await scan(gateC, codes[10]!, lost)).result).toBe('admitted');
+      const r = await offline(gateC, codes[10]!, new Date(), { supersedesScanId: lost });
+      expect(r.result).toBe('already_in');
+      const conflicts = await door.offlineConflicts(eventId);
+      expect(conflicts.some((x) => x.ticketId === ticketIds[10])).toBe(false);
+    });
+
+    it('the verdict CHECK: set exactly on offline rows', async () => {
+      const insert = (mode: 'online' | 'offline', verdict: 'admitted' | null) =>
+        db
+          .insert(schema.doorScans)
+          .values({
+            scanId: randomUUID(),
+            passId: gateC.pass.id,
+            eventId,
+            input: '<unparsed:len=1>',
+            result: 'unknown',
+            method: 'qr',
+            mode,
+            doorVerdict: verdict,
+          })
+          .then(
+            () => null,
+            (e: unknown) => findPostgresError(e)?.constraint_name,
+          );
+      expect(await insert('offline', null)).toBe('door_scans_verdict_offline');
+      expect(await insert('online', 'admitted')).toBe('door_scans_verdict_offline');
+    });
+
+    it('lists every ticket of the event, hashed, with no code or buyer contact', async () => {
+      const list = await door.offlineList(gateC);
+      expect(list.entries).toHaveLength(names.length);
+      expect(list.entries.find((e) => e.name === 'Offline Time')?.inBy).toBe('Gate C');
+      const json = JSON.stringify(list);
+      expect(json).not.toContain('TKT-');
+      expect(json).not.toContain('8801712345678');
+      expect(json).not.toContain('Somebody Private');
+    });
   });
 });

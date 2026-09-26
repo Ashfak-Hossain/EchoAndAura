@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { DbExecutor } from '@/db/executor';
 import {
   CheckInUndoRefusedError,
@@ -20,6 +21,13 @@ import {
   DOOR_UNDO_WINDOW_MS,
   type DoorUndoReason,
 } from '@/server/lib/door-rules';
+import {
+  type DoorVerdict,
+  OFFLINE_LIST_VERSION,
+  type OfflineList,
+  clampOfflineTime,
+  offlineDigest,
+} from '@/server/lib/door-offline';
 import { logger } from '@/server/lib/logger';
 import { formatDhakaClock } from '@/lib/time';
 import { parseScanToken, scanLogInput } from '@/server/lib/scan-token';
@@ -79,6 +87,12 @@ export interface ScanItem {
   phoneLast3?: string;
   method: ScanMethod;
   scannedAt?: Date;
+  /**
+   * ADR-034: a scan the phone answered OFFLINE and sends later. `verdict` is
+   * what it showed the person; `supersedesScanId` the online request it
+   * replaced when that request got no answer. Requires `scannedAt`.
+   */
+  offline?: { verdict: DoorVerdict; supersedesScanId?: string };
 }
 
 export type ScanResultKind =
@@ -89,6 +103,8 @@ export type ScanResultKind =
   | 'unknown'
   | 'practice_ok'
   | 'phone_mismatch'
+  /** An offline door turned away a ticket the server would have admitted (logged only). */
+  | 'turned_away'
   | 'scan_id_conflict'
   /** A replayed ADMIT that no longer stands (it was undone): scan again. */
   | 'rescan';
@@ -145,6 +161,27 @@ export interface DoorStatus {
   checkedIn: number;
   practice: boolean;
   recent: DoorRecentScan[];
+  /** The server's clock: the door phone keeps its offline clock offset fresh with it. */
+  serverTime: Date;
+}
+
+/** Admin: one double entry (ADR-034). */
+export interface OfflineConflict {
+  scanId: string;
+  /** The gate whose offline phone admitted. */
+  gate: string;
+  /** What the server found: already in, or cancelled. */
+  result: ScanResultKind;
+  /** When the offline gate admitted (the phone's corrected clock). */
+  admittedAt: Date;
+  syncedAt: Date;
+  ticketId: string | null;
+  orderId: string | null;
+  attendeeName: string | null;
+  ticketTypeName: string | null;
+  /** The check-in that beat it. */
+  priorAt: Date | null;
+  priorGate: string | null;
 }
 
 /** `paused`: the event was unpublished (draft) — its passes are refused until it is republished. */
@@ -154,6 +191,8 @@ export interface GatePassRow {
   pass: DoorPassRecord;
   state: PassState;
   scans: number;
+  /** Scans made offline and synced later. */
+  offlineScans: number;
   admitted: number;
   searchAdmits: number;
   lastScanAt: Date | null;
@@ -167,6 +206,16 @@ export interface DoorServiceDeps {
   runInTransaction: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
   now?: () => Date;
   passCode?: () => string;
+  /** The offline list's salt (ADR-034); fresh per download. */
+  listSalt?: () => string;
+}
+
+/**
+ * When a scan happened: an offline scan's corrected phone clock, else the
+ * server's receipt. A synced offline admit is 'just now' only if it was.
+ */
+function scanTime(scan: DoorScanRecord): Date {
+  return scan.mode === 'offline' && scan.scannedAt ? scan.scannedAt : scan.receivedAt;
 }
 
 function describe(
@@ -202,6 +251,7 @@ export function createDoorService({
   runInTransaction,
   now = () => new Date(),
   passCode = generatePassCode,
+  listSalt = () => randomBytes(16).toString('hex'),
 }: DoorServiceDeps) {
   const secondsSince = (at: Date) =>
     Math.max(0, Math.floor((now().getTime() - at.getTime()) / 1000));
@@ -266,7 +316,9 @@ export function createDoorService({
   }
 
   async function fresh(ctx: DoorContext, item: ScanItem): Promise<ScanResult> {
-    const practice = ctx.practice;
+    const offline = item.offline;
+    // An offline scan answered PRACTICE on the phone stays practice here too.
+    const practice = ctx.practice || offline?.verdict === 'practice';
     const raw = item.input ?? '';
     let ticket: DoorTicket | null;
     let input: string;
@@ -285,8 +337,10 @@ export function createDoorService({
       ticketId: ticket?.id ?? null,
       input,
       method: item.method,
-      mode: practice ? 'practice' : 'online',
+      mode: offline ? 'offline' : practice ? 'practice' : 'online',
       scannedAt: item.scannedAt ?? null,
+      doorVerdict: offline?.verdict ?? null,
+      supersedesScanId: offline?.supersedesScanId ?? null,
     };
 
     if (!ticket) {
@@ -316,14 +370,19 @@ export function createDoorService({
       return { scanId: item.scanId, result: 'phone_mismatch', practice, ...describe(ticket) };
     }
 
-    if (practice) {
-      // Rehearsal: the answer it WOULD give, logged, and nothing checked in.
+    // Nothing is checked in for a rehearsal, nor for an offline scan whose
+    // door did not admit (it turned the person away, or undid its admit):
+    // the answer it WOULD give is logged, and that is all. Only an offline
+    // ADMIT is replayed as a check-in — the person is already inside.
+    if (practice || (offline && offline.verdict !== 'admitted')) {
       const would =
         ticket.status === 'cancelled'
           ? 'cancelled'
           : ticket.checkedInAt
             ? 'already_in'
-            : 'practice_ok';
+            : practice
+              ? 'practice_ok'
+              : 'turned_away';
       await door.insertScan({
         ...log,
         result: would,
@@ -342,20 +401,30 @@ export function createDoorService({
     }
 
     const gate = ctx.pass.label;
+    // An offline admit happened when the phone says (corrected, clamped),
+    // not when signal came back. An online one: the database clock.
+    const by = {
+      gate,
+      scanId: item.scanId,
+      at:
+        offline && item.scannedAt
+          ? clampOfflineTime(item.scannedAt, ctx.window.validFrom, now())
+          : undefined,
+    };
     return runInTransaction(async (tx) => {
       // Pass first, ticket second (the same order as revoke-and-undo): a
       // revoke waits for this scan, or this scan sees the revoke.
       if (!(await door.lockActivePass(ctx.pass.id, tx))) {
         throw new DoorPassRevokedError(ctx.pass.id);
       }
-      let admitted = await tickets.checkIn(ticket.id, { gate, scanId: item.scanId }, tx);
+      let admitted = await tickets.checkIn(ticket.id, by, tx);
       let current: DoorTicket | null = null;
       if (!admitted) {
         current = await door.findTicket({ id: ticket.id }, tx);
         // A concurrent undo landed between the failed UPDATE and this read:
         // the ticket is admissible again — try once more.
         if (current && current.status === 'issued' && !current.checkedInAt) {
-          admitted = await tickets.checkIn(ticket.id, { gate, scanId: item.scanId }, tx);
+          admitted = await tickets.checkIn(ticket.id, by, tx);
           // Lost again (another gate, or a cancel): `current` is stale — re-read below.
           if (!admitted) current = null;
         }
@@ -369,7 +438,7 @@ export function createDoorService({
             action: 'ticket.checked_in',
             fromStatus: null,
             toStatus: null,
-            note: `${ticket.code} · ${gate} · ${item.method}`,
+            note: `${ticket.code} · ${gate} · ${item.method}${offline ? ' · offline' : ''}`,
           },
           tx,
         );
@@ -554,7 +623,7 @@ export function createDoorService({
         throw new CheckInUndoRefusedError('not_found');
       }
       if (scan.passId !== ctx.pass.id) throw new CheckInUndoRefusedError('not_yours');
-      if (now().getTime() - scan.receivedAt.getTime() > DOOR_UNDO_WINDOW_MS) {
+      if (now().getTime() - scanTime(scan).getTime() > DOOR_UNDO_WINDOW_MS) {
         throw new CheckInUndoRefusedError('too_late');
       }
       const ticketId = scan.ticketId;
@@ -634,23 +703,77 @@ export function createDoorService({
         door.counts(ctx.event.id),
         door.recentScans(ctx.pass.id, DOOR_RECENT_SCANS),
       ]);
-      const at = now().getTime();
+      const serverTime = now();
+      const at = serverTime.getTime();
       return {
         ...counts,
         practice: ctx.practice,
+        serverTime,
         recent: recent.map((r) => ({
           scanId: r.scan.scanId,
           result: r.scan.result,
           method: r.scan.method,
-          at: r.scan.receivedAt,
+          at: scanTime(r.scan),
           attendeeName: r.attendeeName,
           ticketTypeName: r.ticketTypeName,
           undoable:
             r.scan.result === 'admitted' &&
             r.stillCheckedInByThisScan &&
-            at - r.scan.receivedAt.getTime() <= DOOR_UNDO_WINDOW_MS,
+            at - scanTime(r.scan).getTime() <= DOOR_UNDO_WINDOW_MS,
         })),
       };
+    },
+
+    /**
+     * ADR-034: every ticket of the pass's event, for the phone to answer
+     * from when there is no signal. Codes go out only as salted hashes, and
+     * nothing about the buyer goes at all — no phone digits either, which is
+     * why a name-search admit needs signal.
+     */
+    async offlineList(ctx: DoorContext): Promise<OfflineList> {
+      const rows = await door.offlineList(ctx.event.id);
+      const salt = listSalt();
+      const entries = await Promise.all(
+        rows.map(async (r) => ({
+          d: await offlineDigest(salt, r.code),
+          id: r.id,
+          name: r.attendeeName,
+          type: r.ticketTypeName,
+          pos: r.position,
+          of: r.orderQuantity,
+          status: r.status,
+          inAt: r.checkedInAt?.toISOString() ?? null,
+          inBy: r.checkedInBy,
+        })),
+      );
+      return {
+        v: OFFLINE_LIST_VERSION,
+        eventId: ctx.event.id,
+        passId: ctx.pass.id,
+        salt,
+        serverTime: now().toISOString(),
+        validFrom: ctx.window.validFrom.toISOString(),
+        validUntil: ctx.window.validUntil.toISOString(),
+        entries,
+      };
+    },
+
+    /** Admin: the event's double entries — offline admits the server could not honour. */
+    async offlineConflicts(eventId: string): Promise<OfflineConflict[]> {
+      const rows = await door.offlineConflicts(eventId);
+      return rows.map((r) => ({
+        scanId: r.scanId,
+        gate: r.gate,
+        result: r.result,
+        admittedAt: r.scannedAt ?? r.receivedAt,
+        syncedAt: r.receivedAt,
+        ticketId: r.ticketId,
+        orderId: r.orderId,
+        attendeeName: r.attendeeName,
+        ticketTypeName: r.ticketTypeName,
+        priorAt: r.priorCheckedInAt,
+        priorGate: r.priorCheckedInBy,
+      }));
     },
 
     /** Admin: the event's passes with their state and how much they did. */

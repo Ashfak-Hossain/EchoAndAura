@@ -58,7 +58,9 @@ export const terms: PolicyDoc = {
           <p>
             At the door the QR on your ticket is scanned (staff can also type the ticket code or
             find your name). Each ticket admits one person, once: the first scan wins, and a copy of
-            a ticket that has already been scanned is turned away. A printed list is kept as the
+            a ticket that has already been scanned is turned away. If a gate loses signal it checks
+            tickets against a list kept on the phone and sends its scans once the signal is back; a
+            ticket used twice that way is flagged to the organizer. A printed list is kept as the
             backup.
           </p>
           <Callout label="At the door" title="The first scan wins">

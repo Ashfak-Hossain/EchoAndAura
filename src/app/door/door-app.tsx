@@ -131,7 +131,12 @@ export function DoorApp({ initial }: { initial: DoorInitial | null }) {
           That pass link did not open — {linkError} This phone is still on its current gate.
         </p>
       ) : null}
-      <Scanner key={initial.passId} initial={initial.status} onSignedOut={onSignedOut} />
+      <Scanner
+        key={initial.passId}
+        passId={initial.passId}
+        initial={initial.status}
+        onSignedOut={onSignedOut}
+      />
     </>
   );
 }

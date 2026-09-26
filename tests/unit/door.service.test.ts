@@ -591,3 +591,208 @@ describe('doorService passes and status', () => {
     expect(draft.map((r) => r.state)).toEqual(['paused', 'paused']);
   });
 });
+
+describe('doorService offline sync (ADR-034)', () => {
+  const MIN = 60_000;
+  const offline = (
+    input: string,
+    verdict: 'admitted' | 'refused' | 'practice' | 'undone',
+    scannedAt: Date,
+    over: Partial<ScanItem> = {},
+  ): ScanItem => ({
+    scanId: sid(),
+    input,
+    method: 'qr',
+    scannedAt,
+    offline: { verdict },
+    ...over,
+  });
+
+  it('replays an offline ADMIT as a check-in, dated when the door admitted, audited as offline', async () => {
+    const { svc, db, fake, ctx, tickets, order, clock } = await setup();
+    const at = new Date(clock.at.getTime() - 20 * MIN);
+    const r = await svc.scan(await ctx(CODE_B), offline(tickets[0]!.code, 'admitted', at));
+
+    expect(r).toMatchObject({ result: 'admitted', gate: 'Gate B', attendeeName: 'Nusrat Jahan' });
+    expect(db.state.tickets[0]).toMatchObject({ checkedInAt: at, checkedInBy: 'Gate B' });
+    expect(fake.scans.at(-1)).toMatchObject({
+      mode: 'offline',
+      doorVerdict: 'admitted',
+      result: 'admitted',
+      scannedAt: at,
+    });
+    const audit = db.state.events.filter(
+      (e) => e.orderId === order.id && e.action === 'ticket.checked_in',
+    );
+    expect(audit.at(-1)?.note).toBe(`${tickets[0]!.code} · Gate B · qr · offline`);
+  });
+
+  it('clamps a wrong phone clock: never before doors opened, never in the future', async () => {
+    const { svc, db, ctx, tickets, clock } = await setup();
+    await svc.scan(
+      await ctx(CODE_A),
+      offline(tickets[0]!.code, 'admitted', new Date(clock.at.getTime() + 2 * HOUR)),
+    );
+    expect(db.state.tickets[0]!.checkedInAt).toEqual(clock.at);
+
+    await svc.scan(
+      await ctx(CODE_A),
+      offline(tickets[1]!.code, 'admitted', new Date(NOW.getTime() - 10 * HOUR)),
+    );
+    // Doors opened at NOW − 3 h (the event starts an hour after NOW).
+    expect(db.state.tickets[1]!.checkedInAt).toEqual(new Date(NOW.getTime() - 3 * HOUR));
+  });
+
+  it('records a double entry when the ticket was already in: nothing checked in twice', async () => {
+    const { svc, db, ctx, tickets, clock } = await setup();
+    await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code)); // Gate A, online
+    const firstIn = db.state.tickets[0]!.checkedInAt;
+    const offlineAt = new Date(clock.at.getTime() - 5 * MIN);
+
+    const r = await svc.scan(await ctx(CODE_B), offline(tickets[0]!.code, 'admitted', offlineAt));
+    expect(r).toMatchObject({ result: 'already_in', gate: 'Gate A' });
+    expect(db.state.tickets[0]).toMatchObject({ checkedInAt: firstIn, checkedInBy: 'Gate A' });
+
+    const conflicts = await svc.offlineConflicts('ev-1');
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      gate: 'Gate B',
+      result: 'already_in',
+      admittedAt: offlineAt,
+      attendeeName: 'Nusrat Jahan',
+      priorGate: 'Gate A',
+      priorAt: firstIn,
+    });
+  });
+
+  it('records a double entry for a ticket cancelled after the list was downloaded', async () => {
+    const { svc, db, ctx, tickets, clock } = await setup();
+    db.state.tickets[0]!.status = 'cancelled';
+    const r = await svc.scan(await ctx(CODE_B), offline(tickets[0]!.code, 'admitted', clock.at));
+    expect(r.result).toBe('cancelled');
+    expect(db.state.tickets[0]!.checkedInAt).toBeNull();
+    expect((await svc.offlineConflicts('ev-1')).map((c) => c.result)).toEqual(['cancelled']);
+  });
+
+  it('never checks in a scan the offline door turned away or undid — it only logs it', async () => {
+    const { svc, db, fake, ctx, tickets, clock } = await setup();
+    const refused = await svc.scan(
+      await ctx(CODE_A),
+      offline(tickets[0]!.code, 'refused', clock.at),
+    );
+    const undone = await svc.scan(await ctx(CODE_A), offline(tickets[1]!.code, 'undone', clock.at));
+    expect([refused.result, undone.result]).toEqual(['turned_away', 'turned_away']);
+    expect(db.state.tickets.map((t) => t.checkedInAt)).toEqual([null, null]);
+    expect(fake.scans.map((s) => [s.mode, s.doorVerdict])).toEqual([
+      ['offline', 'refused'],
+      ['offline', 'undone'],
+    ]);
+    // Turned away is not a double entry: nobody walked in.
+    expect(await svc.offlineConflicts('ev-1')).toEqual([]);
+
+    // Turned away because this phone's list knew it was in: the log says so.
+    await svc.scan(await ctx(CODE_B), typed(tickets[0]!.code));
+    const again = await svc.scan(await ctx(CODE_A), offline(tickets[0]!.code, 'refused', clock.at));
+    expect(again).toMatchObject({ result: 'already_in', gate: 'Gate B' });
+  });
+
+  it('keeps an offline PRACTICE answer practice, and never checks in while doors are shut', async () => {
+    const { svc, db, fake, ctx, tickets, events, clock } = await setup();
+    const p = await svc.scan(await ctx(CODE_A), offline(tickets[0]!.code, 'practice', clock.at));
+    expect(p).toMatchObject({ result: 'practice_ok', practice: true });
+    expect(fake.scans.at(-1)).toMatchObject({ mode: 'offline', doorVerdict: 'practice' });
+
+    // The phone's clock said doors were open; the server's says not yet.
+    events[0] = { ...events[0]!, startsAt: new Date(NOW.getTime() + 5 * HOUR) };
+    const early = await svc.scan(
+      await ctx(CODE_A),
+      offline(tickets[1]!.code, 'admitted', clock.at),
+    );
+    expect(early.result).toBe('practice_ok');
+    expect(db.state.tickets.map((t) => t.checkedInAt)).toEqual([null, null]);
+  });
+
+  it('is not a double entry when the online request it replaced did admit (the answer was lost)', async () => {
+    const { svc, ctx, tickets, clock } = await setup();
+    const lost = sid();
+    // The live request landed, but the phone never heard back…
+    await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code, lost));
+    // …so it answered offline and later syncs that, naming the lost request.
+    const r = await svc.scan(
+      await ctx(CODE_A),
+      offline(tickets[0]!.code, 'admitted', clock.at, {
+        offline: { verdict: 'admitted', supersedesScanId: lost },
+      }),
+    );
+    expect(r).toMatchObject({ result: 'already_in', byThisPass: true });
+    expect(await svc.offlineConflicts('ev-1')).toEqual([]);
+  });
+
+  it('answers a re-sent sync the same way, and records it once', async () => {
+    const { svc, fake, ctx, tickets, clock } = await setup();
+    const item = offline(tickets[0]!.code, 'admitted', clock.at);
+    const [first, second] = await svc.scanBatch(await ctx(CODE_A), [item, item]);
+    const resent = await svc.scan(await ctx(CODE_A), item);
+    expect(first?.result).toBe('admitted');
+    expect(second).toEqual(first);
+    expect(resent).toMatchObject({ result: 'admitted', replayed: true });
+    expect(fake.scans).toHaveLength(1);
+  });
+
+  it('times the door’s own undo from when it admitted offline, not from the sync', async () => {
+    const { svc, ctx, tickets, clock } = await setup();
+    const item = offline(tickets[0]!.code, 'admitted', new Date(clock.at.getTime() - 5 * MIN));
+    await svc.scan(await ctx(CODE_A), item);
+    await expect(svc.undoOwnAdmit(await ctx(CODE_A), item.scanId, 'mis_tap')).rejects.toThrow(
+      CheckInUndoRefusedError,
+    );
+    const status = await svc.status(await ctx(CODE_A));
+    expect(status.recent[0]).toMatchObject({ undoable: false, at: item.scannedAt });
+    expect(status.serverTime).toEqual(clock.at);
+  });
+
+  it('counts each gate’s offline scans for the organizer', async () => {
+    const { svc, ctx, tickets, events, clock } = await setup();
+    await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code));
+    await svc.scan(await ctx(CODE_B), offline(tickets[1]!.code, 'admitted', clock.at));
+    const rows = await svc.listPasses(events[0]!);
+    expect(rows.map((r) => [r.pass.label, r.scans, r.offlineScans])).toEqual([
+      ['Gate A', 1, 0],
+      ['Gate B', 1, 1],
+    ]);
+  });
+});
+
+describe('doorService.offlineList (ADR-034)', () => {
+  it('lists the event’s tickets with hashed codes, check-ins, and no buyer details', async () => {
+    const { svc, ctx, tickets, clock } = await setup();
+    await svc.scan(await ctx(CODE_A), typed(tickets[1]!.code));
+    const list = await svc.offlineList(await ctx(CODE_B));
+
+    expect(list).toMatchObject({
+      v: 1,
+      eventId: 'ev-1',
+      serverTime: clock.at.toISOString(),
+      validFrom: new Date(NOW.getTime() - 3 * HOUR).toISOString(),
+    });
+    expect(list.entries.map((e) => [e.name, e.pos, e.of, e.status, e.inBy])).toEqual([
+      ['Nusrat Jahan', 1, 2, 'issued', null],
+      ['Tanvir Alam', 2, 2, 'issued', 'Gate A'],
+    ]);
+    const { offlineDigest } = await import('@/server/lib/door-offline');
+    expect(list.entries[0]!.d).toBe(await offlineDigest(list.salt, tickets[0]!.code));
+
+    const json = JSON.stringify(list);
+    expect(json).not.toContain('TKT-');
+    expect(json).not.toContain('8801712345678');
+    expect(json).not.toContain('nusrat@example.com');
+  });
+
+  it('salts every download afresh, so two lists never share a hash', async () => {
+    const { svc, ctx } = await setup();
+    const a = await svc.offlineList(await ctx(CODE_A));
+    const b = await svc.offlineList(await ctx(CODE_A));
+    expect(a.salt).not.toBe(b.salt);
+    expect(a.entries[0]!.d).not.toBe(b.entries[0]!.d);
+  });
+});

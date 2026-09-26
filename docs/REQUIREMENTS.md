@@ -30,7 +30,10 @@ and this file is stale.
   system
 - Check-in at the gate: door phones scan the ticket QR with a per-gate pass
   (first scan wins, name search as a fallback); the printed/exported list is
-  the backup ([ADR-030](DECISIONS.md)). Offline scanning is the next slice
+  the backup ([ADR-030](DECISIONS.md)). Without signal a door phone answers
+  from a downloaded ticket list and syncs its scans later; double entries
+  are shown to the organizer ([ADR-034](DECISIONS.md)). Reloading the page
+  while offline (a service worker) is the next slice
 - Sponsors, managed by the admin: one presenting partner, partners and
   supporters, each with an uploaded SVG or PNG logo and an optional
   website, shown on the home page ("Supported by") and in the site footer;

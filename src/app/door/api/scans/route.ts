@@ -16,7 +16,10 @@ import { doorScansSchema } from '@/lib/validation/door';
 // Fails open (see door-limits): a gate must never stop because Redis blinked.
 const limiter = createDoorLimiter();
 
-/** One scan (Slice A). Thin: guard → pass → Zod → throttle → service. */
+/**
+ * One live scan, or a batch of offline ones being synced (ADR-034).
+ * Thin: guard → pass → Zod → throttle → service.
+ */
 export async function POST(request: Request) {
   if (!isSameOriginJson(request)) return DOOR_FORBIDDEN();
   const ctx = await currentDoor();
@@ -25,12 +28,15 @@ export async function POST(request: Request) {
   if (!parsed.success) return doorJson({ error: 'Bad scan.' }, { status: 400 });
 
   const subject = ctx.pass.id;
+  const sync = parsed.data.scans.some((s) => s.offline);
   const byName = parsed.data.scans.some((s) => s.method === 'search');
-  const rules = [
-    { ...DOOR_LIMITS.scan, subject },
-    ...(byName ? [{ ...DOOR_LIMITS.searchAdmit, subject }] : []),
-  ];
-  if (!(await limiter.allow(rules))) return DOOR_SLOW_DOWN(DOOR_LIMITS.scan.windowSeconds);
+  const rules = sync
+    ? [{ ...DOOR_LIMITS.sync, subject }]
+    : [
+        { ...DOOR_LIMITS.scan, subject },
+        ...(byName ? [{ ...DOOR_LIMITS.searchAdmit, subject }] : []),
+      ];
+  if (!(await limiter.allow(rules))) return DOOR_SLOW_DOWN(rules[0]!.windowSeconds);
 
   try {
     const results = await doorService.scanBatch(ctx, parsed.data.scans);

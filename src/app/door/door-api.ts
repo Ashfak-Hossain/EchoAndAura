@@ -1,3 +1,4 @@
+import type { DoorVerdict, OfflineList } from '@/server/lib/door-offline';
 import type { DoorUndoReason } from '@/server/lib/door-rules';
 import type {
   DoorRecentScan,
@@ -30,6 +31,7 @@ export type WireSearchResult = Wire<DoorSearchResult>;
 export type WireRecentScan = Wire<DoorRecentScan>;
 export interface WireStatus extends Omit<Wire<DoorStatus>, 'recent'> {
   recent: WireRecentScan[];
+  serverTime: string;
   event: { title: string; startsAt: string };
   gate: string;
   validFrom: string;
@@ -52,6 +54,17 @@ export type DoorReply<T> =
   | { ok: false; kind: 'network' };
 
 export const DOOR_REQUEST_TIMEOUT_MS = 4_000;
+/** The offline list and a 50-scan sync run in the background: they may take longer. */
+const BACKGROUND_TIMEOUT_MS = 15_000;
+
+/** One offline scan as it is synced (ADR-034). */
+export interface SyncScan {
+  scanId: string;
+  method: 'qr' | 'typed';
+  input: string;
+  scannedAt: string;
+  offline: { verdict: DoorVerdict; supersedesScanId?: string };
+}
 
 function messageOf(body: unknown, fallback: string): string {
   if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') {
@@ -64,9 +77,10 @@ async function doorRequest<T>(
   path: string,
   method: 'GET' | 'POST' | 'DELETE',
   body?: unknown,
+  timeoutMs = DOOR_REQUEST_TIMEOUT_MS,
 ): Promise<DoorReply<T>> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOOR_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`/door/api/${path}`, {
       method,
@@ -120,4 +134,7 @@ export const doorApi = {
   search: (q: string) => doorRequest<{ results: WireSearchResult[] }>('search', 'POST', { q }),
   undo: (scanId: string, reason: DoorUndoReason) =>
     doorRequest<{ ok: true }>('undo', 'POST', { scanId, reason }),
+  list: () => doorRequest<OfflineList>('list', 'GET', undefined, BACKGROUND_TIMEOUT_MS),
+  sync: (scans: SyncScan[]) =>
+    doorRequest<{ results: WireScanResult[] }>('scans', 'POST', { scans }, BACKGROUND_TIMEOUT_MS),
 };

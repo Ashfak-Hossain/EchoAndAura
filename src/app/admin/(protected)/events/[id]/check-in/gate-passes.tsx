@@ -9,6 +9,7 @@ import { siteUrl } from '@/lib/env.public';
 import { formatDhakaClock, formatDhakaShort } from '@/lib/time';
 import { createGatePassAction, revokeAndUndoGatePassAction, revokeGatePassAction } from './actions';
 import { NewGatePassForm, RevokeAndUndoButton, RevokeGatePassButton } from './gate-pass-controls';
+import { OfflineConflicts } from './offline-conflicts';
 
 const STATE: Record<PassState, { label: string; tone: ChipTone }> = {
   practice: { label: 'Practice until doors open', tone: 'info' },
@@ -101,7 +102,8 @@ export async function GatePasses({
                     </p>
                     <p className="text-[13px] text-muted-foreground tabular">
                       {r.scans} {r.scans === 1 ? 'scan' : 'scans'} · {r.admitted} admitted ·{' '}
-                      {r.searchAdmits} by name · last scan{' '}
+                      {r.searchAdmits} by name
+                      {r.offlineScans > 0 ? ` · ${r.offlineScans} offline` : ''} · last scan{' '}
                       {r.lastScanAt ? formatDhakaClock(r.lastScanAt) : '—'} · made by{' '}
                       {r.pass.createdBy}
                     </p>
@@ -155,6 +157,12 @@ export async function GatePasses({
                           </li>
                           <li>Bring a power bank — the camera runs all evening.</li>
                           <li>
+                            Open the pass where there is signal: the phone downloads the ticket
+                            list, so it keeps scanning if the signal drops, and sends those scans
+                            when it is back. Keep the page open — without signal it cannot be
+                            reloaded.
+                          </li>
+                          <li>
                             Treat the code like a key: anyone with it can check tickets in at this
                             gate.
                           </li>
@@ -168,6 +176,8 @@ export async function GatePasses({
           })}
         </ul>
       ) : null}
+
+      {rows.length > 0 ? <OfflineConflicts eventId={event.id} /> : null}
     </section>
   );
 }

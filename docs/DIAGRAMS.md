@@ -109,6 +109,10 @@ erDiagram
         uuid ticket_id FK
         door_scan_result result
         door_scan_method method
+        door_scan_mode mode
+        door_verdict door_verdict
+        uuid supersedes_scan_id
+        timestamptz scanned_at
         timestamptz received_at
     }
     sponsors {

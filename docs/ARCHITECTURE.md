@@ -127,7 +127,10 @@ generated — never hand-edited):
 - **door_passes** — one per event gate: a 12-symbol code, revocable; its
   working window is derived from the event's dates, never stored
 - **door_scans** — append-only log of every answered gate scan, keyed by the
-  phone's `scan_id` (UNIQUE) so a retried request replays its answer
+  phone's `scan_id` (UNIQUE) so a retried request replays its answer. An
+  offline scan synced later also records what the door showed
+  (`door_verdict`) and the online request it replaced
+  (`supersedes_scan_id`), so double entries can be listed (ADR-034)
 - **sponsors** — shown on the home page and in the footer; a `level`
   (presenting, partner, supporter — at most one presenting, by a partial
   unique index), a dense `position` within the level, `active`, a light or

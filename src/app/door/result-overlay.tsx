@@ -17,7 +17,7 @@ export const AUTO_DISMISS_MS = 1_500;
 
 export type Overlay =
   /** `viaRetry`: sent by the Retry button, with the same person still at the gate. */
-  | { kind: 'result'; result: WireScanResult; viaRetry?: boolean }
+  | { kind: 'result'; result: WireScanResult; viaRetry?: boolean; offline?: boolean }
   | { kind: 'not_recorded'; canRetry: boolean }
   | { kind: 'slow'; retryAfter: number };
 
@@ -65,6 +65,7 @@ export function viewOf(overlay: Overlay): View {
   }
   const r = overlay.result;
   const at = r.at ? formatDhakaClock(new Date(r.at)) : '';
+  if (overlay.offline) return offlineView(r, at);
   const practice = r.practice ? 'PRACTICE — ' : '';
   switch (r.result) {
     case 'admitted':
@@ -159,6 +160,69 @@ export function viewOf(overlay: Overlay): View {
   }
 }
 
+/**
+ * ADR-034: an answer from the phone's own list. Same colours and sounds —
+ * the gate works the same way — but every one says "offline", and a code
+ * that is not on the list cannot be called a wrong event: offline, another
+ * event's ticket looks exactly like a made-up one.
+ */
+function offlineView(r: WireScanResult, at: string): View {
+  const practice = r.practice ? 'PRACTICE — ' : '';
+  switch (r.result) {
+    case 'admitted':
+      return {
+        tone: 'green',
+        headline: 'ADMIT',
+        detail: 'Offline — sent when the signal is back.',
+        feedback: 'admit',
+        autoDismiss: true,
+      };
+    case 'practice_ok':
+      return {
+        tone: 'blue',
+        headline: 'PRACTICE — WOULD ADMIT',
+        detail: 'Offline. Doors are not open yet: nothing was checked in.',
+        feedback: 'practice',
+        autoDismiss: true,
+      };
+    case 'already_in':
+      if (!r.practice && r.byThisPass && (r.secondsAgo ?? Infinity) <= SAME_GATE_SECONDS) {
+        return {
+          tone: 'amber',
+          headline: `ADMITTED ${seconds(r.secondsAgo)} AGO AT THIS GATE`,
+          detail: 'Same person? Let them through. Someone else? Stop them. (Offline)',
+          feedback: 'warn',
+          autoDismiss: false,
+        };
+      }
+      return {
+        tone: 'red',
+        headline: `${practice}ALREADY IN`,
+        detail: `${[at, r.gate].filter(Boolean).join(' · ')} — offline list`,
+        feedback: 'deny',
+        autoDismiss: false,
+      };
+    case 'cancelled':
+      return {
+        tone: 'red',
+        headline: `${practice}CANCELLED`,
+        detail: 'This ticket was cancelled. Send them to the organizer. (Offline)',
+        feedback: 'deny',
+        autoDismiss: false,
+      };
+    case 'unknown':
+    default:
+      return {
+        tone: 'red',
+        headline: `${practice}NOT ON THIS LIST`,
+        detail:
+          'Offline: not a ticket for this event on this phone’s list. Check the printed list, or wait for signal.',
+        feedback: 'deny',
+        autoDismiss: false,
+      };
+  }
+}
+
 export function ResultOverlay({
   overlay,
   onDismiss,
@@ -183,6 +247,7 @@ export function ResultOverlay({
       aria-label={view.headline}
       data-testid="door-result"
       data-result={r?.result ?? overlay.kind}
+      data-offline={overlay.kind === 'result' && overlay.offline ? 'true' : undefined}
       data-tone={view.tone}
       onClick={view.autoDismiss ? onDismiss : undefined}
       className={cn(
