@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
   // the dev typegen. The build/start/typegen scripts set NEXT_DIST_DIR to
   // `.next-build`; dev keeps the default `.next`.
   distDir: process.env.NEXT_DIST_DIR ?? '.next',
+  // ADR-036: the Docker image runs Next's standalone server (only the
+  // files the server traces, ~10x smaller than node_modules). Set by the
+  // Dockerfile only: `pnpm start` (Playwright, local checks) keeps
+  // `next start`, which does not support a standalone build.
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   // react-pdf carries its own bundled runtime; let Node load it as-is.
   serverExternalPackages: ['@react-pdf/renderer'],
   // Phone testing of the gate scanner goes through a cloudflared quick

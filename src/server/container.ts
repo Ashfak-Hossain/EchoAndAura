@@ -26,6 +26,9 @@ import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createReportsService } from '@/server/services/reports.service';
 import { createDashboardService } from '@/server/services/dashboard.service';
 import { createDoorService } from '@/server/services/door.service';
+import { createHealthService } from '@/server/services/health.service';
+import { healthRepository } from '@/server/repositories/health.repository';
+import { pingRedis } from '@/server/queue/probe';
 import { doorRepository } from '@/server/repositories/door.repository';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createSponsorsService } from '@/server/services/sponsors.service';
@@ -126,6 +129,12 @@ export const sponsorsService = createSponsorsService({
   sponsors: sponsorsRepository,
   storage,
   runInTransaction: (fn) => db.transaction(fn),
+});
+
+// ADR-036: what the uptime monitor asks every minute.
+export const healthService = createHealthService({
+  database: healthRepository.ping,
+  queue: pingRedis,
 });
 
 export type { PromoCheck } from '@/server/services/orders.service';

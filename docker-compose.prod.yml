@@ -1,0 +1,106 @@
+# ADR-036: production, as Dokploy runs it on the VPS.
+#
+# Nothing is built here: GitHub Actions builds the images and pushes them to
+# GHCR; this file only pulls and runs them. Postgres and Redis are Dokploy
+# database services (their backups are Dokploy's), reached over
+# `dokploy-network` by their internal host names in DATABASE_URL / REDIS_URL.
+#
+# Every value comes from the environment Dokploy writes next to this file
+# (set in its UI, copied from Bitwarden) — no secret is ever in the repo.
+# `${VAR:?…}` makes a deploy refuse to start when a required one is missing.
+# The SES keys go to the worker only (the web never sends email). The auth
+# settings go to both: the worker runs the create-admin script, and it holds
+# the database password anyway, which is full control.
+#
+# IMAGE_TAG: `main` (the default, the latest green build) or `sha-<commit>`
+# to pin a version — that is how a rollback works (docs/DEPLOY.md).
+
+x-image-web: &image-web ghcr.io/ashfak-hossain/echoandaura-web:${IMAGE_TAG:-main}
+x-image-worker: &image-worker ghcr.io/ashfak-hossain/echoandaura-worker:${IMAGE_TAG:-main}
+
+# 25 GB of disk: container logs are capped (3 × 10 MB per service).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
+x-app-env: &app-env
+  APP_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy}
+  REDIS_URL: ${REDIS_URL:?Set REDIS_URL in Dokploy}
+  SITE_URL: ${SITE_URL:?Set SITE_URL in Dokploy}
+  R2_ENDPOINT: ${R2_ENDPOINT:?Set R2_ENDPOINT in Dokploy}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?Set R2_ACCESS_KEY_ID in Dokploy}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?Set R2_SECRET_ACCESS_KEY in Dokploy}
+  R2_BUCKET: ${R2_BUCKET:?Set R2_BUCKET in Dokploy}
+  R2_PUBLIC_URL: ${R2_PUBLIC_URL:?Set R2_PUBLIC_URL in Dokploy}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in Dokploy}
+  BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL in Dokploy}
+  # Fallbacks only: the live values are saved at /admin/settings (B14).
+  FACEBOOK_PAGE_URL: ${FACEBOOK_PAGE_URL:-}
+  BKASH_RECEIVE_NUMBER: ${BKASH_RECEIVE_NUMBER:-}
+  ORGANIZER_CONTACT_EMAIL: ${ORGANIZER_CONTACT_EMAIL:-}
+  ORGANIZER_PHONE: ${ORGANIZER_PHONE:-}
+
+services:
+  # Runs the committed migrations, then exits. web and worker start only if
+  # it exited 0: a failed migration leaves the old version running.
+  migrate:
+    image: *image-worker
+    pull_policy: always
+    command: ['node', 'dist/ops/migrate.mjs']
+    restart: 'no'
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy}
+    mem_limit: 256m
+    logging: *logging
+    networks: [dokploy-network]
+
+  web:
+    image: *image-web
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: *app-env
+    # Resized covers survive a deploy (ADR-033).
+    volumes:
+      - image-cache:/app/.next-build/cache/images
+    # The domain and HTTPS are set in Dokploy's Domains tab (port 3000);
+    # Dokploy adds the proxy labels itself.
+    expose: ['3000']
+    mem_limit: 1g
+    logging: *logging
+    networks: [dokploy-network]
+
+  worker:
+    image: *image-worker
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-env
+      MAILER: ses
+      AWS_SES_REGION: ${AWS_SES_REGION:-ap-south-1}
+      AWS_SES_ACCESS_KEY_ID: ${AWS_SES_ACCESS_KEY_ID:?Set AWS_SES_ACCESS_KEY_ID in Dokploy}
+      AWS_SES_SECRET_ACCESS_KEY: ${AWS_SES_SECRET_ACCESS_KEY:?Set AWS_SES_SECRET_ACCESS_KEY in Dokploy}
+      EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM in Dokploy}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+    # ~300 MB idle (measured 2026-09-27); a ticket PDF render comes on top,
+    # and a job killed for memory mid-send is worse than a bigger limit.
+    mem_limit: 768m
+    logging: *logging
+    networks: [dokploy-network]
+
+volumes:
+  image-cache:
+
+networks:
+  # Dokploy's own network: its proxy (Traefik) and its database services.
+  dokploy-network:
+    external: true

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: ACTIVE · Owner: unassigned · Last updated: 2026-08-21
+Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-27
 
 The invariants that protect money and inventory live in
 [../CLAUDE.md](../CLAUDE.md) and are deliberately not repeated here in full —
@@ -182,9 +182,26 @@ Full project structure: [DEVELOPMENT.md § Project structure](DEVELOPMENT.md).
 
 ## Deployment topology
 
-Single VPS, Docker Compose: the Next.js app, the worker process, Postgres,
-and Redis as sibling containers; R2 and Resend are external managed services.
-No load balancer or multi-node setup — sized for a single-organizer platform,
-not multi-tenant scale. Backup, monitoring, and incident response procedures
-belong in `docs/RUNBOOK.md`, written in Phase 6 once there's real
-infrastructure to document.
+One VPS (BengalCloud, Dhaka: 2 vCPU, 4 GB RAM, 25 GB disk) running
+[Dokploy](https://dokploy.com), behind Cloudflare (DNS, TLS, proxy)
+([ADR-036](DECISIONS.md)):
+
+```
+GitHub ── merge to main ──► Actions: verify → build web + worker images
+                                     → smoke test → push to GHCR
+                                     → call Dokploy
+                                            │
+Cloudflare ──► VPS: Dokploy (Traefik) ──────┘
+                 ├─ migrate  (worker image, runs once per deploy)
+                 ├─ web      (Next.js standalone, :3000)
+                 ├─ worker   (BullMQ: emails, hold expiry)
+                 ├─ Postgres 17 (Dokploy database, nightly backup → R2)
+                 └─ Redis 7     (Dokploy database)
+External: Cloudflare R2 (covers, logos, backups), Amazon SES (email)
+```
+
+Nothing is built on the server: the images come from CI, and the server
+only pulls them (`docker-compose.prod.yml`). No load balancer or second
+node — sized for one organizer. How a release and a rollback work:
+[DEPLOY.md](DEPLOY.md). Backups, monitoring and incidents: `docs/RUNBOOK.md`
+(Slice D3).

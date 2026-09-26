@@ -1,6 +1,6 @@
 # Environment Variables
 
-Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-15
+Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-27
 
 Every variable the app reads — what it's for, whether it's required, and how to
 obtain it. Configuration is loaded from `.env` (git-ignored). Copy the committed
@@ -12,6 +12,14 @@ cp .env.example .env
 
 Never commit real secrets: `.env` is git-ignored (only `.env.example` is
 committed) and a Write/Edit hook blocks obvious hardcoded secrets.
+
+**In production** there is no `.env` file in the repo or the image. The
+values are set in Dokploy's Environment tab (copied from Bitwarden), and
+`docker-compose.prod.yml` lists which service gets which. The SES keys
+go to the worker only. `APP_ENV=production`
+and `MAILER=ses` are fixed there. `R2_PUBLIC_URL` is also a GitHub repo
+variable, because the image build needs it (ADR-033). See
+[DEPLOY.md](DEPLOY.md) and [ADR-036](DECISIONS.md).
 
 ## Quick reference
 

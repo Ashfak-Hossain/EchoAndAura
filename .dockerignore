@@ -1,0 +1,25 @@
+# ADR-036: what the image build may see. Secrets and local state never.
+.env*
+!.env.example
+.git
+.github
+node_modules
+.next
+.next-build
+dist
+public/door
+coverage
+playwright-report
+test-results
+blob-report
+tmp
+notes
+tests
+# Test configs import tests/: Next's build type-checks every .ts it can see.
+playwright.config.ts
+vitest.config.mts
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.claude
+.vscode

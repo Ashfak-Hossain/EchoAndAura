@@ -1,0 +1,180 @@
+name: Deploy
+
+# ADR-036: after CI passes on main, build the two production images on
+# GitHub's machines, smoke-test them, push them to GHCR, and tell Dokploy to
+# pull and restart. The VPS never builds anything.
+#
+# Inert until configured (docs/DEPLOY.md § One-time setup):
+#   repo variable R2_PUBLIC_URL      — no images are built without it
+#   repo secrets  DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_COMPOSE_ID
+#                                    — images are pushed but not deployed without them
+#
+# Manual run (Actions → Deploy → Run workflow): rebuild and redeploy main.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer one waits rather than racing it.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/ashfak-hossain
+
+jobs:
+  images:
+    # Only a green CI run of a push to main (never a PR), and only once the
+    # repo has its storage URL. A manual run must also be started from main:
+    # from any other branch it would build that branch, tag it `main` and
+    # put it live.
+    if: >-
+      vars.R2_PUBLIC_URL != '' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+
+    # For the smoke test: the images must boot against a real Postgres + Redis.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: smoke
+          POSTGRES_PASSWORD: smoke
+          POSTGRES_DB: smoke
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U smoke -d smoke"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit CI just passed, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Tags
+        id: tags
+        run: echo "sha=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          load: true
+          build-args: R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+          tags: |
+            ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
+            ${{ env.REGISTRY }}/echoandaura-web:main
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Build worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          load: true
+          build-args: R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+          tags: |
+            ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
+            ${{ env.REGISTRY }}/echoandaura-worker:main
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,scope=worker,mode=max
+
+      # The images that will run in production, booted for real: every
+      # migration from an empty database, the web server answering its
+      # health check and the home page, the worker staying up.
+      - name: Smoke test
+        env:
+          WEB: ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
+          WORKER: ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
+        run: |
+          set -euo pipefail
+          cat > smoke.env <<'EOF'
+          APP_ENV=production
+          DATABASE_URL=postgresql://smoke:smoke@127.0.0.1:5432/smoke
+          REDIS_URL=redis://127.0.0.1:6379
+          SITE_URL=http://127.0.0.1:3000
+          BETTER_AUTH_URL=http://127.0.0.1:3000
+          BETTER_AUTH_SECRET=smoke-test-secret-not-used-anywhere-else-0123456789
+          R2_ENDPOINT=http://127.0.0.1:9000
+          R2_ACCESS_KEY_ID=smoke
+          R2_SECRET_ACCESS_KEY=smoke
+          R2_BUCKET=smoke
+          R2_PUBLIC_URL=http://127.0.0.1:9000/smoke
+          MAILER=ses
+          AWS_SES_REGION=ap-south-1
+          AWS_SES_ACCESS_KEY_ID=smoke
+          AWS_SES_SECRET_ACCESS_KEY=smoke
+          EMAIL_FROM=smoke <smoke@example.com>
+          EOF
+          docker run --rm --network host --env-file smoke.env "$WORKER" node dist/ops/migrate.mjs
+          docker run -d --name web --network host --env-file smoke.env "$WEB"
+          docker run -d --name worker --network host --env-file smoke.env "$WORKER"
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3000/api/health && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3000/api/health | grep -q '"ok":true'
+          # What the container's own HEALTHCHECK asks (Traefik routes on it).
+          curl -fsS 'http://127.0.0.1:3000/api/health?live' | grep -q '"ok":true'
+          curl -fsS -o /dev/null http://127.0.0.1:3000/
+          curl -fsS -o /dev/null http://127.0.0.1:3000/door/sw.js
+          sleep 5
+          test "$(docker inspect -f '{{.State.Running}}' worker)" = true
+        # The worker boots with the production mailer (it refuses any other)
+        # on fake keys: an empty database queues no email, so none is sent.
+
+      - name: Container logs (on failure)
+        if: failure()
+        run: |
+          docker logs web || true
+          docker logs worker || true
+
+      - name: Push
+        run: |
+          for image in echoandaura-web echoandaura-worker; do
+            docker push "$REGISTRY/$image:${{ steps.tags.outputs.sha }}"
+            docker push "$REGISTRY/$image:main"
+          done
+
+      - name: Deploy
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
+            echo "::notice::Images pushed; Dokploy is not configured yet, so nothing was deployed."
+            exit 0
+          fi
+          curl -fsS -X POST "$DOKPLOY_URL/api/compose.deploy" \
+            -H "x-api-key: $DOKPLOY_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"
+          echo "::notice::Deploy of ${{ steps.tags.outputs.sha }} requested — watch it in Dokploy."
