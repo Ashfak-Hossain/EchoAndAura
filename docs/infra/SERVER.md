@@ -429,6 +429,40 @@ time, not when they are saved.
 **Check** (in the Environment tab): searching for `<` finds only the one
 inside `EMAIL_FROM`; anything else is a placeholder never replaced.
 
+### 12. First deploy (2026-09-27)
+
+PR #1 merged into `main` as `bf87d7e` → CI green → Deploy workflow →
+Dokploy. About 10½ minutes from merge to running:
+
+| Stage                                   | Time        |
+| --------------------------------------- | ----------- |
+| CI on `main`                            | 2½ min      |
+| Build web (first build, empty cache)    | 2 min 50 s  |
+| Build worker (reuses web's build stage) | 2 min 13 s  |
+| Smoke test                              | 7 s         |
+| Push to GHCR                            | 42 s        |
+| Dokploy: pull images, `migrate`, start  | about 2 min |
+
+Result: `migrate` applied every migration to the empty database in
+0.6 s and exited 0 (15 tables); then `web` started (health check
+`healthy`, `/api/health` `{"ok":true,"database":true,"queue":true}`)
+and `worker` started with hold expiry scheduled every minute. Idle memory:
+web 126 MB, worker 122 MB. Disk after the first pull: 13 of 25 GB.
+
+The GHCR images are **public** (anonymous pull works), so the server
+needs no registry key.
+
+The site is **not public yet**: no DNS for `echoandaura.com` and no
+domain on the web service.
+
+**Check** (on the server):
+
+```sh
+docker ps -a --filter name=echoandaura-app --format '{{.Names}}\t{{.Status}}'   # migrate Exited (0); web Up (healthy); worker Up
+docker logs echoandaura-app-5nuhfn-migrate-1                                     # Migrations up to date
+docker exec echoandaura-app-5nuhfn-web-1 node -e "fetch('http://127.0.0.1:3000/api/health').then(async r=>console.log(r.status, await r.text()))"
+```
+
 ---
 
 ## Verify
@@ -480,7 +514,9 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
    Bitwarden.
 6. Section 11: the Compose app and its Environment, from Bitwarden. Put
    its new compose ID in GitHub's `DOKPLOY_COMPOSE_ID` secret.
-7. The steps after this point are added here as they are done.
+7. Deploy: GitHub → Actions → Deploy → Run workflow (branch `main`).
+   Check as in section 12.
+8. The steps after this point are added here as they are done.
 
 ## History
 
@@ -495,3 +531,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside     |
 | 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                  |
 | 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                             |
+| 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                            |
