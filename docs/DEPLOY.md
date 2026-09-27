@@ -97,18 +97,15 @@ changes only through a pull request (no approval needed: one maintainer),
 and CI's `verify` check must pass before the merge button works. There is
 no bypass, for admins either.
 
-After the first push, check the two packages' visibility (GitHub → your
-profile → Packages). The repo is public and nothing secret is in the
-images, so a public package is fine and needs nothing more. A private one
-needs a key on the server to pull it. In GitHub → Settings → Developer settings → Personal access tokens →
-Tokens (classic), create one with **only** `read:packages` and a one-year
-expiry. Add it in Dokploy → Settings → Registry (URL `ghcr.io`, your GitHub
-username, the token as the password), and keep it in Bitwarden. Dokploy
-logs the server's Docker in with it. If the first deploy still fails with
-`denied` on the pull, do the same by hand once, over SSH:
-`docker login ghcr.io -u <github-username>` and paste the token. It can
-read images and nothing else. When it expires, deploys fail at the pull
-step and the old version keeps running.
+The two packages on GHCR are **public** (checked 2026-09-27: anonymous
+pull works), so the server pulls them with no key. That is safe: the
+repo is public too, and no secret is in the images (the build fails if a
+placeholder leaks into the output). If they ever become private, the
+server needs a read-only key: GitHub → Settings → Developer settings →
+Personal access tokens → Tokens (classic), **only** `read:packages`, one
+year; add it in Dokploy → Settings → Registry (`ghcr.io`, your GitHub
+username, the token as password), or once over SSH with
+`docker login ghcr.io -u <github-username>`. Keep it in Bitwarden.
 
 The runtime environment (database, Redis, R2, SES, auth secret) is set in
 Dokploy, never in GitHub or the repo: `docker-compose.prod.yml` lists every
