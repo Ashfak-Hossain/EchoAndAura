@@ -1,6 +1,6 @@
 # Cloudflare
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-09-20
+Status: ACTIVE · Owner: Evan · Last updated: 2026-09-27
 
 Cloudflare holds the **domain** (registrar + authoritative DNS), receives
 mail for `hello@` (**Email Routing**), and will hold event cover images
@@ -27,6 +27,10 @@ and one zone; no API tokens exist yet (R2 will add one).
 All mail records are **DNS only** (grey cloud). Proxying a DKIM CNAME or
 an MX host breaks it silently. The app's own `A`/`AAAA` records arrive
 with deployment (Phase 6) and are the only ones that should be proxied.
+The one exception is `deploy`, the Dokploy dashboard: it stays DNS only,
+because its only users are the owner and GitHub's deploy call (bot
+protection in front of it could block the call), and Traefik gets its
+Let's Encrypt certificate directly ([SERVER.md](SERVER.md)).
 
 | Type   | Name (relative)                               | Content                                                            | Proxy    | Owner / purpose                                                                                              |
 | ------ | --------------------------------------------- | ------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
@@ -39,6 +43,7 @@ with deployment (Phase 6) and are the only ones that should be proxied.
 | MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                      | —        | SES custom MAIL FROM — bounces return to SES                                                                 |
 | TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                            |
 | A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                | Proxied  | the app                                                                                                      |
+| A      | `deploy`                                      | `160.25.226.166`                                                   | DNS only | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27                      |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
 leave it.
