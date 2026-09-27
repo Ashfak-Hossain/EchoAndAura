@@ -80,16 +80,22 @@ Give a temporary password and have Raj change it after signing in.
 
 In GitHub → the repo → Settings → Secrets and variables → Actions:
 
-| Kind     | Name                 | Value                                                                     |
-| -------- | -------------------- | ------------------------------------------------------------------------- |
-| Variable | `R2_PUBLIC_URL`      | The public R2 URL covers are served from — baked into the build (ADR-033) |
-| Secret   | `DOKPLOY_URL`        | `https://deploy.echoandaura.com`                                          |
-| Secret   | `DOKPLOY_API_KEY`    | Dokploy → Settings → Profile → API keys                                   |
-| Secret   | `DOKPLOY_COMPOSE_ID` | The compose app's id (in its URL in Dokploy)                              |
+| Kind     | Name                 | Value                                                                          |
+| -------- | -------------------- | ------------------------------------------------------------------------------ |
+| Variable | `R2_PUBLIC_URL`      | `https://media.echoandaura.com`: baked into the build (ADR-033)                |
+| Secret   | `DOKPLOY_URL`        | `https://deploy.echoandaura.com`                                               |
+| Secret   | `DOKPLOY_API_KEY`    | Dokploy → Settings → Profile → API / CLI (Bitwarden `Dokploy deploy (GitHub)`) |
+| Secret   | `DOKPLOY_COMPOSE_ID` | The compose app's id (in its URL in Dokploy)                                   |
 
 Without `R2_PUBLIC_URL` the Deploy workflow does nothing; without the three
 Dokploy secrets it builds and pushes images but does not deploy. So `main`
-can be merged before the server exists.
+can be merged before the server exists. All four were set on 2026-09-27.
+
+**`main` is protected** by the ruleset "main is production" (Settings →
+Rules → Rulesets), created 2026-09-27: no deleting it, no force-pushing,
+changes only through a pull request (no approval needed: one maintainer),
+and CI's `verify` check must pass before the merge button works. There is
+no bypass, for admins either.
 
 After the first push, check the two packages' visibility (GitHub → your
 profile → Packages). The repo is public and nothing secret is in the

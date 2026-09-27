@@ -87,6 +87,28 @@ reboot                      # the kernel was updated
 apt autoremove --purge -y   # removes the old kernel
 ```
 
+**What the provider's image brings.** After a reinstall the panel runs
+its own "recipe" scripts as root; their logs land in `/root`
+(`exec_recipe.log`, `recipe_-*.log`). An audit on 2026-09-27 found:
+
+- The only thing the recipes do is start **`qemu-guest-agent`**, the
+  helper the panel uses for clean shutdown, showing the IP and resetting
+  the root password. Keep it: the provider controls the physical host
+  anyway, so it adds no real risk, and without it the panel's emergency
+  password reset stops working.
+- Five of the six recipe logs predate this server (2025-08 to 2026-05):
+  leftovers baked into the provider's image. Harmless, deleted. Treat the
+  image as untrusted and check it after any reinstall.
+- `/root/.ssh/authorized_keys` held exactly one key (ours), and `root`
+  was the only account with a login shell.
+
+**Check after any reinstall:**
+
+```sh
+awk '{print $1, $NF}' /root/.ssh/authorized_keys          # only keys you know
+awk -F: '$7 ~ /(bash|sh|zsh)$/ {print $1}' /etc/passwd    # only root
+```
+
 ### 2. SSH: keys only
 
 **Why:** bots try passwords on every public server all day. With
@@ -324,6 +346,89 @@ server.
 (closed); `curl -sI https://deploy.echoandaura.com` answers `200` with a
 Let's Encrypt certificate.
 
+### 10. The app's Postgres and Redis
+
+Created in Dokploy, project **`echoandaura`** (environment `production`),
+as Dokploy database services. They are separate from Dokploy's own
+Postgres 16, which holds only Dokploy's settings.
+
+| Service  | Internal host (App Name)   | Image         | Memory limit | Data volume                     | Credentials (Bitwarden)                     |
+| -------- | -------------------------- | ------------- | ------------ | ------------------------------- | ------------------------------------------- |
+| Postgres | `echoandaura-db-ljctqy`    | `postgres:17` | 1 GiB        | `echoandaura-db-ljctqy-data`    | `Postgres (prod)`: password, `DATABASE_URL` |
+| Redis    | `echoandaura-redis-t1myan` | `redis:7`     | 256 MiB      | `echoandaura-redis-t1myan-data` | `Redis (prod)`: password, `REDIS_URL`       |
+
+- Database `echoandaura`, user `echoandaura` (the app's own user, not
+  the `postgres` superuser). No extensions are needed.
+- Dokploy appends a random suffix to each App Name. The host names above
+  are the real ones, and they are what `DATABASE_URL` and `REDIS_URL`
+  point at.
+- Passwords are 32 letters and digits, with no symbols, because symbols
+  like `@`, `/` or `#` break a connection URL.
+- **No external port on either.** They are reachable only on
+  `dokploy-network`, where web and worker run. An external port would be
+  published around the firewall.
+- Redis runs as `redis-server --requirepass <password>` (Dokploy's
+  default), with Redis's own snapshotting to its volume. A crash can lose
+  jobs queued in the last moments: an email that was about to be sent can
+  be re-sent from the admin. AOF persistence (`--appendonly yes`) would
+  close that gap; it needs a custom Run Command and is not set.
+- The volumes survive restarts and redeploys, but not the loss of the
+  server. Backups are a separate step.
+- `vm.overcommit_memory = 1` in `/etc/sysctl.d/99-redis.conf` (host
+  kernel setting, applies to every container). Redis saves its snapshot
+  by forking a copy of itself; without this, the kernel can refuse that
+  copy when memory looks tight, and the save fails. Redis warns about it
+  at startup, and its documentation asks for it on every Redis host.
+  **Check:** `sysctl vm.overcommit_memory` prints `1`.
+
+**Check** (on the server): both show `1/1` in `docker service ls`, and
+from Dokploy's network:
+
+```sh
+docker run --rm --network dokploy-network postgres:17 pg_isready -h echoandaura-db-ljctqy -U echoandaura   # accepting connections
+docker run --rm --network dokploy-network redis:7 redis-cli -h echoandaura-redis-t1myan ping               # NOAUTH: reachable, and locked
+docker service inspect echoandaura-db-ljctqy --format '{{json .Endpoint.Ports}}'                          # null: nothing published
+```
+
+### 11. The app (Dokploy Compose)
+
+Dokploy project `echoandaura` → `production` → Compose app
+**`echoandaura-app`** (folder on the server:
+`/etc/dokploy/compose/echoandaura-app-5nuhfn`).
+
+| Setting      | Value                                                                    | Why                                                                                                             |
+| ------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Compose Type | Docker Compose (not Stack)                                               | `depends_on: service_completed_successfully` (migrate before web and worker) does not exist in Stack mode       |
+| Provider     | Git: `https://github.com/Ashfak-Hossain/EchoAndAura.git`, branch `main`  | Public repo, so no GitHub connection needed. Dokploy reads only the compose file from it; images come from GHCR |
+| Compose Path | `./docker-compose.prod.yml`                                              |                                                                                                                 |
+| Autodeploy   | **off**                                                                  | A deploy must come only from GitHub's Deploy workflow, after the images are built and smoke-tested              |
+| Compose ID   | in the app's URL (`…/compose/<id>`); Bitwarden `Dokploy deploy (GitHub)` | GitHub's `DOKPLOY_COMPOSE_ID` secret                                                                            |
+
+**Environment tab** (values in Bitwarden; this is the list of names):
+
+| Variable                                                               | From Bitwarden                                                                              |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                         | `Postgres (prod)`                                                                           |
+| `REDIS_URL`                                                            | `Redis (prod)`                                                                              |
+| `SITE_URL`, `BETTER_AUTH_URL`                                          | `https://echoandaura.com` (not secret)                                                      |
+| `BETTER_AUTH_SECRET`                                                   | `BETTER_AUTH_SECRET (prod)` (`openssl rand -base64 32`)                                     |
+| `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`              | `Cloudflare R2 token`                                                                       |
+| `R2_BUCKET`, `R2_PUBLIC_URL`                                           | `echoandaura-media`, `https://media.echoandaura.com`                                        |
+| `AWS_SES_REGION`, `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY` | `AWS worker key (SES)` (region `ap-south-1`)                                                |
+| `EMAIL_FROM`, `EMAIL_REPLY_TO`                                         | `"echoandaura <tickets@echoandaura.com>"` (quoted: it has a space), `hello@echoandaura.com` |
+
+Left out on purpose: the bKash number, phone and Facebook fallbacks (the
+live values are set at `/admin/settings`), and `IMAGE_TAG` (defaults to
+`main`; set only to roll back, see [../DEPLOY.md](../DEPLOY.md)).
+`docker-compose.prod.yml` decides which service gets which variable; the
+SES keys reach the worker only.
+
+Dokploy writes these into a `.env` file in the app's folder at deploy
+time, not when they are saved.
+
+**Check** (in the Environment tab): searching for `<` finds only the one
+inside `EMAIL_FROM`; anything else is a placeholder never replaced.
+
 ---
 
 ## Verify
@@ -369,7 +474,13 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 4. Section 9: point `deploy` at the new IP in Cloudflare (and update the
    IP in this file, CLOUDFLARE.md and `scripts/infra-check.ts`), set the
    Server Domain, close port 3000.
-5. The app: the steps after this point are added here as they are done.
+5. Section 10: the project, Postgres and Redis. **Restore the latest
+   Postgres backup** into the new database before the app starts. The new
+   App Names get new suffixes: update this file and the URLs in
+   Bitwarden.
+6. Section 11: the Compose app and its Environment, from Bitwarden. Put
+   its new compose ID in GitHub's `DOKPLOY_COMPOSE_ID` secret.
+7. The steps after this point are added here as they are done.
 
 ## History
 
@@ -380,3 +491,7 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-27 | ufw installed and enabled (22, 80, 443, 3000); Docker log limits in `/etc/docker/daemon.json`, before Docker                                               |
 | 2026-09-27 | Dokploy v0.30.7 installed (Docker 28.5.0, Traefik v3.6, Swarm). Owner account created via SSH tunnel; nobody had claimed it in the ~2 h port 3000 was open |
 | 2026-09-27 | Dashboard at https://deploy.echoandaura.com (DNS only, Let's Encrypt). Port 3000 closed; outside scan: only 22, 80, 443 answer                             |
+| 2026-09-27 | Audit of the provider's image: recipes only start qemu-guest-agent; stale recipe logs from other machines removed; one SSH key, root the only shell        |
+| 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside     |
+| 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                  |
+| 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                             |
