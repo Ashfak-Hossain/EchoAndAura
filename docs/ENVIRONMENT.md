@@ -1,6 +1,6 @@
 # Environment Variables
 
-Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-15
+Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-27
 
 Every variable the app reads — what it's for, whether it's required, and how to
 obtain it. Configuration is loaded from `.env` (git-ignored). Copy the committed
@@ -12,6 +12,14 @@ cp .env.example .env
 
 Never commit real secrets: `.env` is git-ignored (only `.env.example` is
 committed) and a Write/Edit hook blocks obvious hardcoded secrets.
+
+**In production** there is no `.env` file in the repo or the image. The
+values are set in Dokploy's Environment tab (copied from Bitwarden), and
+`docker-compose.prod.yml` lists which service gets which. The SES keys
+go to the worker only. `APP_ENV=production`
+and `MAILER=ses` are fixed there. `R2_PUBLIC_URL` is also a GitHub repo
+variable, because the image build needs it (ADR-033). See
+[DEPLOY.md](DEPLOY.md) and [ADR-036](DECISIONS.md).
 
 ## Quick reference
 
@@ -28,17 +36,17 @@ committed) and a Write/Edit hook blocks obvious hardcoded secrets.
 | `AWS_SES_REGION` / `AWS_SES_ACCESS_KEY_ID` / `AWS_SES_SECRET_ACCESS_KEY`                    | With `MAILER=ses`  | Phase 4      | Amazon SES credentials for the worker (IAM user with `ses:SendEmail` only; region `ap-south-1`)                                                                                                                                               |
 | `EMAIL_FROM`                                                                                | With `MAILER=ses`  | Phase 4      | From address on the verified domain, e.g. `echoandaura <tickets@echoandaura.com>`. Keep the display name ASCII (SESv2 envelope)                                                                                                               |
 | `EMAIL_REPLY_TO`                                                                            | No                 | Phase 4      | Where buyer replies land, e.g. `hello@echoandaura.com` (Cloudflare Email Routing → the organizer)                                                                                                                                             |
-| `ORGANIZER_PHONE`                                                                           | No                 | Phase 4      | Organizer phone shown in emails ("Raj 01712 345678"), on /contact and every policy page contact card; hidden when unset                                                                                                                       |
+| `ORGANIZER_PHONE`                                                                           | No                 | Phase 4      | Fallback for the support phone (emails, /contact, contact cards, check-in sheet); live value at /admin/settings (B14)                                                                                                                         |
 | `AWS_ACCOUNT_ID`                                                                            | No (`infra:check`) | Docs         | The 12-digit AWS account id, kept out of the public repo; `pnpm infra:check` compares the CLI session against it                                                                                                                              |
+| `E2E_DATABASE_URL`                                                                          | No (tests)         | Phase 6      | The Playwright suite's own database; defaults to `DATABASE_URL` with `_e2e` appended to the name. Created, migrated, **truncated** and seeded on every run — never point it at real data                                                      |
 | `E2E_EXPOSE_MAGIC_LINK`                                                                     | No (tests)         | Phase 4      | `1` makes the sign-in page show the magic link so Playwright can follow it. Honoured only when `APP_ENV=test`; ignored everywhere else                                                                                                        |
 | `R2_ENDPOINT` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | Yes                | Phase 1      | S3-compatible object storage for event images: MinIO locally, Cloudflare R2 in production                                                                                                                                                     |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                                   | Local only         | Phase 1      | Credentials for the MinIO container in `docker-compose.yml`; the same values go in `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` locally                                                                                                        |
-| `BKASH_RECEIVE_NUMBER`                                                                      | Yes                | Phase 3      | Organizer's bKash number shown to buyers                                                                                                                                                                                                      |
 | `APP_ENV`                                                                                   | No                 | Phase 1      | `local` \| `test` \| `staging` \| `production` — the environment chip in the admin header; falls back to `NODE_ENV`. `test` (set by the Playwright web server) also enables the magic-link seam and disables better-auth's sign-in rate limit |
 | `SITE_URL`                                                                                  | Yes (prod)         | Phase 2      | Absolute public origin for canonical + Open Graph URLs (`https://echoandaura.com`); falls back to `BETTER_AUTH_URL` locally                                                                                                                   |
-| `FACEBOOK_PAGE_URL`                                                                         | No                 | Phase 2      | Organizer's Facebook page — "Remind me on Facebook", footer link, contact cards; hidden when unset                                                                                                                                            |
-| `BKASH_RECEIVE_NUMBER`                                                                      | No                 | Phase 3      | Personal bKash number buyers send money to (order page); "to be announced" when unset. Moves to Settings in Phase 6                                                                                                                           |
-| `ORGANIZER_CONTACT_EMAIL`                                                                   | No                 | Phase 3      | Organizer email shown on order pages ("Stuck? Message the organizer…"), on /contact and every policy page contact card; hidden when unset                                                                                                     |
+| `FACEBOOK_PAGE_URL`                                                                         | No                 | Phase 2      | Fallback for the Facebook page link; the live value is set at /admin/settings (B14); hidden when unset                                                                                                                                        |
+| `BKASH_RECEIVE_NUMBER`                                                                      | No                 | Phase 3      | Fallback for the bKash number buyers send money to; the live value is set at /admin/settings (B14)                                                                                                                                            |
+| `ORGANIZER_CONTACT_EMAIL`                                                                   | No                 | Phase 3      | Fallback for the support email (order pages, /contact, contact cards, email footers); live value at /admin/settings (B14)                                                                                                                     |
 | `APP_TIMEZONE`                                                                              | Yes                | —            | App timezone (`Asia/Dhaka`)                                                                                                                                                                                                                   |
 
 ## How to obtain / prepare each
@@ -98,6 +106,9 @@ instead of sending. Cost at this volume (~1,500/month) is cents; the first
    that the only key on any server is the send-only one below.
    Production access is a support case: answer AWS's "tell us more" reply
    with volume, trigger, bounce handling and example subjects, or it stalls.
+   Ask only once something is live at the domain — the 2026-09-21 request
+   was denied with nothing published there (infra/AWS.md has the reopen
+   checklist).
 2. SES (region **`ap-south-1`**, Mumbai) → _Identities_ → _Create identity_ →
    Domain `echoandaura.com`, Easy DKIM. SES shows **3 CNAME records**.
 3. IAM → _Users_ → create `echoandaura-worker`, access key only, with this
@@ -206,16 +217,47 @@ any origin by default, so no CORS setup is needed locally.
    ]
    ```
 
-Uploads never pass through the Next.js server: the server presigns a PUT
-bound to the validated type and size, the browser uploads, and the server
-verifies the stored object before recording its key
-(see [DECISIONS.md — ADR-007](DECISIONS.md)).
+Event cover uploads never pass through the Next.js server: the server
+presigns a PUT bound to the validated type and size, the browser uploads,
+and the server verifies the stored object before recording its key
+(see [DECISIONS.md — ADR-007](DECISIONS.md)). Sponsor logos are the
+exception ([ADR-032](DECISIONS.md)): SVG or PNG files of at most 512 KB,
+which the server receives, inspects and writes itself with
+`ObjectStorage.put`, under an immutable key and served as an attachment.
+The same Object Read & Write token covers those writes; the CORS policy
+above is only needed for the browser's cover PUT.
+
+**Covers are displayed through Next's image optimizer**
+([ADR-033](DECISIONS.md)). The optimizer's allow-list is built from
+`R2_PUBLIC_URL`, so:
+
+- `R2_PUBLIC_URL` must be set **at build time** (`pnpm build`), not only at
+  runtime. The allow-list is baked into the build, so changing the bucket or
+  domain means a rebuild. A build with `APP_ENV=staging` or `production` and
+  no `R2_PUBLIC_URL` fails. Any other build warns, and its covers won't load.
+- Deployments must keep `.next-build/cache/images` between releases, as a
+  volume or a persistent directory. That is where resized covers are cached;
+  without it, every cover is re-encoded after each deploy.
+- With MinIO on `localhost`, the optimizer is allowed to fetch from a local
+  address. Against R2 it never is.
 
 ### Manual bKash — Phase 3
 
 - `BKASH_RECEIVE_NUMBER`: the organizer's bKash number, shown to buyers on the
   payment page. There is **no bKash API** (see [ADR-001](DECISIONS.md)) — this is
   the only bKash configuration.
+
+### Organizer settings — since Phase 6 (B14), env is only the fallback
+
+`BKASH_RECEIVE_NUMBER`, `ORGANIZER_CONTACT_EMAIL`, `ORGANIZER_PHONE` and
+`FACEBOOK_PAGE_URL` are now **fallbacks**: the organizer edits the live
+values at `/admin/settings` (bKash number, account name and type, support
+email/phone, Facebook page, verification promise, organizer name, address),
+and a saved value wins over the environment field by field. A fresh
+database with nothing saved behaves exactly as the env describes, so these
+variables stay useful for local and CI. The worker reads the settings row
+per email job — no restart after a change. Migration `0011` must be applied
+before the app boots ([ADR-025](DECISIONS.md)).
 
 ### Public site — Phase 2
 

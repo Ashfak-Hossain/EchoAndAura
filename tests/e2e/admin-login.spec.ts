@@ -35,7 +35,9 @@ test.describe('admin login', () => {
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: /^sign in$/i }).click();
 
-    await expect(page).toHaveURL(/\/admin$/);
+    // Six workers share one Node process; a PDF render elsewhere can hold the
+    // event loop for seconds, so the sign-in action gets a realistic budget.
+    await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
     await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
     // B2 has a Sign out in the sidebar footer and one in the header; either works.

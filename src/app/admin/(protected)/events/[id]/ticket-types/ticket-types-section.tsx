@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { TICKET_TYPE_SALE_STATE_LABELS, ticketTypeSaleState } from '@/lib/status-labels';
 import { formatDhaka } from '@/lib/time';
+import { editorPath } from '../editor-path';
 
 interface Props {
   eventId: string;
@@ -33,6 +34,12 @@ export function TicketTypesSection({ eventId, ticketTypes }: Props) {
     { total: 0, sold: 0, held: 0 },
   );
   const addHref = `/admin/events/${eventId}/ticket-types/new`;
+  // B13: the comps sheet opens over this tab (URL state, like every sheet).
+  const compHref = (ticketTypeId?: string) =>
+    `${editorPath(eventId, 'ticket-types')}&comp=${ticketTypeId ?? '1'}`;
+  const anyAvailable = ticketTypes.some(
+    (t) => t.quantityTotal - t.quantitySold - t.quantityReserved > 0,
+  );
 
   if (ticketTypes.length === 0) {
     return (
@@ -55,7 +62,14 @@ export function TicketTypesSection({ eventId, ticketTypes }: Props) {
         <h2 id="ticket-types-heading" className="text-xl">
           Ticket types
         </h2>
-        <ButtonLink href={addHref}>Add ticket type</ButtonLink>
+        <div className="flex flex-wrap gap-2">
+          {anyAvailable ? (
+            <ButtonLink variant="secondary" href={compHref()} scroll={false}>
+              Issue complimentary tickets
+            </ButtonLink>
+          ) : null}
+          <ButtonLink href={addHref}>Add ticket type</ButtonLink>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
@@ -102,7 +116,18 @@ export function TicketTypesSection({ eventId, ticketTypes }: Props) {
                         }`
                       : 'always on sale'}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right whitespace-nowrap">
+                    {available > 0 ? (
+                      <ButtonLink
+                        variant="ghost"
+                        size="sm"
+                        href={compHref(tt.id)}
+                        scroll={false}
+                        aria-label={`Issue comps: ${tt.name}`}
+                      >
+                        Issue comps
+                      </ButtonLink>
+                    ) : null}
                     <ButtonLink
                       variant="ghost"
                       size="sm"

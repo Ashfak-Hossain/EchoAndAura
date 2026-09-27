@@ -10,7 +10,9 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  // Six workers share one Node process; a PDF render elsewhere can hold the
+  // event loop for seconds, so the sign-in action gets a realistic budget.
+  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
 }
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
@@ -24,7 +26,7 @@ async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket typ
 async function archivedPastEvent(page: Page, title: string): Promise<string> {
   await page.goto('/admin/events/new');
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Venue').fill('Aura Rooftop, Banani');
+  await page.getByLabel('Venue', { exact: true }).fill('Aura Rooftop, Banani');
   await page.getByLabel(/^Starts at/).fill('2019-05-23T20:00');
   await page.getByLabel(/^Registration opens/).fill('2019-05-01T10:00');
   await page.getByRole('button', { name: /create event/i }).click();
@@ -65,7 +67,8 @@ test.describe('archive (A6)', () => {
     await page.goto('/');
     await expect(
       page
-        .getByRole('navigation', { name: 'Site pages' })
+        .getByRole('contentinfo')
+        .getByRole('navigation', { name: 'Tickets' })
         .getByRole('link', { name: 'Past events' }),
     ).toHaveAttribute('href', '/archive');
     await page.getByRole('link', { name: /see all past events/i }).click();

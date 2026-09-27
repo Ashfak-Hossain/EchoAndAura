@@ -25,9 +25,10 @@ export const ADMIN_NAV: readonly NavItem[] = [
   { label: 'Events', href: '/admin/events', prefix: true },
   { label: 'Verification', href: '/admin/verification', prefix: true, badge: 'verification' },
   { label: 'Orders', href: '/admin/orders', prefix: true },
-  { label: 'Promo codes', href: '/admin/promo-codes', disabled: true },
-  { label: 'Reports', href: '/admin/reports', disabled: true },
-  { label: 'Settings', href: '/admin/settings', disabled: true },
+  { label: 'Promo codes', href: '/admin/promo-codes', prefix: true },
+  { label: 'Sponsors', href: '/admin/sponsors', prefix: true },
+  { label: 'Reports', href: '/admin/reports' },
+  { label: 'Settings', href: '/admin/settings' },
 ];
 
 export function isNavItemActive(item: NavItem, pathname: string): boolean {

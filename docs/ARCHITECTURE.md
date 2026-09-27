@@ -1,6 +1,6 @@
 # Architecture
 
-Status: ACTIVE · Owner: unassigned · Last updated: 2026-08-21
+Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-27
 
 The invariants that protect money and inventory live in
 [../CLAUDE.md](../CLAUDE.md) and are deliberately not repeated here in full —
@@ -109,7 +109,9 @@ sessions can't race each other.
 Entities and their relationships, not full DDL (that lives in `drizzle/`,
 generated — never hand-edited):
 
-- **events** — one event, has many `ticket_types`
+- **events** — one event, has many `ticket_types`; `image_key` names its
+  cover in object storage; `presenting_sponsor_id` optionally names the
+  sponsor shown as "Presented by" (`ON DELETE SET NULL`)
 - **ticket_types** — belongs to an event; holds `quantity_total`,
   `quantity_sold`, `quantity_reserved`; may have its own sales window (Early
   Bird is a row here, not a price-change rule)
@@ -120,7 +122,30 @@ generated — never hand-edited):
 - **promo_codes** — percentage or fixed, optionally restricted to specific
   `ticket_types`
 - **tickets** — issued on fulfilment; named and transferable, attendee name
-  editable until registration closes
+  editable until registration closes; `checked_in_at / _by / _scan_id` once
+  scanned at a gate (ADR-030)
+- **door_passes** — one per event gate: a 12-symbol code, revocable; its
+  working window is derived from the event's dates, never stored
+- **door_scans** — append-only log of every answered gate scan, keyed by the
+  phone's `scan_id` (UNIQUE) so a retried request replays its answer. An
+  offline scan synced later also records what the door showed
+  (`door_verdict`) and the online request it replaced
+  (`supersedes_scan_id`), so double entries can be listed (ADR-034)
+- **sponsors** — shown on the home page and in the footer; a `level`
+  (presenting, partner, supporter — at most one presenting, by a partial
+  unique index), a dense `position` within the level, `active`, a light or
+  dark `tile_tone`, and `logo_key` plus the logo's measured width and
+  height (ADR-032)
+
+Images live in object storage (R2; MinIO locally), and rows store keys,
+never URLs. Event covers are uploaded by the browser with a presigned PUT
+(ADR-007). Pages show covers through Next's image optimizer
+(`/_next/image`). It fetches the original from the storage host, and only
+from there, then serves a WebP resized for each placement. The results are
+cached on disk under `.next-build/cache/images` (ADR-033). Open Graph tags
+keep the raw storage URL. Sponsor logos go through the server, which checks
+the file first and stores it as a download-only attachment (ADR-032). They
+are drawn with a plain `<img>`.
 
 ## Directory-structure rationale
 
@@ -144,6 +169,12 @@ generated — never hand-edited):
   `services/events.service.ts` → `app/admin/(protected)/events/actions.ts`)
   is the reference implementation — see
   [DECISIONS.md — ADR-005](DECISIONS.md).
+- **The door phone is the only offline client.** `src/app/door/offline/`
+  holds the phone-side pieces: the ticket list and outbox in IndexedDB
+  (ADR-034), and a service worker scoped to `/door` that reopens a saved
+  copy of the page without signal (ADR-035). The worker is bundled on its
+  own (`pnpm sw:build` → `public/door/sw.js`) and never caches the door
+  API. The rest of the site has no worker.
 - **`src/components/ui/` is shadcn-generated** and excluded from hand-editing
   by `.claude/settings.json` — regenerate via the CLI instead.
 
@@ -151,9 +182,26 @@ Full project structure: [DEVELOPMENT.md § Project structure](DEVELOPMENT.md).
 
 ## Deployment topology
 
-Single VPS, Docker Compose: the Next.js app, the worker process, Postgres,
-and Redis as sibling containers; R2 and Resend are external managed services.
-No load balancer or multi-node setup — sized for a single-organizer platform,
-not multi-tenant scale. Backup, monitoring, and incident response procedures
-belong in `docs/RUNBOOK.md`, written in Phase 6 once there's real
-infrastructure to document.
+One VPS (BengalCloud, Dhaka: 2 vCPU, 4 GB RAM, 25 GB disk) running
+[Dokploy](https://dokploy.com), behind Cloudflare (DNS, TLS, proxy)
+([ADR-036](DECISIONS.md)):
+
+```
+GitHub ── merge to main ──► Actions: verify → build web + worker images
+                                     → smoke test → push to GHCR
+                                     → call Dokploy
+                                            │
+Cloudflare ──► VPS: Dokploy (Traefik) ──────┘
+                 ├─ migrate  (worker image, runs once per deploy)
+                 ├─ web      (Next.js standalone, :3000)
+                 ├─ worker   (BullMQ: emails, hold expiry)
+                 ├─ Postgres 17 (Dokploy database, nightly backup → R2)
+                 └─ Redis 7     (Dokploy database)
+External: Cloudflare R2 (covers, logos, backups), Amazon SES (email)
+```
+
+Nothing is built on the server: the images come from CI, and the server
+only pulls them (`docker-compose.prod.yml`). No load balancer or second
+node — sized for one organizer. How a release and a rollback work:
+[DEPLOY.md](DEPLOY.md). Backups, monitoring and incidents: `docs/RUNBOOK.md`
+(Slice D3).

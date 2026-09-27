@@ -28,7 +28,19 @@ and this file is stale.
 - Promo codes: percentage or fixed, unlimited uses, restrictable by ticket type
 - Admin can cancel a ticket (releases inventory); refunds happen outside the
   system
-- Check-in via printed/exported list — no QR scanning at the gate
+- Check-in at the gate: door phones scan the ticket QR with a per-gate pass
+  (first scan wins, name search as a fallback); the printed/exported list is
+  the backup ([ADR-030](DECISIONS.md)). Without signal a door phone answers
+  from a downloaded ticket list and syncs its scans later; double entries
+  are shown to the organizer ([ADR-034](DECISIONS.md)). A door phone that
+  opened its pass with signal can also reload the page without it (a
+  service worker keeps a saved copy, deleted when the session ends;
+  [ADR-035](DECISIONS.md))
+- Sponsors, managed by the admin: one presenting partner, partners and
+  supporters, each with an uploaded SVG or PNG logo and an optional
+  website, shown on the home page ("Supported by") and in the site footer;
+  hidden sponsors are kept but not shown. An event can name one presenting
+  sponsor, shown on its page as "Presented by" ([ADR-032](DECISIONS.md))
 
 ## Explicit out-of-scope
 
@@ -39,7 +51,6 @@ scope** for the MVP.
   [DECISIONS.md — ADR-001](DECISIONS.md))
 - Custom field builder per event
 - Bangla localisation
-- QR scanner PWA
 - Waitlist
 - Reminder emails
 

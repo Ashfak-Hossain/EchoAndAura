@@ -39,7 +39,7 @@ export default async function ArchivePage() {
           </h1>
           <p className="max-w-[520px] text-[15px] leading-relaxed text-[#c9c3b7] lg:text-[17px]">
             {events.length > 0
-              ? `${events.length} ${events.length === 1 ? 'show' : 'shows'} since ${since}. Every one of them was a room full of people who paid by bKash and got in with a name on a list.`
+              ? `${events.length} ${events.length === 1 ? 'show' : 'shows'} since ${since}. Every one of them was a room full of people who paid by bKash and got in with a named ticket.`
               : 'Every show we have put on, once it has happened.'}
           </p>
         </div>

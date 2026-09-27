@@ -7,9 +7,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { EMAIL_KINDS, renderEmail } from '@/server/email/templates/render';
 import type { EmailView } from '@/server/email/templates/view';
+import { resolveSettings } from '@/server/services/settings.service';
 
 const T0 = new Date('2026-09-17T05:20:00Z');
 const NOW = new Date();
+
+const seed = resolveSettings(null);
 
 const view: EmailView = {
   order: {
@@ -33,6 +36,7 @@ const view: EmailView = {
     rejectionReason: 'no_matching_credit',
     rejectionNote:
       'No credit of ৳3,600.00 from 01712345678 appears in the statement for 9AB12CD34E.',
+    complimentaryReason: null,
     holdExpiresAt: new Date(NOW.getTime() + 24 * 3_600_000),
     createdAt: T0,
     updatedAt: T0,
@@ -43,12 +47,15 @@ const view: EmailView = {
     title: 'Echo & Aura Live — Dhaka',
     description: null,
     venue: 'ICCB Hall 4, Dhaka',
+    venueHidden: false,
+    venueArea: null,
     startsAt: new Date('2026-10-01T13:00:00Z'),
     endsAt: null,
     registrationOpensAt: new Date('2026-09-11T13:00:00Z'),
     registrationClosesAt: new Date('2026-09-26T17:59:00Z'),
     status: 'published',
     imageKey: null,
+    presentingSponsorId: null,
     createdAt: T0,
     updatedAt: T0,
   },
@@ -74,13 +81,23 @@ const view: EmailView = {
     position: i + 1,
     attendeeName: ['Nusrat Jahan', 'তানভীর আলম', 'Farhana Rahman'][i]!,
     status: 'issued',
+    checkedInAt: null,
+    checkedInBy: null,
+    checkedInScanId: null,
     createdAt: T0,
     updatedAt: T0,
   })),
   siteUrl: process.env.SITE_URL ?? 'https://echoandaura.com',
-  bkashNumber: process.env.BKASH_RECEIVE_NUMBER ?? '01712 345678',
-  contactEmail: process.env.ORGANIZER_CONTACT_EMAIL ?? 'hello@echoandaura.com',
-  contactPhone: process.env.ORGANIZER_PHONE ?? '01712 345678',
+  // The env seed, exactly as a fresh database resolves it — with demo values where env is blank.
+  promoCode: null,
+  bkashNumber: seed.bkashReceiveNumber ?? '01712 345678',
+  contactEmail: seed.supportEmail ?? 'hello@echoandaura.com',
+  contactPhone: seed.supportPhone ?? '01712 345678',
+  bkashAccountName: 'Rajibul Karim',
+  bkashAccountType: seed.bkashAccountType,
+  verificationPromise: seed.verificationPromise,
+  organizerName: seed.organizerName,
+  organizerAddress: 'House 42, Road 11, Banani, Dhaka 1213',
   availableNow: 124,
   at: T0,
 };

@@ -4,19 +4,19 @@ import { ordersService } from '@/server/container';
 import { EmptyState } from '@/components/empty-state';
 import { Money } from '@/components/money';
 import { PageHeader } from '@/components/page-header';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { DataTable } from '@/components/admin/data-table';
+import { parseSort, type SortState } from '@/lib/table-sort';
 import { formatRelative } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { queueColumns, type QueueRowData } from './columns';
 
 export const metadata: Metadata = { title: 'Verification' };
 export const dynamic = 'force-dynamic';
+
+const QUEUE_SORT_COLUMNS = ['submitted', 'amount', 'hold'] as const;
+type QueueSortColumn = (typeof QUEUE_SORT_COLUMNS)[number];
+/** Oldest submission first: the person who has waited longest is on top. */
+const DEFAULT_SORT: SortState<QueueSortColumn> = { column: 'submitted', desc: false };
 
 /** Under this, the hold column turns red (B7). */
 const URGENT_HOLD_MS = 2 * 3_600_000;
@@ -36,10 +36,47 @@ function holdIn(expiresAt: Date | null, now: Date): { text: string; urgent: bool
 
 // B7: oldest first — the person who has waited longest is always on top.
 // No inline approve: approving needs amount and trxID side by side (B8).
-export default async function VerificationQueuePage() {
+export default async function VerificationQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort: sortParam } = await searchParams;
+  const sort = parseSort(sortParam, QUEUE_SORT_COLUMNS, DEFAULT_SORT);
   const queue = await ordersService.listVerificationQueue();
   const now = new Date();
   const oldest = queue[0] ? waited(now.getTime() - queue[0].submittedAt.getTime()) : null;
+
+  // Unpaginated by design (tens of rows): sorted here on the server from the URL.
+  const dir = sort.desc ? -1 : 1;
+  const sorted = [...queue].sort((a, b) => {
+    const cmp =
+      sort.column === 'amount'
+        ? a.order.totalPaisa - b.order.totalPaisa
+        : sort.column === 'hold'
+          ? (a.order.holdExpiresAt?.getTime() ?? Infinity) -
+            (b.order.holdExpiresAt?.getTime() ?? Infinity)
+          : a.submittedAt.getTime() - b.submittedAt.getTime();
+    return dir * cmp;
+  });
+  const rows: QueueRowData[] = sorted.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
+    const hold = holdIn(order.holdExpiresAt, now);
+    return {
+      id: order.id,
+      reference: order.reference,
+      buyerName: order.buyerName,
+      buyerPhone: order.buyerPhone,
+      ticketTypeName,
+      quantity: order.quantity,
+      eventTitle,
+      totalPaisa: order.totalPaisa,
+      trxId: order.bkashTrxId ?? '',
+      sender: order.bkashSenderMsisdn ?? '',
+      submittedLabel: formatRelative(submittedAt, now),
+      holdLabel: hold.text,
+      holdUrgent: hold.urgent,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,64 +99,19 @@ export default async function VerificationQueuePage() {
             Sorted oldest first — the person who has waited longest is always on top.
           </p>
 
-          {/* Desktop table */}
-          <div className="hidden overflow-hidden rounded-xl border border-border bg-card lg:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Reference · buyer</TableHead>
-                  <TableHead>Tickets</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>trxID</TableHead>
-                  <TableHead>Sender</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Hold expires</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {queue.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
-                  const hold = holdIn(order.holdExpiresAt, now);
-                  return (
-                    <TableRow key={order.id} className="cursor-pointer" data-testid="queue-row">
-                      <TableCell>
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          className="font-mono font-medium hover:underline"
-                        >
-                          {order.reference}
-                        </Link>
-                        <div className="text-[13px]">{order.buyerName}</div>
-                        <div className="text-[13px] text-muted-foreground tabular">
-                          {order.buyerPhone}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          {ticketTypeName} × {order.quantity}
-                        </div>
-                        <div className="text-[13px] text-muted-foreground">{eventTitle}</div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        <Money paisa={order.totalPaisa} />
-                      </TableCell>
-                      <TableCell className="font-mono">{order.bkashTrxId}</TableCell>
-                      <TableCell className="tabular">{order.bkashSenderMsisdn}</TableCell>
-                      <TableCell className="tabular">{formatRelative(submittedAt, now)}</TableCell>
-                      <TableCell
-                        className={cn('tabular', hold.urgent && 'font-semibold text-destructive')}
-                      >
-                        {hold.text}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          {/* Desktop table (phone cards below) */}
+          <DataTable
+            tableId="verification"
+            columns={queueColumns}
+            data={rows}
+            sort={sort}
+            sortBase={{ pathname: '/admin/verification', query: '' }}
+            rowTestId="queue-row"
+          />
 
           {/* Phone cards */}
           <ul className="flex flex-col gap-3 lg:hidden">
-            {queue.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
+            {sorted.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
               const hold = holdIn(order.holdExpiresAt, now);
               return (
                 <li key={order.id}>

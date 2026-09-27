@@ -52,3 +52,6 @@ yarn-error.log*
 next-env.d.ts
 tmp/
 dist/
+
+# ADR-035: the /door service worker, built by `pnpm sw:build`
+/public/door/

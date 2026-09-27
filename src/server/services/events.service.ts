@@ -12,11 +12,13 @@ import {
 } from '@/server/lib/errors';
 import { descriptionToHtml } from '@/server/lib/description';
 import { type EventStatus, assertEventTransition } from '@/server/lib/event-status';
+import { type OfferSummary, offerSummary } from '@/server/lib/event-offer';
 import { type EventPhase, eventPhase } from '@/server/lib/event-phase';
 import {
   type HomeSelection,
   selectArchiveEvents,
   selectHomeEvents,
+  selectUpcomingEvents,
 } from '@/server/lib/home-events';
 import { type PublishProblem, publishReadiness } from '@/server/lib/publish-readiness';
 import { defaultRegistrationWindow } from '@/server/lib/registration-window';
@@ -31,6 +33,7 @@ import type {
   TicketTypesRepository,
 } from '@/server/repositories/ticket-types.repository';
 import type { ObjectStorage, UploadTarget } from '@/server/storage/object-storage';
+import { forPublic } from '@/server/lib/venue';
 
 /**
  * Event business rules. Built by a factory that receives its repositories,
@@ -56,22 +59,35 @@ export interface CreateEventInput {
   slug?: string;
   description?: string;
   venue?: string;
+  /** Private venue: public pages show `venueArea` and a note instead (ADR-029). */
+  venueHidden?: boolean;
+  venueArea?: string;
   startsAt: Date;
   endsAt?: Date;
   /** Either registration bound left undefined falls back to the 20/5-day rule. */
   registrationOpensAt?: Date;
   registrationClosesAt?: Date;
+  /**
+   * "Presented by" on the event page (Canvas 6, N11); null or omitted for
+   * none. Any sponsor may be picked, hidden ones too — the page shows only
+   * an active one, so hiding a sponsor never needs every event edited.
+   */
+  presentingSponsorId?: string | null;
 }
 
 export type UpdateEventInput = CreateEventInput;
 
-/** One event as the home page shows it: hero, "also upcoming" card or past row. */
+/** One event as the home page and /events show it: hero, event card or past row. */
 export interface HomeEvent {
   event: EventRecord;
   phase: EventPhase;
-  /** Lowest ticket price in paisa; null when no ticket types exist. */
-  fromPricePaisa: number | null;
-  /** Tickets still available across every type (the hero's "112 left"). */
+  /**
+   * From-price, Early Bird and the row to highlight, by the one rule the
+   * event page uses too (`offerSummary`), so a card and the page it links
+   * to always quote the same price.
+   */
+  offer: OfferSummary;
+  /** Tickets still available across every type (the hero's "112 tickets left"). */
   availableTotal: number;
   coverUrl: string | null;
 }
@@ -121,41 +137,40 @@ export function createEventsService(
     ): Promise<{ event: EventRecord; ticketTypes: TicketTypeRecord[] }> {
       const event = await repo.findBySlug(slug);
       if (!event || event.status === 'draft') throw new EventNotFoundError(slug);
-      return { event, ticketTypes: await ticketTypes.listByEvent(event.id) };
+      // Public read model: a private venue never leaves the server (ADR-029).
+      return { event: forPublic(event), ticketTypes: await ticketTypes.listByEvent(event.id) };
     },
 
     /**
      * The home page read model (A1): hero, "also upcoming", past strip.
-     * One events query, one capacity GROUP BY for every event shown — never
-     * a query per event.
+     * One events query, one ticket-types query for every event shown —
+     * never a query per event.
      */
     async getHomePage(at: Date = now()): Promise<HomeSelection<HomeEvent>> {
-      const visible = await repo.listByStatus(['published', 'archived']);
+      const visible = (await repo.listByStatus(['published', 'archived'])).map(forPublic);
       const picked = selectHomeEvents(visible, at);
       const shown = [picked.featured, ...picked.alsoUpcoming, ...picked.past].filter(
         (e): e is EventRecord => e !== null,
       );
-      const capacity = new Map(
-        (await ticketTypes.capacityByEvent(shown.map((e) => e.id))).map((c) => [c.eventId, c]),
-      );
-
-      const decorate = (event: EventRecord): HomeEvent => {
-        const cap = capacity.get(event.id);
-        const availableTotal = cap ? Math.max(0, cap.total - cap.sold - cap.held) : 0;
-        return {
-          event,
-          phase: eventPhase({ event, availableTotal, now: at }),
-          fromPricePaisa: cap?.fromPricePaisa ?? null,
-          availableTotal,
-          coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
-        };
-      };
+      const decorate = await decorator(shown, at);
 
       return {
         featured: picked.featured ? decorate(picked.featured) : null,
         alsoUpcoming: picked.alsoUpcoming.map(decorate),
+        upcomingTotal: picked.upcomingTotal,
         past: picked.past.map(decorate),
       };
+    },
+
+    /**
+     * The /events read model: every upcoming published event, soonest
+     * first, decorated like the home page's cards. One events query, one
+     * ticket-types query.
+     */
+    async getUpcomingPage(at: Date = now()): Promise<HomeEvent[]> {
+      const published = (await repo.listByStatus(['published'])).map(forPublic);
+      const upcoming = selectUpcomingEvents(published, at);
+      return upcoming.map(await decorator(upcoming, at));
     },
 
     /**
@@ -163,25 +178,29 @@ export function createEventsService(
      * first. One events query; no capacity query, nothing here is on sale.
      */
     async getArchivePage(at: Date = now()): Promise<ArchiveEvent[]> {
-      const visible = await repo.listByStatus(['published', 'archived']);
+      const visible = (await repo.listByStatus(['published', 'archived'])).map(forPublic);
       return selectArchiveEvents(visible, at).map((event) => ({
         event,
         coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
       }));
     },
 
-    /** @throws EventSlugTakenError (from the repository) on a duplicate slug. */
+    /**
+     * @throws EventSlugTakenError on a duplicate slug, SponsorNotFoundError
+     *   when the presenting sponsor no longer exists (both from the repository).
+     */
     createEvent(input: CreateEventInput): Promise<EventRecord> {
       const defaults = defaultRegistrationWindow(input.startsAt);
       return repo.insert({
         title: input.title,
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
-        venue: input.venue ?? null,
+        ...venueFields(input),
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,
         registrationClosesAt: input.registrationClosesAt ?? defaults.registrationClosesAt,
+        presentingSponsorId: input.presentingSponsorId ?? null,
       });
     },
 
@@ -189,7 +208,7 @@ export function createEventsService(
      * Full-form update: every field is replaced with what the form submitted.
      * A cleared registration bound falls back to the default rule again, and
      * a cleared slug is re-derived from the (possibly new) title.
-     * @throws EventNotFoundError, EventSlugTakenError
+     * @throws EventNotFoundError, EventSlugTakenError, SponsorNotFoundError
      */
     async updateEvent(id: string, input: UpdateEventInput): Promise<EventRecord> {
       const defaults = defaultRegistrationWindow(input.startsAt);
@@ -197,11 +216,12 @@ export function createEventsService(
         title: input.title,
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
-        venue: input.venue ?? null,
+        ...venueFields(input),
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,
         registrationClosesAt: input.registrationClosesAt ?? defaults.registrationClosesAt,
+        presentingSponsorId: input.presentingSponsorId ?? null,
       };
       const updated = await repo.update(id, patch);
       if (!updated) throw new EventNotFoundError(id);
@@ -290,6 +310,41 @@ export function createEventsService(
     },
   };
 
+  /**
+   * Phase, offer and cover for every event a listing shows, from ONE
+   * ticket-types query for all of them: lists must never do a query per
+   * event (N+1 as the events table grows).
+   */
+  async function decorator(
+    events: readonly EventRecord[],
+    at: Date,
+  ): Promise<(event: EventRecord) => HomeEvent> {
+    // Ordered by created_at like `listByEvent`, so offerSummary breaks a
+    // price tie the same way here as on the event page.
+    const typesByEvent = new Map<string, TicketTypeRecord[]>();
+    for (const t of await ticketTypes.listByEvents(events.map((e) => e.id))) {
+      const list = typesByEvent.get(t.eventId);
+      if (list) list.push(t);
+      else typesByEvent.set(t.eventId, [t]);
+    }
+    return (event) => {
+      const types = typesByEvent.get(event.id) ?? [];
+      // Same sum as the event page: stock left across every type, whether
+      // or not its own window is open (eventPhase decides what that means).
+      const availableTotal = types.reduce(
+        (n, t) => n + Math.max(0, t.quantityTotal - t.quantitySold - t.quantityReserved),
+        0,
+      );
+      return {
+        event,
+        phase: eventPhase({ event, availableTotal, now: at }),
+        offer: offerSummary(types, event, at),
+        availableTotal,
+        coverUrl: event.imageKey ? storage.publicUrl(event.imageKey) : null,
+      };
+    };
+  }
+
   // Writes only ever store allowlisted HTML (ADR-010): editor output is
   // sanitised, plain text is wrapped in paragraphs, an empty editor is NULL.
   function cleanDescription(raw: string | undefined): string | null {
@@ -308,3 +363,13 @@ export function createEventsService(
 }
 
 export type EventsService = ReturnType<typeof createEventsService>;
+
+/** The area only means something while the venue is private; a public venue stores none. */
+function venueFields(input: CreateEventInput) {
+  const venueHidden = input.venueHidden ?? false;
+  return {
+    venue: input.venue ?? null,
+    venueHidden,
+    venueArea: venueHidden ? (input.venueArea ?? null) : null,
+  };
+}

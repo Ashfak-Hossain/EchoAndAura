@@ -21,6 +21,9 @@ function view(over: Partial<EmailView> = {}): EmailView {
       position: 1,
       attendeeName: 'Nusrat Jahan',
       status: 'issued',
+      checkedInAt: null,
+      checkedInBy: null,
+      checkedInScanId: null,
       createdAt: T0,
       updatedAt: T0,
     },
@@ -33,6 +36,9 @@ function view(over: Partial<EmailView> = {}): EmailView {
       position: 2,
       attendeeName: 'তানভীর আলম',
       status: 'issued',
+      checkedInAt: null,
+      checkedInBy: null,
+      checkedInScanId: null,
       createdAt: T0,
       updatedAt: T0,
     },
@@ -58,6 +64,7 @@ function view(over: Partial<EmailView> = {}): EmailView {
       promoCodeId: null,
       rejectionReason: 'no_matching_credit',
       rejectionNote: 'No credit of ৳2,400.00 appears for 9AB12CD34E.',
+      complimentaryReason: null,
       holdExpiresAt: new Date('2026-09-18T01:08:00Z'),
       createdAt: T0,
       updatedAt: T0,
@@ -65,10 +72,16 @@ function view(over: Partial<EmailView> = {}): EmailView {
     event: ev,
     ticketType: ticketType({ name: 'General' }),
     tickets,
+    promoCode: null,
     siteUrl: 'https://echoandaura.com',
     bkashNumber: '01712 345678',
     contactEmail: 'hello@echoandaura.com',
     contactPhone: '01712 345678',
+    bkashAccountName: null,
+    bkashAccountType: 'personal',
+    verificationPromise: 'usually within 4 hours',
+    organizerName: 'Raj',
+    organizerAddress: null,
     availableNow: 124,
     at: T0,
     ...over,
@@ -103,6 +116,35 @@ describe('email templates', () => {
       expect(joined(r.html)).toContain(s);
       expect(r.text).toContain(s);
     }
+    // Personal account: "Send Money", the organizer's name and promise from the settings.
+    expect(joined(r.html)).toContain('Send Money');
+    expect(joined(r.html)).toContain('a personal account');
+    expect(joined(r.html)).toContain('usually within 4 hours');
+    expect(joined(r.html)).toContain('message Raj on 01712 345678');
+    expect(joined(r.html)).toContain('Raj 01712 345678');
+  });
+
+  // B14: the bKash wording and the sender follow the settings, not the code.
+  it('C1 says "Payment" for a merchant account and names the account and organizer', async () => {
+    const r = await renderEmail(
+      'payment-instructions',
+      view({
+        order: { ...view().order, status: 'pending_payment' },
+        bkashAccountType: 'merchant',
+        bkashAccountName: 'Echo Events Ltd',
+        organizerName: 'Rajibul',
+        organizerAddress: 'House 42, Banani, Dhaka',
+        verificationPromise: 'within the hour',
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('choose <strong>Payment</strong>');
+    expect(html).not.toContain('Send Money');
+    expect(html).toContain('(Echo Events Ltd)');
+    expect(html).toContain('within the hour');
+    expect(html).toContain('message Rajibul on 01712 345678');
+    expect(html).toContain('House 42, Banani, Dhaka');
+    expect(html).not.toContain('Raj ');
   });
 
   it('C2 lists every ticket with its code, name (Bengali intact), position and link', async () => {
@@ -120,6 +162,67 @@ describe('email templates', () => {
       expect(joined(r.html)).toContain(s);
     }
     expect(r.text).toContain('TKT-4H8ZP2XQ');
+  });
+
+  // A re-send after an admin cancel: the dead ticket is gone, the subject
+  // counts what is left, and the survivor keeps its place in the order.
+  it('C2 re-sent after a cancel omits the cancelled ticket and counts live ones', async () => {
+    const v = view();
+    v.tickets[0]!.status = 'cancelled';
+    const r = await renderEmail('tickets-issued', v);
+    expect(r.subject).toBe('Your ticket for Echo & Aura Live — Dhaka');
+    expect(joined(r.html)).not.toContain('TKT-4H8ZP2XQ');
+    expect(joined(r.html)).toContain('TKT-9WQ2LM5D');
+    expect(joined(r.html)).toContain('Ticket 2 of 2');
+    expect(r.text).not.toContain('TKT-4H8ZP2XQ');
+  });
+
+  // ADR-029: ticket holders get the private venue in full, with a nudge not to spread it.
+  it('C2 names a private venue in full and asks not to share it', async () => {
+    const base = view();
+    const r = await renderEmail(
+      'tickets-issued',
+      view({
+        event: {
+          ...base.event,
+          venue: 'Warehouse 7, Tejgaon I/A',
+          venueHidden: true,
+          venueArea: 'Tejgaon, Dhaka',
+        },
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('Warehouse 7, Tejgaon I/A');
+    expect(html).toContain('please don&#x27;t share it widely');
+    expect(r.text).toContain('Warehouse 7, Tejgaon I/A');
+  });
+
+  // B13: a comp was never paid for, and its reason is internal.
+  it('C2 for a comp says complimentary, never "paid", and never shows the reason', async () => {
+    const base = view();
+    const r = await renderEmail(
+      'tickets-issued',
+      view({
+        order: {
+          ...base.order,
+          totalPaisa: 0,
+          discountPaisa: base.order.subtotalPaisa,
+          bkashTrxId: null,
+          bkashSenderMsisdn: null,
+          buyerPhone: null,
+          rejectionReason: null,
+          rejectionNote: null,
+          complimentaryReason: 'Press — internal note',
+        },
+      }),
+    );
+    const html = joined(r.html);
+    expect(html).toContain('Complimentary tickets from');
+    expect(html).toContain('TKT-4H8ZP2XQ');
+    for (const absent of ['Payment confirmed', 'Paid ৳', 'trxID', 'Press — internal note']) {
+      expect(html).not.toContain(absent);
+      expect(r.text).not.toContain(absent);
+    }
   });
 
   it('C3 quotes the reason label and the note word for word', async () => {

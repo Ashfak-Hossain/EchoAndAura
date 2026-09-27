@@ -11,6 +11,10 @@ import { db } from '@/db/client';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
+import { promoCodesRepository } from '@/server/repositories/promo-codes.repository';
+import { reportsRepository } from '@/server/repositories/reports.repository';
+import { settingsRepository } from '@/server/repositories/settings.repository';
+import { sponsorsRepository } from '@/server/repositories/sponsors.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
@@ -18,6 +22,16 @@ import { enqueueEmail } from '@/server/queue/producer';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
+import { createPromoCodesService } from '@/server/services/promo-codes.service';
+import { createReportsService } from '@/server/services/reports.service';
+import { createDashboardService } from '@/server/services/dashboard.service';
+import { createDoorService } from '@/server/services/door.service';
+import { createHealthService } from '@/server/services/health.service';
+import { healthRepository } from '@/server/repositories/health.repository';
+import { pingRedis } from '@/server/queue/probe';
+import { doorRepository } from '@/server/repositories/door.repository';
+import { createSettingsService } from '@/server/services/settings.service';
+import { createSponsorsService } from '@/server/services/sponsors.service';
 import { createTicketsService } from '@/server/services/tickets.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import {
@@ -35,6 +49,7 @@ function lazyStorage(): ObjectStorage {
 
 export const storage: ObjectStorage = {
   createUploadUrl: (input) => lazyStorage().createUploadUrl(input),
+  put: (input) => lazyStorage().put(input),
   head: (key) => lazyStorage().head(key),
   delete: (key) => lazyStorage().delete(key),
   publicUrl: (key) => lazyStorage().publicUrl(key),
@@ -42,6 +57,7 @@ export const storage: ObjectStorage = {
 
 export const eventsService = createEventsService(eventsRepository, ticketTypesRepository, storage);
 export const ticketTypesService = createTicketTypesService(ticketTypesRepository);
+export const settingsService = createSettingsService(settingsRepository);
 export const inventoryService = createInventoryService(inventoryRepository);
 export const ordersService = createOrdersService({
   orders: ordersRepository,
@@ -49,6 +65,7 @@ export const ordersService = createOrdersService({
   events: eventsRepository,
   ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
+  promoCodes: promoCodesRepository,
   runInTransaction: (fn) => db.transaction(fn),
   // Emails are queued after commit and sent by the worker (Invariant 7).
   onOrderCreated: (orderId) => enqueueEmail('payment-instructions', orderId),
@@ -59,6 +76,7 @@ export const ordersService = createOrdersService({
 export const fulfilmentService = createFulfilmentService({
   orders: ordersRepository,
   tickets: ticketsRepository,
+  ticketTypes: ticketTypesRepository,
   inventory: inventoryService,
   runInTransaction: (fn) => db.transaction(fn),
   onTicketsIssued: (orderId) => enqueueEmail('tickets-issued', orderId),
@@ -73,3 +91,50 @@ export const ticketsService = createTicketsService({
   ticketTypes: ticketTypesRepository,
   runInTransaction: (fn) => db.transaction(fn),
 });
+
+// B12: read-only aggregates over the same repositories.
+export const reportsService = createReportsService({
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
+  orders: ordersRepository,
+  reports: reportsRepository,
+});
+
+// B3: the admin dashboard's live numbers (read-only).
+export const dashboardService = createDashboardService({
+  orders: ordersRepository,
+  reports: reportsRepository,
+});
+
+// B10: promo codes, the admin side. Pricing reads codes via ordersService.
+export const promoCodesService = createPromoCodesService({
+  promoCodes: promoCodesRepository,
+  events: eventsRepository,
+  ticketTypes: ticketTypesRepository,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+// ADR-030: gate passes and check-in at the door.
+export const doorService = createDoorService({
+  door: doorRepository,
+  tickets: ticketsRepository,
+  orders: ordersRepository,
+  events: eventsRepository,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+// B15: sponsors. Logos are uploaded by the server before the transaction
+// and old ones deleted after it (Invariant 7).
+export const sponsorsService = createSponsorsService({
+  sponsors: sponsorsRepository,
+  storage,
+  runInTransaction: (fn) => db.transaction(fn),
+});
+
+// ADR-036: what the uptime monitor asks every minute.
+export const healthService = createHealthService({
+  database: healthRepository.ping,
+  queue: pingRedis,
+});
+
+export type { PromoCheck } from '@/server/services/orders.service';

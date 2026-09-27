@@ -3,12 +3,21 @@ import {
   AttendeeNamesMismatchError,
   InvalidRejectionReasonError,
   OrderNotFoundError,
+  OrderReferenceCollisionError,
   OrderStatusConflictError,
+  SoldOutError,
+  TicketCancelledError,
+  TicketCheckedInError,
   TicketCodeCollisionError,
+  TicketNotFoundError,
+  TicketTypeNotFoundError,
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
+import { multiplyPaisa } from '@/server/lib/money';
+import { generateOrderReference } from '@/server/lib/order-reference';
 import { assertOrderTransition } from '@/server/lib/order-status';
+import { computeOrderTotals } from '@/server/lib/pricing';
 import {
   REJECTION_REASONS,
   type RejectionReason,
@@ -16,27 +25,32 @@ import {
 } from '@/server/lib/rejection-reasons';
 import { generateTicketCode } from '@/server/lib/ticket-code';
 import type { OrderRecord, OrdersRepository } from '@/server/repositories/orders.repository';
+import type { TicketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import type { TicketRecord, TicketsRepository } from '@/server/repositories/tickets.repository';
 import type { InventoryService } from '@/server/services/inventory.service';
 
 /**
  * FULFILMENT (Invariant 4). This module is the ONLY code that marks an
  * order `paid` or `issued`, the only caller of `inventory.convertToSold`,
- * and the only creator of ticket rows. It is called from the admin
- * Approve action and nowhere else. Never duplicate this logic.
+ * and the only creator of ticket rows. Two entry points, both admin
+ * actions: Approve (a verified bKash payment) and Issue complimentary
+ * tickets (B13). Never duplicate this logic elsewhere.
  *
  * Approve is one transaction: lock the order → `paid` → held → sold →
  * ticket rows → `issued`, with an audit row per status change (Invariant
- * 6). Nothing inside it touches the network (Invariant 7); the ticket
- * email is handed to `onTicketsIssued` only after the commit.
+ * 6). A comp is one transaction too: hold → sold → order row born `issued`
+ * → ticket rows → one audit row. Nothing inside either touches the network
+ * (Invariant 7); the ticket email is handed to `onTicketsIssued` only after
+ * the commit.
  */
 
-/** How many fresh code sets to try before giving up on a collision. */
+/** How many fresh code sets (and, for comps, references) to try on a collision. */
 const CODE_ATTEMPTS = 3;
 
 export interface FulfilmentDeps {
   orders: OrdersRepository;
   tickets: TicketsRepository;
+  ticketTypes: TicketTypesRepository;
   inventory: InventoryService;
   runInTransaction: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
   /**
@@ -50,6 +64,22 @@ export interface FulfilmentDeps {
   /** B8 Re-send: enqueue C2 again. Unlike the others, a failure here is the caller's to report. */
   onTicketsResendRequested?: (orderId: string) => Promise<void>;
   ticketCode?: () => string;
+  orderReference?: () => string;
+}
+
+export interface ComplimentaryInput {
+  /** The event the admin issued from — the ticket type must be this event's. */
+  eventId: string;
+  ticketTypeId: string;
+  quantity: number;
+  /** One name for every ticket; each can be renamed on its ticket page. */
+  guestName: string;
+  /** Where the tickets email goes. */
+  guestEmail: string;
+  /** Why — kept on the order and in the audit trail, never shown to the guest. */
+  reason: string;
+  /** The admin's identity for the audit row (their email). */
+  actor: string;
 }
 
 export interface ApproveInput {
@@ -72,17 +102,139 @@ export interface RejectInput {
   note?: string;
 }
 
+export interface CancelTicketInput {
+  /** The order the page showed the ticket on — a mismatch is refused. */
+  orderId: string;
+  /** The admin's identity for the audit row (their email). */
+  actor: string;
+  /** Why — free text, kept in the audit trail (already trimmed and bounded at the boundary). */
+  reason: string;
+}
+
+export interface CancelTicketResult {
+  ticket: TicketRecord;
+  order: OrderRecord;
+  /** True when this was the order's last live ticket and the order is now `cancelled`. */
+  orderCancelled: boolean;
+}
+
 export function createFulfilmentService({
   orders,
   tickets,
+  ticketTypes,
   inventory,
   runInTransaction,
   onTicketsIssued,
   onOrderRejected = async () => {},
   onTicketsResendRequested = async () => {},
   ticketCode = generateTicketCode,
+  orderReference = generateOrderReference,
 }: FulfilmentDeps) {
   return {
+    /**
+     * B13: issue free tickets. They take real stock (the same atomic hold
+     * every order takes — Invariant 2), are born `issued` with a ৳0 order
+     * whose whole subtotal is the discount, and are cancelled ticket by
+     * ticket like any other. No sales-window check: comps are the
+     * organizer's call; stock is the only limit.
+     * @throws TicketTypeNotFoundError (unknown, or another event's),
+     *   SoldOutError, InvalidQuantityError, AttendeeNamesMismatchError
+     */
+    async issueComplimentaryTickets(input: ComplimentaryInput): Promise<ApproveResult> {
+      const ticketType = await ticketTypes.findById(input.ticketTypeId);
+      if (!ticketType || ticketType.eventId !== input.eventId) {
+        throw new TicketTypeNotFoundError(input.ticketTypeId);
+      }
+      // The price is the row's (Invariant 5), snapshotted like any order's;
+      // the discount is all of it, so the total is 0 by the one pricing rule.
+      const totals = computeOrderTotals({
+        unitPricePaisa: ticketType.pricePaisa,
+        quantity: input.quantity,
+        discountPaisa: multiplyPaisa(ticketType.pricePaisa, input.quantity),
+      });
+      const names = Array.from({ length: input.quantity }, () => input.guestName);
+
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const result = await runInTransaction(async (tx) => {
+            // Held, then straight to sold: comps compete for the last seats
+            // exactly like paid orders do, through the same conditional UPDATEs.
+            const held = await inventory.hold(ticketType.id, input.quantity, tx);
+            if (!held) throw new SoldOutError(ticketType.id, input.quantity);
+            await inventory.convertToSold(ticketType.id, input.quantity, tx);
+
+            // Born `issued`: there is no payment step to pass through, the
+            // same way createOrder inserts at `pending_payment`.
+            const order = await orders.insert(
+              {
+                reference: orderReference(),
+                eventId: ticketType.eventId,
+                ticketTypeId: ticketType.id,
+                quantity: totals.quantity,
+                unitPricePaisa: totals.unitPricePaisa,
+                subtotalPaisa: totals.subtotalPaisa,
+                discountPaisa: totals.discountPaisa,
+                totalPaisa: totals.totalPaisa,
+                status: 'issued',
+                buyerName: input.guestName,
+                buyerEmail: input.guestEmail,
+                buyerPhone: null,
+                attendeeNames: names,
+                complimentaryReason: input.reason,
+                holdExpiresAt: null,
+              },
+              tx,
+            );
+            if (order.attendeeNames.length !== order.quantity) {
+              throw new AttendeeNamesMismatchError(order.quantity, order.attendeeNames.length);
+            }
+
+            const rows = await tickets.insertMany(
+              order.attendeeNames.map((attendeeName, i) => ({
+                orderId: order.id,
+                ticketTypeId: order.ticketTypeId,
+                eventId: order.eventId,
+                code: ticketCode(),
+                position: i + 1,
+                attendeeName,
+                status: 'issued' as const,
+              })),
+              tx,
+            );
+
+            // One change (nothing → issued), one audit row (Invariant 6).
+            await orders.insertEvent(
+              {
+                orderId: order.id,
+                actor: input.actor,
+                action: 'order.comp_issued',
+                fromStatus: null,
+                toStatus: 'issued',
+                note: `${order.quantity} × ${ticketType.name} · complimentary — ${input.reason} · ${rows
+                  .map((t) => t.code)
+                  .join(', ')}`,
+              },
+              tx,
+            );
+            return { order, tickets: rows };
+          });
+
+          try {
+            await onTicketsIssued(result.order.id);
+          } catch (err: unknown) {
+            logger.error({ orderId: result.order.id, err }, 'fulfilment: onTicketsIssued failed');
+          }
+          return result;
+        } catch (err: unknown) {
+          // Rolled back whole (hold included): a fresh reference and codes are all that is needed.
+          const collision =
+            err instanceof TicketCodeCollisionError || err instanceof OrderReferenceCollisionError;
+          if (collision && attempt < CODE_ATTEMPTS) continue;
+          throw err;
+        }
+      }
+    },
+
     /**
      * Approve a verified payment: the order becomes `issued`, its hold
      * becomes sales, and one ticket per attendee name exists.
@@ -244,6 +396,83 @@ export function createFulfilmentService({
         logger.error({ orderId, err }, 'fulfilment: onOrderRejected failed');
       }
       return rejected;
+    },
+
+    /**
+     * B8 "Cancel ticket": one seat goes back on sale; money is returned
+     * outside the app. One transaction — lock the order, then the ticket
+     * (the same order approve takes, so two admins cancelling siblings
+     * cannot deadlock) → conditional `issued → cancelled` on the ticket →
+     * ONLY THEN `inventory.releaseSold(1)`, so a lost race can never free a
+     * seat twice → audit row with the reason (Invariant 6). When it was the
+     * order's last live ticket the order follows (`issued → cancelled`, its
+     * one legal exit) with its own audit row. Nothing here is network
+     * (Invariant 7): there is no cancellation email — the admin is already
+     * talking to the buyer.
+     * @throws TicketNotFoundError (also when the ticket is not on `orderId`),
+     *   TicketCancelledError (already cancelled, including a concurrent
+     *   cancel that won), OrderNotFoundError, OrderStatusConflictError (order
+     *   not `issued`), InventoryStateError
+     */
+    async cancelTicket(
+      ticketId: string,
+      { orderId, actor, reason }: CancelTicketInput,
+    ): Promise<CancelTicketResult> {
+      return runInTransaction(async (tx) => {
+        // Lock the order first: it is the aggregate, and approve locks it too.
+        const order = await orders.findByIdForUpdate(orderId, tx);
+        if (!order) throw new OrderNotFoundError(orderId);
+        if (order.status !== 'issued') throw new OrderStatusConflictError(orderId, order.status);
+
+        const ticket = await tickets.findByIdForUpdate(ticketId, tx);
+        // A ticket on some other order is "not found" here, never touched.
+        if (!ticket || ticket.orderId !== orderId) throw new TicketNotFoundError(ticketId);
+        if (ticket.status === 'cancelled') throw new TicketCancelledError(ticket.code);
+        // ADR-030: the holder walked in. Cancelling would put a seat back on
+        // sale with its occupant inside — undo the check-in first, on purpose.
+        if (ticket.checkedInAt) {
+          throw new TicketCheckedInError(ticket.code, ticket.checkedInAt, ticket.checkedInBy ?? '');
+        }
+
+        const cancelled = await tickets.cancel(ticketId, tx);
+        if (!cancelled) throw new TicketCancelledError(ticket.code);
+
+        // After the conditional flip, in the same tx: the seat was SOLD, so
+        // it leaves quantity_sold — `release` would free someone else's hold.
+        await inventory.releaseSold(ticket.ticketTypeId, 1, tx);
+
+        await orders.insertEvent(
+          {
+            orderId,
+            actor,
+            action: 'ticket.cancelled',
+            fromStatus: null,
+            toStatus: null,
+            note: `${ticket.code} (${ticket.attendeeName}): ${reason}`,
+          },
+          tx,
+        );
+
+        const live = await tickets.countIssuedByOrder(orderId, tx);
+        if (live > 0) return { ticket: cancelled, order, orderCancelled: false };
+
+        // Last live ticket gone: the order is over. Same tx, same audit trail.
+        assertOrderTransition(order.status, 'cancelled');
+        const done = await orders.transition(orderId, { from: ['issued'], to: 'cancelled' }, tx);
+        if (!done) throw new OrderStatusConflictError(orderId, order.status);
+        await orders.insertEvent(
+          {
+            orderId,
+            actor,
+            action: 'order.cancelled',
+            fromStatus: 'issued',
+            toStatus: 'cancelled',
+            note: `all ${order.quantity} tickets cancelled`,
+          },
+          tx,
+        );
+        return { ticket: cancelled, order: done, orderCancelled: true };
+      });
     },
 
     /**

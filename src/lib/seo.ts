@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { descriptionToPlainText } from '@/server/lib/description';
 import { formatBDT } from '@/server/lib/money';
+import { publicVenue } from '@/server/lib/venue';
 import { formatDhakaLong } from '@/lib/time';
 
 export const SITE_NAME = 'echoandaura';
@@ -17,6 +18,9 @@ export interface EventMetadataInput {
     title: string;
     description: string | null;
     venue: string | null;
+    /** A private venue is never in share text — the public area is (ADR-029). */
+    venueHidden: boolean;
+    venueArea: string | null;
     startsAt: Date;
   };
   /** Absolute public URL of the cover image, or null when none. */
@@ -115,7 +119,8 @@ function summarise(event: EventMetadataInput['event'], fromPricePaisa: number | 
   if (text) return truncate(text, DESCRIPTION_MAX);
 
   const parts = [`${formatDhakaLong(event.startsAt)} (Dhaka)`];
-  if (event.venue) parts.push(event.venue);
+  const where = publicVenue(event).text;
+  if (where) parts.push(where);
   if (fromPricePaisa !== null) parts.push(`tickets from ${formatBDT(fromPricePaisa)}`);
   return truncate(parts.join(' · '), DESCRIPTION_MAX);
 }

@@ -25,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
     event: params.get('event') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
+    sort: params.get('sort') ?? undefined,
   });
 
   const { rows, total } = await ordersService.exportOrders(input);
@@ -35,6 +36,7 @@ export async function GET(request: Request): Promise<Response> {
     'ticket_type',
     'quantity',
     'total_bdt',
+    'complimentary',
     'buyer_name',
     'buyer_email',
     'buyer_phone',
@@ -50,6 +52,7 @@ export async function GET(request: Request): Promise<Response> {
     ticketTypeName,
     order.quantity,
     formatDecimalBDT(order.totalPaisa),
+    order.complimentaryReason === null ? '' : 'yes',
     order.buyerName,
     order.buyerEmail,
     order.buyerPhone,

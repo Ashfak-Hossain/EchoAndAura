@@ -65,12 +65,35 @@ export const eventFormSchema = z
     // HTML from the rich-text editor (ADR-010) is ~3–5× the visible text.
     description: optionalText(50_000),
     venue: optionalText(300),
+    // Checkbox: present ("on") when ticked, absent otherwise.
+    venueHidden: z
+      .literal('on')
+      .optional()
+      .transform((v) => v === 'on'),
+    venueArea: optionalText(120),
     startsAt: dhakaDateTime,
     endsAt: optionalDhakaDateTime,
     registrationOpensAt: optionalDhakaDateTime,
     registrationClosesAt: optionalDhakaDateTime,
+    // <select>: "" is the "None" option. Null, not undefined — the form is a
+    // full replace, so choosing None clears the presenter.
+    presentingSponsorId: z
+      .string()
+      .trim()
+      .transform((v) => (v === '' ? undefined : v))
+      .optional()
+      .pipe(z.uuid({ error: 'Choose a presenting sponsor from the list' }).optional())
+      .transform((v) => v ?? null),
   })
   .superRefine((v, ctx) => {
+    // Ticket holders are promised the venue; a private one must exist.
+    if (v.venueHidden && !v.venue) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['venue'],
+        message: 'Add the venue to keep it private — ticket holders need it',
+      });
+    }
     if (v.endsAt && v.endsAt <= v.startsAt) {
       ctx.addIssue({
         code: 'custom',

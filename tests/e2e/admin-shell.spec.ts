@@ -9,7 +9,9 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  // Six workers share one Node process; a PDF render elsewhere can hold the
+  // event loop for seconds, so the sign-in action gets a realistic budget.
+  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
 }
 
 test.describe('admin shell (B2)', () => {
@@ -33,11 +35,17 @@ test.describe('admin shell (B2)', () => {
       'href',
       '/admin/orders',
     );
-    // Unbuilt sections are visible but not links — no dead ends.
-    for (const label of ['Promo codes', 'Reports', 'Settings']) {
-      await expect(nav.getByRole('link', { name: label })).toHaveCount(0);
-      await expect(nav.locator('[aria-disabled="true"]', { hasText: label })).toBeVisible();
+    // Every section is live now (Promo codes B10, Sponsors B15, Reports B12, Settings B14).
+    for (const [label, href] of [
+      ['Promo codes', '/admin/promo-codes'],
+      ['Sponsors', '/admin/sponsors'],
+      ['Reports', '/admin/reports'],
+      ['Settings', '/admin/settings'],
+    ] as const) {
+      await expect(nav.getByRole('link', { name: label })).toHaveAttribute('href', href);
     }
+    // No dead ends: nothing is rendered as a disabled placeholder any more.
+    await expect(nav.locator('[aria-disabled="true"]')).toHaveCount(0);
 
     // Environment chip + signed-in email in the header.
     // The chip reflects APP_ENV (the Playwright web server sets "test").

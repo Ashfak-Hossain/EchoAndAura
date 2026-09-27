@@ -20,6 +20,11 @@ export function toDhakaInput(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, "yyyy-MM-dd'T'HH:mm");
 }
 
+/** The Dhaka calendar day of an instant, as `yyyy-MM-dd` (B12 buckets; 18:00Z is already tomorrow). */
+export function dhakaDay(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, 'yyyy-MM-dd');
+}
+
 /** Human display, e.g. "1 Oct 2026, 19:00". */
 export function formatDhaka(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, HH:mm');
@@ -42,6 +47,11 @@ export function formatRelative(date: Date, now: Date = new Date()): string {
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy');
+}
+
+/** Just the Dhaka clock time, e.g. "20:51" (the gate's "already in" answer). */
+export function formatDhakaClock(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, 'HH:mm');
 }
 
 /** Short weekday form for prose, e.g. "Thu 1 Oct, 19:00" (B5 "dates in plain words"). */

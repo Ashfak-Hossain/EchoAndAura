@@ -11,7 +11,7 @@ interface Props {
   now: Date;
   /** Desktop panel rows are denser than the mobile cards (A2 · 1440). */
   compact?: boolean;
-  /** The row to tint marigold: the open type whose sales end soonest (an Early Bird). */
+  /** The row to tint marigold: the Early Bird while it sells (`offerSummary().highlightId`). */
   highlightId?: string | null;
 }
 

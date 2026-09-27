@@ -19,10 +19,42 @@ test.describe('static pages (A7)', () => {
       expect(res?.status(), path).toBe(200);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
     }
+    // Canvas 6 (N12): the footer groups its links into named navs. "Refund
+    // policy" is under both Help and Legal, so each link is looked up in one.
     await page.goto('/');
-    const footer = page.getByRole('navigation', { name: 'Site pages' });
-    for (const label of ['About', 'FAQ', 'Terms of sale', 'Privacy', 'Refund policy', 'Contact']) {
-      await expect(footer.getByRole('link', { name: label, exact: true })).toBeVisible();
+    const footer = page.getByRole('contentinfo');
+    const groups: [string, [string, string][]][] = [
+      [
+        'About',
+        [
+          ['About', '/about'],
+          ['Contact', '/contact'],
+        ],
+      ],
+      [
+        'Help',
+        [
+          ['FAQ', '/faq'],
+          ['Refund policy', '/refund'],
+        ],
+      ],
+      [
+        'Legal',
+        [
+          ['Terms of sale', '/terms'],
+          ['Privacy policy', '/privacy'],
+          ['Refund policy', '/refund'],
+        ],
+      ],
+    ];
+    for (const [nav, links] of groups) {
+      const group = footer.getByRole('navigation', { name: nav, exact: true });
+      for (const [label, href] of links) {
+        await expect(group.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+          'href',
+          href,
+        );
+      }
     }
   });
 
@@ -43,5 +75,70 @@ test.describe('static pages (A7)', () => {
     await expect(page.locator('details#someone-else')).toContainText(
       /change it on the ticket page/i,
     );
+  });
+
+  test('policies: switcher, table of contents, anchors, print (Canvas 5)', async ({ page }) => {
+    await page.goto('/terms');
+    const switcher = page.getByRole('navigation', { name: 'Policies' });
+    await expect(switcher.getByRole('link', { name: 'Terms' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.getByRole('heading', { name: 'The short version' })).toBeVisible();
+    await expect(page.getByRole('note')).toHaveCount(4);
+
+    // Desktop: the sticky table of contents jumps to a section.
+    const toc = page.getByRole('complementary').getByRole('navigation', { name: 'On this page' });
+    await toc.getByRole('link', { name: /Names and transfers/ }).click();
+    await expect(page).toHaveURL(/\/terms#names-and-transfers$/);
+    await expect(page.locator('section#names-and-transfers')).toBeInViewport();
+    await expect(
+      page.locator('section#names-and-transfers').getByRole('note').first(),
+    ).toContainText('Names lock 5 days before the event');
+
+    // Printed: the prose alone, headed by where it came from.
+    await page.emulateMedia({ media: 'print' });
+    await expect(switcher).toBeHidden();
+    await expect(toc).toBeHidden();
+    await expect(page.getByText(/^echoandaura · .+\/terms$/)).toBeVisible();
+    await page.emulateMedia({ media: 'screen' });
+
+    await switcher.getByRole('link', { name: 'Privacy' }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
+    await expect(
+      page.getByRole('navigation', { name: 'Policies' }).getByRole('link', { name: 'Privacy' }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('table')).toContainText('Never shown');
+  });
+
+  test('policies on a phone: the table of contents is a collapsed list', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/refund');
+    const toc = page.locator('details').filter({ hasText: 'On this page' });
+    await expect(toc).not.toHaveAttribute('open', '');
+    await toc.locator('summary').click();
+    await toc.getByRole('link', { name: /If the event is cancelled/ }).click();
+    await expect(page).toHaveURL(/#event-cancelled$/);
+  });
+
+  test('FAQ topics jump to their questions', async ({ page }) => {
+    await page.goto('/faq');
+    const topics = page.getByRole('complementary').getByRole('navigation', { name: 'FAQ topics' });
+    await topics.getByRole('link', { name: /Paying by bKash/ }).click();
+    await expect(page).toHaveURL(/#paying-by-bkash$/);
+    await expect(page.locator('section#paying-by-bkash details')).toHaveCount(2);
+  });
+
+  test('About shows the cover band and the three steps; Contact the channels', async ({ page }) => {
+    await page.goto('/about');
+    await expect(page.getByTestId('about-cover')).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 3 })).toHaveText([
+      'Register',
+      'Pay by bKash',
+      'Get scanned at the door',
+    ]);
+    await page.goto('/contact');
+    await expect(page.getByRole('heading', { name: 'Ways to reach us' })).toBeVisible();
+    await expect(page.getByText('EA-7K2Q9M')).toBeVisible();
   });
 });

@@ -15,12 +15,7 @@ export function ExpiredEmail({ v }: { v: EmailView }) {
     ? `${formatDhakaLong(v.event.registrationClosesAt)} (Dhaka)`
     : null;
   return (
-    <EmailLayout
-      preview="Nothing was charged. Tickets are still available."
-      contactEmail={v.contactEmail}
-      contactPhone={v.contactPhone}
-      siteUrl={v.siteUrl}
-    >
+    <EmailLayout preview="Nothing was charged. Tickets are still available." sender={v}>
       <Text style={styles.h1}>Your ticket hold has expired</Text>
       <Text style={styles.p}>
         We held {v.order.quantity} {v.ticketType.name}{' '}
@@ -43,7 +38,7 @@ export function ExpiredEmail({ v }: { v: EmailView }) {
       <div style={styles.callout}>
         <Text style={{ ...styles.p, margin: 0 }}>
           <strong>Already sent the money? Do not send it again.</strong> Reply with your TrxID and
-          {v.contactPhone ? ' Raj' : ' the organizer'} will match it by hand.
+          {v.contactPhone ? ` ${v.organizerName}` : ' the organizer'} will match it by hand.
         </Text>
       </div>
 

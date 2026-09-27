@@ -171,7 +171,7 @@ export function TicketPdf({ input }: { input: TicketPdfInput }) {
                   {/* qrcode draws modules as 1-unit strokes, not fills. */}
                   <Path d={t.qrPath} stroke="#000" strokeWidth={1} fill="none" />
                 </Svg>
-                <Text style={s.small}>{cancelled ? 'void' : 'the code, as a QR'}</Text>
+                <Text style={s.small}>{cancelled ? 'void' : 'scanned at the door'}</Text>
               </View>
             </View>
 
@@ -179,7 +179,7 @@ export function TicketPdf({ input }: { input: TicketPdfInput }) {
             <Text style={s.body}>
               {cancelled
                 ? 'This ticket was cancelled by the organizer and will not be admitted, even if printed. Refunds are handled outside the app.'
-                : 'Show this at the door. Door staff find your name and code on the printed list — the QR is just the code, not a scanner requirement.'}
+                : 'Show this at the door: the QR is scanned, and admits one person, once. If it will not scan, staff can type the code or find your name.'}
             </Text>
             {input.contactEmail ? (
               <Text style={[s.body, { marginTop: 4 }]}>{input.contactEmail}</Text>
@@ -194,9 +194,9 @@ export function TicketPdf({ input }: { input: TicketPdfInput }) {
               {input.registrationClosesAt
                 ? ` until registration closes on ${formatDhakaLong(input.registrationClosesAt)} (Dhaka)`
                 : ' until registration closes'}
-              ; after that the door list is printed and fixed. This ticket admits one person. There
-              are no refunds through the app. Tickets cancelled by the organizer will not be
-              admitted, even if this page has been printed.
+              ; after that the names are fixed. This ticket admits one person, once. There are no
+              refunds through the app. Tickets cancelled by the organizer will not be admitted, even
+              if this page has been printed.
             </Text>
 
             <Text style={s.footer}>

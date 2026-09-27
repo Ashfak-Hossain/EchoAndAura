@@ -12,9 +12,11 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
  * container constructs the real client lazily so builds and unit tests never
  * need credentials.
  *
- * Uploads are browser → storage via presigned PUT. The Next server never
- * proxies image bytes, and nothing here runs inside a DB transaction
- * (Invariant 7).
+ * Event covers go browser → storage via presigned PUT (ADR-007): the Next
+ * server never proxies those bytes. Sponsor logos are the exception — at
+ * most 512 KB, and the server must read them anyway to measure and screen
+ * them — so the server writes them itself with `put`. Nothing here runs
+ * inside a DB transaction (Invariant 7).
  */
 
 export interface UploadTarget {
@@ -30,9 +32,20 @@ export interface StoredObjectInfo {
   size: number | undefined;
 }
 
+export interface PutObjectInput {
+  key: string;
+  body: Uint8Array;
+  contentType: string;
+  /** e.g. `attachment`: opening the URL directly downloads the file instead of rendering it. */
+  contentDisposition?: string;
+  cacheControl?: string;
+}
+
 export interface ObjectStorage {
   /** Presign a PUT that is bound to this exact content type and length. */
   createUploadUrl(input: { key: string; contentType: string; size: number }): Promise<UploadTarget>;
+  /** Server-side upload of bytes the caller has already validated. */
+  put(input: PutObjectInput): Promise<void>;
   /** Metadata of a stored object, or null when it does not exist. */
   head(key: string): Promise<StoredObjectInfo | null>;
   delete(key: string): Promise<void>;
@@ -92,6 +105,20 @@ export function createS3ObjectStorage(env: StorageEnv): ObjectStorage {
         signableHeaders: new Set(['content-type', 'content-length']),
       });
       return { url, key, expiresInSeconds: UPLOAD_URL_TTL_SECONDS };
+    },
+
+    async put({ key, body, contentType, contentDisposition, cacheControl }) {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: env.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+          ContentLength: body.byteLength,
+          ContentDisposition: contentDisposition,
+          CacheControl: cacheControl,
+        }),
+      );
     },
 
     async head(key) {

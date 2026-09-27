@@ -80,10 +80,21 @@ export class TicketTypeCapacityTooLowError extends DomainError {
   }
 }
 
-/** A ticket type with sales, holds, or any order history cannot be deleted. */
+/**
+ * A ticket type with sales, holds or any order history cannot be deleted —
+ * nor one a promo code is restricted to (B10: removing it would silently
+ * widen that code to every ticket type).
+ */
 export class TicketTypeInUseError extends DomainError {
-  constructor(public readonly ticketTypeId: string) {
-    super(`Ticket type ${ticketTypeId} has orders and cannot be deleted`);
+  constructor(
+    public readonly ticketTypeId: string,
+    public readonly by: 'orders' | 'promo_code' = 'orders',
+  ) {
+    super(
+      by === 'orders'
+        ? `Ticket type ${ticketTypeId} has orders and cannot be deleted`
+        : `Ticket type ${ticketTypeId} is restricted by a promo code and cannot be deleted`,
+    );
   }
 }
 
@@ -103,9 +114,13 @@ export class InvalidQuantityError extends DomainError {
 export class InventoryStateError extends DomainError {
   constructor(
     public readonly ticketTypeId: string,
-    public readonly operation: 'release' | 'convertToSold',
+    public readonly operation: 'release' | 'convertToSold' | 'releaseSold',
   ) {
-    super(`Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is held`);
+    super(
+      `Inventory ${operation} on ticket type ${ticketTypeId} exceeds what is ${
+        operation === 'releaseSold' ? 'sold' : 'held'
+      }`,
+    );
   }
 }
 
@@ -228,13 +243,14 @@ export class TrxIdChangedError extends DomainError {
   }
 }
 
+/** `ref` is whatever the caller looked the ticket up by: a code, or an id on the admin side. */
 export class TicketNotFoundError extends DomainError {
-  constructor(public readonly code: string) {
-    super(`Ticket ${code} not found`);
+  constructor(public readonly ref: string) {
+    super(`Ticket ${ref} not found`);
   }
 }
 
-/** A cancelled ticket cannot be renamed — it will not be admitted anyway. */
+/** A cancelled ticket cannot be renamed or cancelled again — it will not be admitted anyway. */
 export class TicketCancelledError extends DomainError {
   constructor(public readonly code: string) {
     super(`Ticket ${code} is cancelled`);
@@ -259,5 +275,119 @@ export class InvalidAttendeeNameError extends DomainError {
 export class TicketRenameConflictError extends DomainError {
   constructor(public readonly code: string) {
     super(`Ticket ${code} changed before the rename could be saved`);
+  }
+}
+
+/**
+ * B10: the code cannot be used on the chosen ticket type (see
+ * `judgePromo` for the reasons). Raised before any stock is held, so a bad
+ * code never costs the buyer a seat.
+ */
+export class PromoCodeNotValidError extends DomainError {
+  constructor(
+    public readonly code: string,
+    public readonly reason: 'unknown' | 'not_for_ticket_type' | 'makes_ticket_free',
+  ) {
+    super(`Promo code ${code} is not valid (${reason})`);
+  }
+}
+
+/** B10: codes are unique (case-insensitively — they are stored upper-cased). */
+export class PromoCodeTakenError extends DomainError {
+  constructor(public readonly code: string) {
+    super(`Promo code ${code} already exists`);
+  }
+}
+
+export class PromoCodeNotFoundError extends DomainError {
+  constructor(public readonly promoCodeId: string) {
+    super(`Promo code ${promoCodeId} not found`);
+  }
+}
+
+/** B10: a code some order used can be switched off, never deleted — the order still names it. */
+export class PromoCodeInUseError extends DomainError {
+  constructor(public readonly promoCodeId: string) {
+    super(`Promo code ${promoCodeId} has orders and cannot be deleted`);
+  }
+}
+
+/** ADR-030: someone who walked in holds this ticket — undo the check-in first. */
+export class TicketCheckedInError extends DomainError {
+  constructor(
+    public readonly code: string,
+    public readonly checkedInAt: Date,
+    public readonly checkedInBy: string,
+  ) {
+    super(`Ticket ${code} was checked in at ${checkedInBy}`);
+  }
+}
+
+export class DoorPassNotFoundError extends DomainError {
+  constructor(public readonly passId: string) {
+    super(`Gate pass ${passId} not found`);
+  }
+}
+
+/** A pass is only made for a published event whose door window has not ended. */
+export class DoorPassNotAllowedError extends DomainError {
+  constructor(public readonly reason: 'not_published' | 'window_ended') {
+    super(`Gate pass cannot be created (${reason})`);
+  }
+}
+
+/** Repository-level: the random pass code collided; the service retries. */
+export class DoorPassCodeCollisionError extends DomainError {
+  constructor() {
+    super('Gate pass code collision');
+  }
+}
+
+/** Repository-level: this scan id is already logged (a retry racing itself). */
+export class DoorScanIdTakenError extends DomainError {
+  constructor(public readonly scanId: string) {
+    super(`Scan ${scanId} already recorded`);
+  }
+}
+
+/** An undo the door or the admin may not do (too late, not theirs, not checked in). */
+export class CheckInUndoRefusedError extends DomainError {
+  constructor(public readonly reason: 'not_found' | 'not_yours' | 'too_late' | 'not_checked_in') {
+    super(`Check-in undo refused (${reason})`);
+  }
+}
+
+/**
+ * The pass was revoked while this request was in flight: the scan
+ * transaction locks the pass row first and found it revoked (ADR-030).
+ */
+export class DoorPassRevokedError extends DomainError {
+  constructor(public readonly passId: string) {
+    super(`Gate pass ${passId} was revoked`);
+  }
+}
+
+export class SponsorNotFoundError extends DomainError {
+  constructor(public readonly sponsorId: string) {
+    super(`Sponsor ${sponsorId} not found`);
+  }
+}
+
+/** The logo failed `inspectLogo`; `reason` is the sentence the admin form shows. */
+export class SponsorLogoInvalidError extends DomainError {
+  constructor(public readonly reason: string) {
+    super(reason);
+  }
+}
+
+/**
+ * The one-presenting-partner index refused a write. Every sponsor write
+ * takes the same advisory lock and demotes the old presenting partner
+ * first, so this is the backstop for a writer that skipped it — the admin
+ * reloads and sees who is presenting now.
+ */
+export class SponsorPresentingConflictError extends DomainError {
+  constructor() {
+    super('Another sponsor is already the presenting partner');
   }
 }

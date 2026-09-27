@@ -13,3 +13,15 @@ export const rejectFormSchema = z.object({
 });
 
 export type RejectFormInput = z.infer<typeof rejectFormSchema>;
+
+/** B8 cancel-ticket dialog: the reason is required — "why" must be in the audit trail. */
+export const CANCEL_REASON_MAX = 200;
+export const cancelTicketFormSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(2, { error: 'Say why — it goes in the audit trail.' })
+    .max(CANCEL_REASON_MAX, { error: `Keep the reason under ${CANCEL_REASON_MAX} characters.` }),
+});
+
+export type CancelTicketFormInput = z.infer<typeof cancelTicketFormSchema>;

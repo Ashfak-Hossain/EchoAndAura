@@ -37,7 +37,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-border: var(--accent-border);
   --color-marigold: var(--marigold);
+  --color-wash: var(--wash);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -92,8 +94,13 @@
   --accent: #fdf3e0;
   --accent-foreground: #1c1a17;
   --accent-ink: #8a5209;
+  /* The border of accent-tint surfaces: callouts, the open FAQ item (Canvas 5). */
+  --accent-border: #f0d9ac;
   --marigold: #eda43c;
   --ring: #1c1a17;
+  /* Canvas 6 (N2): the public chrome's hover tint. Translucent on purpose so
+     one token reads on both the charcoal header and the light one. */
+  --wash: rgb(166 158 145 / 0.16);
 
   /* Status (S1) */
   --success: #1f7a4c;
@@ -216,5 +223,60 @@
   }
   .rich-text u {
     text-decoration: underline;
+  }
+}
+
+/* Print: A4, black on white (B11 check-in sheet); the B12 report keeps its
+   bar and tint colours because they are the data. */
+/* Help & policies (Canvas 5): the design's marigold ring, with a charcoal
+   ring filling the 2px offset — marigold alone is ~2:1 on these light
+   surfaces, under the 3:1 a focus indicator needs (WCAG 1.4.11). Canvas 6
+   extends the same ring to the site chrome (header, footer, phone menu) and
+   the home page. It owns box-shadow, so nothing in these scopes may draw a
+   state with box-shadow on a focusable element — the active nav underline
+   is a pseudo-element for that reason. */
+.help-page :focus-visible,
+.site-chrome :focus-visible,
+.home-page :focus-visible {
+  outline: 3px solid var(--marigold);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--foreground);
+}
+
+/* K12: the help pages print on A4 with 16/16/18 mm margins; admin sheets
+   keep the default page below. (Named pages must be declared top-level.) */
+@page help {
+  size: A4;
+  margin: 16mm 16mm 18mm;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .print-colors,
+  .print-colors * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  /* Help & policies (Canvas 5, K12): black on white, no tints, no shadows —
+     the boxes that matter keep a 1px black border (print:border-black). */
+  .help-page {
+    page: help;
+  }
+  .help-page,
+  .help-page * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .help-page a {
+    text-decoration: none !important;
   }
 }

@@ -110,7 +110,9 @@ function toMessage(err: unknown): string {
     return 'Quantity cannot be lower than the tickets already sold or held';
   }
   if (err instanceof TicketTypeInUseError) {
-    return 'This ticket type has orders and cannot be deleted';
+    return err.by === 'promo_code'
+      ? 'A promo code is restricted to this ticket type. Edit that code to take this ticket type off it (or delete the code if no order used it), then delete'
+      : 'This ticket type has orders and cannot be deleted';
   }
   if (err instanceof TicketTypeNotFoundError) return 'This ticket type no longer exists';
   if (err instanceof EventNotFoundError) return 'This event no longer exists';

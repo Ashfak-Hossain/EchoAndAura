@@ -7,7 +7,7 @@ import { OrderNotFoundError } from '@/server/lib/errors';
 import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-reasons';
 import { Money } from '@/components/money';
 import { PageHeader } from '@/components/page-header';
-import { StatusChip } from '@/components/status-chip';
+import { Chip, StatusChip } from '@/components/status-chip';
 import {
   Table,
   TableBody,
@@ -16,8 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
-import { approveOrderAction, rejectOrderAction, resendTicketsEmailAction } from './actions';
+import { formatDhakaClock, formatDhakaLong, formatDhakaShort, formatRelative } from '@/lib/time';
+import {
+  approveOrderAction,
+  cancelTicketAction,
+  rejectOrderAction,
+  resendTicketsEmailAction,
+  undoCheckInAction,
+} from './actions';
+import { CancelTicketButton } from './cancel-ticket-button';
+import { UndoCheckInButton } from './undo-check-in-button';
 import { VerificationActions } from './verification-actions';
 
 export const metadata: Metadata = { title: 'Order' };
@@ -25,14 +33,21 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ approved?: string; rejected?: string; resent?: string }>;
+  searchParams: Promise<{
+    approved?: string;
+    rejected?: string;
+    resent?: string;
+    cancelled?: string;
+    order?: string;
+    undone?: string;
+  }>;
 }
 
 // B8: three read columns, then the actions bar, then the writeable lists.
 // The page shape never changes between statuses — only which actions exist.
 export default async function AdminOrderPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { approved, rejected, resent } = await searchParams;
+  const { approved, rejected, resent, cancelled, order: orderFlag, undone } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
 
   let view;
@@ -42,11 +57,23 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
     if (err instanceof OrderNotFoundError) notFound();
     throw err;
   }
-  const { order, event, ticketType, events, tickets } = view;
+  const { order, event, ticketType, events, tickets, promoCode } = view;
   const now = new Date();
+  const liveTickets = tickets.filter((t) => t.status === 'issued');
+  const cancelledTickets = tickets.length - liveTickets.length;
+  // Per-ticket Cancel exists only while the order itself is live.
+  const canCancel = order.status === 'issued';
   const submitted = [...events]
     .reverse()
     .find((e) => e.action === 'payment.submitted' || e.action === 'payment.updated');
+  // B13: a comp has no bKash side; who issued it and why take that column.
+  const comp =
+    order.complimentaryReason === null
+      ? null
+      : {
+          reason: order.complimentaryReason,
+          issued: events.find((e) => e.action === 'order.comp_issued') ?? null,
+        };
 
   const metaLine = [
     `Created ${formatDhakaLong(order.createdAt)} (Dhaka)`,
@@ -64,8 +91,15 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
       <PageHeader
         title={<span className="font-mono">{order.reference}</span>}
         badge={
-          <span data-testid="order-status">
-            <StatusChip kind="order" status={order.status} />
+          <span className="inline-flex items-center gap-2">
+            <span data-testid="order-status">
+              <StatusChip kind="order" status={order.status} />
+            </span>
+            {comp ? (
+              <span data-testid="order-comp">
+                <Chip tone="warning">Complimentary</Chip>
+              </span>
+            ) : null}
           </span>
         }
         subtitle={metaLine}
@@ -96,6 +130,19 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
           Could not queue the email — the queue may be down. Nothing else changed.
         </p>
       ) : null}
+      {cancelled ? (
+        <p role="status" className="rounded-md bg-secondary px-3 py-2 text-sm">
+          Ticket <span className="font-mono">{cancelled}</span> cancelled — one seat is back on
+          sale.
+          {orderFlag === 'cancelled' ? ' No live tickets remain, so the order is cancelled.' : ''}
+        </p>
+      ) : null}
+      {undone ? (
+        <p role="status" className="rounded-md bg-secondary px-3 py-2 text-sm">
+          Check-in of <span className="font-mono">{undone}</span> undone — the next scan of it
+          admits.
+        </p>
+      ) : null}
 
       {order.status === 'rejected' && order.rejectionReason ? (
         <div className="rounded-xl border border-[#efc4c0] bg-destructive-tint px-4 py-3.5 text-[#8e1e17]">
@@ -119,7 +166,7 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             </a>
           </Row>
           <Row label="Phone" mono>
-            {order.buyerPhone}
+            {order.buyerPhone ?? '—'}
           </Row>
         </Card>
         <Card title="Order">
@@ -138,7 +185,9 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <Money paisa={order.subtotalPaisa} />
           </Row>
           {order.discountPaisa > 0 ? (
-            <Row label="Discount">
+            <Row
+              label={comp ? 'Complimentary' : promoCode ? `Discount · ${promoCode}` : 'Discount'}
+            >
               −<Money paisa={order.discountPaisa} />
             </Row>
           ) : null}
@@ -146,19 +195,37 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
             <Money paisa={order.totalPaisa} />
           </Row>
         </Card>
-        {/* Tinted: the only column Raj compares against another screen. */}
-        <Card title="bKash" tinted>
-          <Row label="Transaction ID" mono>
-            {order.bkashTrxId ?? '—'}
-          </Row>
-          <Row label="Sender" mono>
-            {order.bkashSenderMsisdn ?? '—'}
-          </Row>
-          <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
-          <Row label="Hold expires">
-            {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
-          </Row>
-        </Card>
+        {comp ? (
+          <section
+            className="flex flex-col gap-2.5 rounded-xl border border-[#f0d9ac] bg-accent p-4.5 text-[#5c4514]"
+            data-testid="comp-card"
+          >
+            <h2 className="font-sans text-xs font-medium tracking-widest uppercase">
+              Complimentary
+            </h2>
+            <p className="text-[15px] leading-normal">{comp.reason}</p>
+            {comp.issued ? (
+              <p className="text-[13px]">
+                Issued by {comp.issued.actor} · {formatDhakaShort(comp.issued.createdAt)} (Dhaka)
+              </p>
+            ) : null}
+            <p className="text-[13px]">Not shown to the guest. No bKash payment.</p>
+          </section>
+        ) : (
+          /* Tinted: the only column Raj compares against another screen. */
+          <Card title="bKash" tinted>
+            <Row label="Transaction ID" mono>
+              {order.bkashTrxId ?? '—'}
+            </Row>
+            <Row label="Sender" mono>
+              {order.bkashSenderMsisdn ?? '—'}
+            </Row>
+            <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
+            <Row label="Hold expires">
+              {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
+            </Row>
+          </Card>
+        )}
       </div>
 
       {order.status === 'pending_verification' ? (
@@ -176,6 +243,10 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
         />
       ) : order.status === 'pending_payment' ? (
         <p className="text-sm text-muted-foreground">No trxID yet — nothing to verify.</p>
+      ) : order.status === 'cancelled' ? (
+        <p className="text-sm text-muted-foreground" data-testid="order-readonly">
+          This order is cancelled — read-only. The audit trail below says who and why.
+        </p>
       ) : order.status === 'issued' ? (
         <form
           action={resendTicketsEmailAction.bind(null, order.id)}
@@ -198,7 +269,12 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
         <h2 className="text-lg">
           Tickets{' '}
           <span className="text-sm font-normal text-muted-foreground">
-            · {tickets.length === 0 ? 'issued on approval' : `${tickets.length} issued`}
+            ·{' '}
+            {tickets.length === 0
+              ? 'issued on approval'
+              : cancelledTickets === 0
+                ? `${tickets.length} issued`
+                : `${liveTickets.length} issued · ${cancelledTickets} cancelled`}
           </span>
         </h2>
         {tickets.length > 0 ? (
@@ -209,6 +285,11 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                   <TableHead>Code</TableHead>
                   <TableHead>Attendee</TableHead>
                   <TableHead>Status</TableHead>
+                  {canCancel ? (
+                    <TableHead className="w-36">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -226,8 +307,38 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
                     </TableCell>
                     <TableCell>{t.attendeeName}</TableCell>
                     <TableCell>
-                      <StatusChip kind="ticket" status={t.status} />
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <StatusChip kind="ticket" status={t.status} />
+                        {t.checkedInAt ? (
+                          <span
+                            data-testid="ticket-checked-in"
+                            className="text-[13px] text-success"
+                          >
+                            In {formatDhakaClock(t.checkedInAt)} · {t.checkedInBy}
+                          </span>
+                        ) : null}
+                      </span>
                     </TableCell>
+                    {canCancel ? (
+                      <TableCell className="text-right">
+                        {/* A ticket used at the gate cannot be cancelled until the check-in is undone. */}
+                        {t.checkedInAt && t.checkedInScanId ? (
+                          <UndoCheckInButton
+                            code={t.code}
+                            attendeeName={t.attendeeName}
+                            admitted={`${formatDhakaClock(t.checkedInAt)} · ${t.checkedInBy ?? ''}`}
+                            undo={undoCheckInAction.bind(null, order.id, t.id, t.checkedInScanId)}
+                          />
+                        ) : t.status === 'issued' ? (
+                          <CancelTicketButton
+                            code={t.code}
+                            attendeeName={t.attendeeName}
+                            last={liveTickets.length === 1}
+                            cancel={cancelTicketAction.bind(null, order.id, t.id)}
+                          />
+                        ) : null}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>

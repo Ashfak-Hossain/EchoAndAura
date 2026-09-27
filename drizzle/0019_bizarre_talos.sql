@@ -1,0 +1,1 @@
+ALTER TYPE "public"."door_scan_result" ADD VALUE 'phone_mismatch';

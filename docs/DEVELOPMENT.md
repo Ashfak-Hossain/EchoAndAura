@@ -19,9 +19,36 @@ pnpm install
 cp .env.example .env            # then fill in real values
 docker compose up -d            # Postgres 17 + Redis 7
 pnpm db:migrate                 # apply migrations
-pnpm db:seed                    # optional sample data
+pnpm admin:create               # the admin login
+pnpm db:seed                    # realistic demo data (see "Demo data" below)
 pnpm dev                        # http://localhost:3000
 ```
+
+## Demo data
+
+`pnpm db:seed` builds five Dhaka events — one open with ~60 orders, one
+closing soon with a **private venue**, one sold out, one not open yet, one
+past and archived — plus ~155 orders in every state (issued, awaiting
+verification, awaiting payment with one hold ending within 2 hours,
+rejected, expired, a cancelled ticket, comps) and the promo codes DHAKA15,
+VIP500 and EARLYFRIENDS. It also adds eight sponsors across the three
+levels (one hidden, one on a dark tile, one without a website) with
+generated SVG wordmark logos, and the open event is "Presented by" the
+presenting partner. Dates are relative to today, so it never goes stale;
+covers are generated (sharp). Everything goes through the real
+services, so every counter and audit row is genuine; only the timestamps
+are backdated so reports show weeks of history. Buyers are `@example.com`
+and email hooks are off — nothing is ever sent.
+
+- `pnpm db:seed` — adds whatever is missing; an event already seeded is
+  skipped with its orders, a sponsor with the same name is kept.
+- `pnpm db:seed --reset` — first **empties** events, ticket types, orders,
+  tickets, promo codes, gate passes, door scans and sponsors, and removes
+  their cover and logo objects (users, sessions and settings stay). Refused
+  unless the database is local and not `_e2e`, and `APP_ENV`/`NODE_ENV`
+  are not production or staging (`scripts/seed/guard.ts`).
+- Settings are written only when none are saved yet.
+- Needs Postgres and MinIO running (`docker compose up -d`).
 
 Run the background worker (email, expiry jobs) in a second terminal:
 
@@ -39,28 +66,28 @@ obtain each.
 
 ## Scripts
 
-| Script                     | Purpose                                                                                       |
-| -------------------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm dev`                 | Next.js dev server                                                                            |
-| `pnpm build` / `start`     | Production build / serve                                                                      |
-| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                                               |
-| `pnpm lint`                | ESLint                                                                                        |
-| `pnpm format`              | Prettier                                                                                      |
-| `pnpm test`                | Unit tests (Vitest)                                                                           |
-| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                                          |
-| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs                                  |
-| `pnpm test:e2e`            | Playwright end-to-end                                                                         |
-| `pnpm db:generate`         | Generate a Drizzle migration from the schema                                                  |
-| `pnpm db:migrate`          | Apply migrations                                                                              |
-| `pnpm db:studio`           | Drizzle Studio                                                                                |
-| `pnpm db:seed`             | Seed sample data                                                                              |
-| `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis         |
-| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                        |
-| `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first               |
-| `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                        |
-| `pnpm email:test <to>`     | Send one test message through the configured mailer (`MAILER=ses` to prove SES)               |
-| `pnpm infra:check`         | Read-only audit of AWS, DNS, SES and local services against `docs/infra/` (needs `aws login`) |
-| `pnpm verify`              | **The gate:** typecheck + lint + test + build                                                 |
+| Script                     | Purpose                                                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                 | Next.js dev server                                                                                                                                                        |
+| `pnpm build` / `start`     | Production build / serve                                                                                                                                                  |
+| `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                                                                                                                           |
+| `pnpm lint`                | ESLint                                                                                                                                                                    |
+| `pnpm format`              | Prettier                                                                                                                                                                  |
+| `pnpm test`                | Unit tests (Vitest)                                                                                                                                                       |
+| `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                                                                                                                      |
+| `pnpm test:integration:db` | Postgres-only subset (inventory + concurrency); what CI runs                                                                                                              |
+| `pnpm test:e2e`            | Playwright against a production build on :3100 and its own database (`<DATABASE_URL name>_e2e`, created/migrated/wiped/seeded each run; override with `E2E_DATABASE_URL`) |
+| `pnpm db:generate`         | Generate a Drizzle migration from the schema                                                                                                                              |
+| `pnpm db:migrate`          | Apply migrations                                                                                                                                                          |
+| `pnpm db:studio`           | Drizzle Studio                                                                                                                                                            |
+| `pnpm db:seed [--reset]`   | Realistic demo data through the real services; `--reset` empties events/orders first (dev database only) — see "Demo data"                                                |
+| `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis                                                                                     |
+| `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                                                                                                    |
+| `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first                                                                                           |
+| `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                                                                                                    |
+| `pnpm email:test <to>`     | Send one test message through the configured mailer (`MAILER=ses` to prove SES)                                                                                           |
+| `pnpm infra:check`         | Read-only audit of AWS, DNS, SES and local services against `docs/infra/` (needs `aws login`)                                                                             |
+| `pnpm verify`              | **The gate:** typecheck + lint + test + build                                                                                                                             |
 
 ## Testing
 
@@ -86,6 +113,62 @@ obtain each.
 
 Every service gets unit tests; money and state-machine functions must cover the
 failure path, not just the happy path.
+
+### The gate scanner on a real phone
+
+The door page (`/door`, [ADR-030](DECISIONS.md)) needs the camera, and
+phones only allow it on HTTPS with a real certificate. `next dev
+--experimental-https` is not enough: its certificate is for `localhost`
+only, and the phone reaches your laptop by another name. Use a Cloudflare
+quick tunnel instead (free, no account):
+
+1. `brew install cloudflared`, then with `pnpm dev` running:
+   `cloudflared tunnel --url http://localhost:3000`. It prints an address
+   like `https://<random>.trycloudflare.com`.
+2. For that session, set `SITE_URL` and `BETTER_AUTH_URL` in `.env` to the
+   tunnel address and restart `pnpm dev` (gate-pass QR codes and admin
+   sign-in use them). Put them back afterwards.
+   `*.trycloudflare.com` is already in `allowedDevOrigins` (dev only).
+3. On the laptop, open the tunnel address → admin → an event → Check-in
+   list → **New gate pass**. Scan the pass QR with the phone and open it in
+   Safari or Chrome (not inside Messenger).
+4. Check on an Android phone (Chrome) and an iPhone (Safari): a ticket QR
+   shown on another screen decodes; the torch toggles; locking the phone
+   and coming back shows **Tap to resume**; the iPhone still beeps with
+   the ringer on silent.
+
+Before doors open (4 h before the start) a pass is in **practice** (blue
+banner): scans answer but check nothing in, so testing with real tickets at
+home is safe. Every seeded event is days away, so steps 1–4 all run in
+practice. To see the real answers — green ADMIT, amber "at this gate", red
+ALREADY IN from a second phone, name search with the phone digits, Undo —
+open one event's **Details** tab and set **Starts at** to an hour ago and
+**Registration closes** to before that (a started event never becomes the
+home-page hero). Put it back afterwards, or re-seed with
+`pnpm db:seed --reset`.
+
+**Offline (ADR-034).** Open the pass with signal, wait a moment (the phone
+downloads the ticket list), then switch on airplane mode. Scans answer with "offline" on them and the header counts
+"N to send"; turn signal back on and they go out within 15 s. A ticket
+admitted offline at one gate and online at another shows under **Double
+entries** on the check-in page. On a laptop, Chrome DevTools → Network →
+Offline does the same; `tests/e2e/door-offline.spec.ts` covers it.
+
+**Reload without signal (ADR-035).** The page saves a copy of itself
+through a service worker, **in production builds only** (`pnpm build &&
+pnpm start`, or the deployed site — never `pnpm dev`, where file names
+change on every edit). With airplane mode on, reload `/door`: the saved
+copy opens in offline mode ("Counts as of …" — the header counts are from
+the last load). After **End session** the copy is gone and a reload
+without signal shows "No signal". `pnpm build` bundles the worker first
+(`pnpm sw:build`: `src/app/door/offline/sw.ts` → `public/door/sw.js`,
+git-ignored); `tests/e2e/door-reload.spec.ts` covers it.
+
+If a phone ever seems stuck on an old version of the gate page: Chrome →
+Settings → Site settings → the site → **Clear & reset**; iPhone → Settings
+→ Safari → Advanced → Website Data → the site → Delete. (On a laptop:
+DevTools → Application → Service workers → Unregister.) The worker checks
+for a new version on every page load, so this should never be needed.
 
 ## The quality gate
 

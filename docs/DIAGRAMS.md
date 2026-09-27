@@ -22,6 +22,10 @@ erDiagram
     promo_codes |o--o{ orders : "applied to"
     orders ||--o{ order_events : "audited by"
     orders ||--o{ tickets : issues
+    events ||--o{ door_passes : "gates of"
+    door_passes ||--o{ door_scans : logs
+    tickets |o--o{ door_scans : "scanned as"
+    sponsors |o--o{ events : presents
 
     events {
         uuid id PK
@@ -31,6 +35,7 @@ erDiagram
         timestamptz registration_opens_at
         timestamptz registration_closes_at
         event_status status
+        uuid presenting_sponsor_id FK
     }
     ticket_types {
         uuid id PK
@@ -86,12 +91,49 @@ erDiagram
         text code UK
         text attendee_name
         ticket_status status
+        timestamptz checked_in_at
+        text checked_in_by
+        uuid checked_in_scan_id
+    }
+    door_passes {
+        uuid id PK
+        uuid event_id FK
+        text label
+        text code UK
+        timestamptz revoked_at
+    }
+    door_scans {
+        uuid id PK
+        uuid scan_id UK
+        uuid pass_id FK
+        uuid ticket_id FK
+        door_scan_result result
+        door_scan_method method
+        door_scan_mode mode
+        door_verdict door_verdict
+        uuid supersedes_scan_id
+        timestamptz scanned_at
+        timestamptz received_at
+    }
+    sponsors {
+        uuid id PK
+        text name
+        text website_url
+        sponsor_level level
+        text logo_key UK
+        double logo_width
+        double logo_height
+        sponsor_tile_tone tile_tone
+        boolean active
+        int position
     }
 ```
 
 Money is `bigint` paisa (Invariant 1); `orders.bkash_trx_id` is UNIQUE
 (Invariant 3); `ticket_types` carries a CHECK that
 `quantity_total − quantity_sold − quantity_reserved >= 0` (Invariant 2 backstop).
+A partial unique index on `sponsors.level` allows one presenting partner;
+deleting a sponsor sets `events.presenting_sponsor_id` to null (ADR-032).
 
 ---
 

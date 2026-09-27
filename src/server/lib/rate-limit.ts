@@ -67,8 +67,17 @@ export function createRedisRateLimitStore(redis: IORedis): RateLimitStore {
 // Cached on globalThis like the producer queue: Next dev re-evaluates
 // server modules on reload and would leak a connection each time.
 const g = globalThis as unknown as { __rateLimitStore?: RateLimitStore };
+/**
+ * Connects on the first hit, not when a route module loads: limiters are
+ * built at module scope, and `next build` loads every route (ADR-036) —
+ * it must not need Redis, nor open a connection it never uses. A missing
+ * REDIS_URL then surfaces on that hit, through the limiter's `onError`.
+ */
 export function redisRateLimitStore(): RateLimitStore {
-  return (g.__rateLimitStore ??= createRedisRateLimitStore(
-    createRedisConnection(process.env, 'producer'),
-  ));
+  return {
+    hit: (key, windowSeconds) =>
+      (g.__rateLimitStore ??= createRedisRateLimitStore(
+        createRedisConnection(process.env, 'producer'),
+      )).hit(key, windowSeconds),
+  };
 }

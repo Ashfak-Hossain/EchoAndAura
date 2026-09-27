@@ -16,7 +16,9 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  // Six workers share one Node process; a PDF render elsewhere can hold the
+  // event loop for seconds, so the sign-in action gets a realistic budget.
+  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
 }
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
@@ -56,7 +58,7 @@ test.describe('home page (A1)', () => {
 
     await page.goto('/admin/events/new');
     await page.getByLabel('Title', { exact: true }).fill(title);
-    await page.getByLabel('Venue').fill('Gulshan Society Hall');
+    await page.getByLabel('Venue', { exact: true }).fill('Gulshan Society Hall');
     await page.getByLabel(/^Starts at/).fill(dhakaInput(startsAt));
     await page.getByLabel(/^Registration opens/).fill('2026-01-01T10:00');
     await page.getByLabel(/^Registration closes/).fill(dhakaInput(closesAt));
@@ -90,21 +92,28 @@ test.describe('home page (A1)', () => {
       await expect(hero).toHaveAttribute('data-phase', 'closing_soon');
       await expect(hero.getByRole('heading', { level: 1 })).toHaveText(title);
       await expect(hero.getByText('Gulshan Society Hall')).toBeVisible();
+      // Case-insensitive substring: the price line reads "From ৳600.00".
       await expect(hero.getByText('from ৳600.00')).toBeVisible();
-      await expect(hero.getByText('Closing soon')).toBeVisible();
+      // exact: the phase sentence also starts with "Closing soon."
+      await expect(hero.getByText('Closing soon', { exact: true })).toBeVisible();
+      // The countdown hydrates and names itself to the minute (the close is < 1 h away).
+      await expect(hero.getByRole('timer')).toHaveAttribute(
+        'aria-label',
+        /^Registration closes in 0 days, 0 hours, \d+ minutes?$/,
+      );
       await expect(hero.getByTestId('hero-cover')).toBeVisible();
       await expect(hero.getByRole('link', { name: /get tickets/i })).toHaveAttribute(
         'href',
         `/events/${slug}/register`,
       );
-      await expect(hero.getByRole('link', { name: /^details$/i })).toHaveAttribute(
+      await expect(hero.getByRole('link', { name: /event details/i })).toHaveAttribute(
         'href',
         `/events/${slug}`,
       );
       await expect(page.getByTestId('home-dormant')).toHaveCount(0);
 
-      // Trust points are always there.
-      await expect(page.getByRole('heading', { name: 'Paid by bKash' })).toBeVisible();
+      // "How it works" is always there.
+      await expect(page.getByRole('heading', { name: 'Pay by bKash' })).toBeVisible();
 
       // Share preview of the home page names the next event and uses its cover.
       const meta = (p: string) =>

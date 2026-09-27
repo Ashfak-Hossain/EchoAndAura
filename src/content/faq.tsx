@@ -1,26 +1,44 @@
 import Link from 'next/link';
 import type { FaqItem } from '@/components/public/faq-accordion';
-import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE, VERIFICATION_SLA } from './site';
+
+/**
+ * Canvas 5 (A7.4): the questions grouped by what people are doing. Ids are
+ * jump-link anchors (`/faq#paying-by-bkash`) — the topics are navigation,
+ * not filters. The page lists topics in this order.
+ */
+export const FAQ_TOPICS = [
+  { id: 'tickets-and-entry', label: 'Tickets & entry' },
+  { id: 'paying-by-bkash', label: 'Paying by bKash' },
+  { id: 'orders-and-holds', label: 'Orders & holds' },
+  { id: 'changes-and-refunds', label: 'Changes & refunds' },
+] as const;
+export type FaqTopicId = (typeof FAQ_TOPICS)[number]['id'];
+
+export type FaqEntry = FaqItem & { topic: FaqTopicId };
+import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
 
 /**
  * A7 FAQ copy. Order matters: the questions people actually ask, most
  * common first. Ids are the shareable anchors (`/faq#wrong-trxid`) — treat
- * them as permanent once published.
+ * them as permanent once published. A function of the verification promise
+ * (B14 settings) so the FAQ quotes what the organizer actually promised.
  */
-export const FAQ_ITEMS: FaqItem[] = [
+export const faqItems = (verificationPromise: string): FaqEntry[] => [
   {
     id: 'when-do-tickets-arrive',
+    topic: 'tickets-and-entry',
     question: 'How long until my tickets arrive?',
     answer: (
       <p>
-        A person checks your bKash transaction against the statement — {VERIFICATION_SLA}. When it
-        matches, the tickets are emailed straight away and your order page updates itself. If
+        A person checks your bKash transaction against the statement — {verificationPromise}. When
+        it matches, the tickets are emailed straight away and your order page updates itself. If
         something is wrong you get an email explaining what to do.
       </p>
     ),
   },
   {
     id: 'wrong-trxid',
+    topic: 'paying-by-bkash',
     question: 'I typed the wrong TrxID. What now?',
     answer: (
       <>
@@ -42,29 +60,46 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     id: 'someone-else',
+    topic: 'changes-and-refunds',
     question: 'Can someone else use my ticket?',
     answer: (
       <p>
         Yes. Every ticket carries a name, and you can change it on the ticket page (the link in your
         tickets email) until registration closes {REGISTRATION_CLOSES_DAYS_BEFORE} days before the
-        event. After that the door list is printed and the names are fixed. The person at the door
-        needs the name and the ticket code, nothing else.
+        event. After that the names are fixed. At the door they need the ticket — its QR, or the
+        ticket code — nothing else.
       </p>
     ),
   },
   {
     id: 'print',
+    topic: 'tickets-and-entry',
     question: 'Do I need to print anything?',
     answer: (
       <p>
-        No. Show the ticket on your phone, or just give your name and ticket code — the door works
-        from a printed list, not a scanner. A printable PDF is on every ticket page for people who
-        prefer paper.
+        No. Show the QR on your phone and it is scanned at the door. No signal, or a flat battery?
+        Give your ticket code, or your name — then staff ask for the last 3 digits of the phone
+        number that bought the ticket. A printable PDF is on every ticket page for people who prefer
+        paper.
+      </p>
+    ),
+  },
+  {
+    id: 'screenshot',
+    topic: 'tickets-and-entry',
+    question: 'Can I show a screenshot of my ticket?',
+    answer: (
+      <p>
+        Yes. A screenshot of the QR scans the same as the ticket page. Each ticket admits one
+        person, once — the first scan wins — so do not post or share it: if a copy is scanned before
+        you arrive, the ticket has already been used. To pass a ticket on, send it to that one
+        person and change the name on its ticket page.
       </p>
     ),
   },
   {
     id: 'no-card-payment',
+    topic: 'paying-by-bkash',
     question: 'Why is there no card payment?',
     answer: (
       <p>
@@ -77,6 +112,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     id: 'hold-expired',
+    topic: 'orders-and-holds',
     question: 'My hold expired but I sent the money',
     answer: (
       <p>
@@ -90,6 +126,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     id: 'find-my-order',
+    topic: 'orders-and-holds',
     question: 'I closed the page. How do I get back to my order?',
     answer: (
       <p>

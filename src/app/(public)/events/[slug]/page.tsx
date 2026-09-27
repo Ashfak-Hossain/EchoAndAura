@@ -1,21 +1,25 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';
+import { offerSummary } from '@/server/lib/event-offer';
 import { eventPhase } from '@/server/lib/event-phase';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
-import { ticketAvailability } from '@/server/lib/event-phase';
 import { formatBDT } from '@/server/lib/money';
+import { VENUE_PRIVATE_NOTE, publicVenue, publicVenueLine } from '@/server/lib/venue';
+import { PhaseChip } from '@/components/public/phase-chip';
+import { PresentedBy } from '@/components/public/sponsors/presented-by';
 import { RichText } from '@/components/rich-text';
-import { REGISTRATION_CLOSES_DAYS_BEFORE, VERIFICATION_SLA } from '@/content/site';
-import { facebookPageUrl } from '@/lib/env.public';
+import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
+import { getSiteSettings } from '@/lib/settings';
+import { getPublicSponsors } from '@/lib/sponsors';
 import { buildEventMetadata, siteUrl } from '@/lib/seo';
 import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { EventCta } from './cta';
 import { CalendarIcon, PinIcon } from '../../home/icons';
-import { PhaseChip } from '../../home/phase-chip';
 import { PhaseNotice } from './phase-notice';
 import { ShareRow } from './share-row';
 import { TicketList } from './ticket-list';
@@ -40,7 +44,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return buildEventMetadata({
     event,
     coverUrl: eventsService.coverImageUrl(event),
-    fromPricePaisa: ticketTypes.length ? Math.min(...ticketTypes.map((t) => t.pricePaisa)) : null,
+    // Same from-price rule as the page and the home cards (ADR-032): a share
+    // preview must never quote an Early Bird that has ended or sold out.
+    fromPricePaisa: offerSummary(ticketTypes, event, new Date()).fromPricePaisa,
     siteUrl: siteUrl(),
   });
 }
@@ -60,25 +66,29 @@ export default async function PublicEventPage({ params }: Props) {
   const phase = eventPhase({ event, availableTotal, now });
   const coverUrl = eventsService.coverImageUrl(event);
   const pageUrl = `${siteUrl()}/events/${event.slug}`;
-  const facebook = facebookPageUrl();
+  const [settings, sponsors] = await Promise.all([getSiteSettings(), getPublicSponsors()]);
+  const facebook = settings.facebookPageUrl;
+  // Looked up in the active list the footer already loaded (React-cached, no
+  // extra query): a hidden presenter shows nothing; a deleted one is already
+  // null (ON DELETE SET NULL).
+  const presenter = event.presentingSponsorId
+    ? (sponsors.find((s) => s.id === event.presentingSponsorId) ?? null)
+    : null;
   const past = phase === 'past';
 
   const dateLine = `${formatDhakaLong(event.startsAt)} (Dhaka)`;
-  const mapsHref = event.venue
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`
+  // The event came through forPublic: a private venue is already gone.
+  const venue = publicVenue(event);
+  const venueLine = publicVenueLine(event);
+  const mapsHref = venue.mapsQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.mapsQuery)}`
     : null;
 
   const selling = phase === 'open' || phase === 'closing_soon';
-  const fromPricePaisa = ticketTypes.length
-    ? Math.min(...ticketTypes.map((t) => t.pricePaisa))
-    : null;
-  // The open type whose sales end soonest reads as the deal (an Early Bird).
-  const highlightId =
-    selling && ticketTypes.length > 1
-      ? (ticketTypes
-          .filter((t) => ticketAvailability(t, now).kind === 'left' && t.salesEndsAt)
-          .sort((a, b) => a.salesEndsAt!.getTime() - b.salesEndsAt!.getTime())[0]?.id ?? null)
-      : null;
+  // The same rule as the home page's cards (Canvas 6, decision 5): the
+  // from-price counts what can still be bought, and the Early Bird row is
+  // highlighted only while it sells.
+  const offer = offerSummary(ticketTypes, event, now);
 
   const cta = (
     <EventCta
@@ -112,7 +122,7 @@ export default async function PublicEventPage({ params }: Props) {
         phase={phase}
         now={now}
         compact
-        highlightId={highlightId}
+        highlightId={offer.highlightId}
       />
       {withCta ? <div className="flex flex-col gap-2">{cta}</div> : null}
       <p className="flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-border pt-3 text-center text-[12px] text-muted-foreground">
@@ -128,16 +138,21 @@ export default async function PublicEventPage({ params }: Props) {
       {/* Title band: the cover as a darkened backdrop on desktop, on top on mobile */}
       <section className={cn('relative overflow-hidden bg-[#14120f] text-background')}>
         <div
-          className={cn(
-            'relative aspect-[16/10] w-full bg-[#1a2a20] lg:hidden',
-            past && 'grayscale',
-          )}
+          className={cn('relative aspect-16/10 w-full bg-[#1a2a20] lg:hidden', past && 'grayscale')}
         >
           {coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            // Both covers span the viewport: one `sizes`, so one srcset,
+            // so the browser picks the same file for both and fetches it
+            // once, although one of the two is display:none (ADR-033).
+            // Each is the largest paint at its width, so neither is lazy.
+            <Image
               src={coverUrl}
               alt=""
+              width={1200}
+              height={630}
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
               className="size-full object-cover"
               data-testid="event-cover-mobile"
             />
@@ -145,10 +160,14 @@ export default async function PublicEventPage({ params }: Props) {
         </div>
         <div aria-hidden="true" className="absolute inset-0 hidden lg:block">
           {coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={coverUrl}
               alt=""
+              width={1200}
+              height={630}
+              sizes="100vw"
+              loading="eager"
+              fetchPriority="high"
               className={cn('size-full object-cover opacity-90', past && 'grayscale')}
               data-testid="event-cover"
             />
@@ -157,19 +176,28 @@ export default async function PublicEventPage({ params }: Props) {
           )}
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(20_18_15/0.96)_0%,rgb(20_18_15/0.85)_45%,rgb(20_18_15/0.25)_100%)]" />
         </div>
-        <div className="relative mx-auto flex w-full max-w-360 flex-col justify-end gap-3 px-4 pt-5 pb-6 lg:min-h-[480px] lg:max-w-360 lg:gap-4 lg:px-16 lg:py-12">
-          <Link href="/" className="text-sm text-[#a8a29a] hover:text-background">
-            ← All events
+        <div className="relative mx-auto flex w-full max-w-360 flex-col justify-end gap-3 px-4 pt-5 pb-6 lg:min-h-120 lg:max-w-360 lg:gap-4 lg:px-16 lg:py-12">
+          <Link
+            href={past ? '/archive' : '/events'}
+            className="text-sm text-[#a8a29a] hover:text-background"
+          >
+            {past ? '← Past events' : '← All events'}
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <PhaseChip phase={phase} registrationOpensAt={event.registrationOpensAt} size="sm" />
+            <PhaseChip
+              phase={phase}
+              registrationOpensAt={event.registrationOpensAt}
+              earlyBirdOnSale={offer.earlyBirdOnSale}
+              variant="card"
+              size="sm"
+            />
             {selling && event.registrationClosesAt ? (
               <span className="text-[12px] tracking-[0.08em] text-[#c9c3b7] uppercase tabular">
                 closes {formatDhakaShort(event.registrationClosesAt)}
               </span>
             ) : null}
           </div>
-          <h1 className="max-w-[760px] font-heading text-[34px] leading-[1.05] font-extrabold tracking-[-0.025em] text-pretty lg:text-[56px] lg:leading-[1.02]">
+          <h1 className="max-w-190 font-heading text-[34px] leading-[1.05] font-extrabold tracking-tight text-pretty lg:text-[56px] lg:leading-[1.02]">
             {event.title}
           </h1>
           <div className="flex flex-col gap-1.5 text-[15px] text-[#e6e1d6] lg:flex-row lg:flex-wrap lg:gap-7 lg:text-[17px]">
@@ -177,13 +205,14 @@ export default async function PublicEventPage({ params }: Props) {
               <CalendarIcon className="shrink-0" />
               {past ? `Happened ${dateLine}` : dateLine}
             </p>
-            {event.venue ? (
-              <p className="flex items-center gap-2">
+            {venueLine ? (
+              <p className="flex items-center gap-2" data-testid="event-venue-line">
                 <PinIcon className="shrink-0" />
-                {event.venue}
+                {venueLine}
               </p>
             ) : null}
           </div>
+          {presenter ? <PresentedBy sponsor={presenter} /> : null}
         </div>
       </section>
 
@@ -216,9 +245,17 @@ export default async function PublicEventPage({ params }: Props) {
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
                 Venue
               </dt>
-              <dd className="line-clamp-2 font-heading text-[15px] font-semibold text-pretty lg:text-[20px]">
-                {event.venue ?? 'To be announced'}
+              <dd
+                className="line-clamp-2 font-heading text-[15px] font-semibold text-pretty lg:text-[20px]"
+                data-testid="event-venue"
+              >
+                {venue.text ?? (venue.isPrivate ? 'Private' : 'To be announced')}
               </dd>
+              {venue.isPrivate ? (
+                <dd className="text-[13px] text-muted-foreground" data-testid="event-venue-note">
+                  {VENUE_PRIVATE_NOTE}
+                </dd>
+              ) : null}
               {mapsHref ? (
                 <dd className="text-[13px]">
                   <a
@@ -237,9 +274,9 @@ export default async function PublicEventPage({ params }: Props) {
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
                 Entry
               </dt>
-              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">Name + code</dd>
+              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">QR ticket</dd>
               <dd className="hidden text-[13px] text-muted-foreground lg:block">
-                Printed door list, no scanner
+                Scanned at the door · name + code works too
               </dd>
             </div>
           </dl>
@@ -254,7 +291,7 @@ export default async function PublicEventPage({ params }: Props) {
               </h2>
               <RichText
                 description={event.description}
-                className="max-w-[640px] text-[16px] text-pretty text-[#2b2925] lg:text-[17px]"
+                className="max-w-160 text-[16px] text-pretty text-[#2b2925] lg:text-[17px]"
               />
             </section>
           ) : null}
@@ -269,7 +306,10 @@ export default async function PublicEventPage({ params }: Props) {
                   Tickets are named. You can change the name on a ticket until registration closes,{' '}
                   {REGISTRATION_CLOSES_DAYS_BEFORE} days before the show.
                 </li>
-                <li>Pay by bKash after registering; a person checks it, {VERIFICATION_SLA}.</li>
+                <li>
+                  Pay by bKash after registering; a person checks it, {settings.verificationPromise}
+                  .
+                </li>
                 <li>No refunds through the app — see the refund policy for cancellations.</li>
               </ul>
             </section>
@@ -284,11 +324,17 @@ export default async function PublicEventPage({ params }: Props) {
         </aside>
       </div>
 
-      {/* Mobile sticky CTA bar */}
+      {/* Mobile sticky CTA bar. The price sits beside a plain "Register"
+          only while open. Closing soon, the button carries the count
+          ("Register — 31 tickets left") and needs the whole row, with the
+          close time under it (A2 closing-soon frame); beside the price it
+          pushed a 390px page sideways. */}
       <div className="sticky bottom-0 mt-auto flex items-center gap-3 border-t border-border bg-background/95 px-4 pt-3 pb-5 shadow-[0_-4px_12px_rgb(28_26_23/0.08)] backdrop-blur lg:hidden">
-        {fromPricePaisa !== null && selling ? (
+        {offer.fromPricePaisa !== null && phase === 'open' ? (
           <div className="flex shrink-0 flex-col">
-            <span className="text-[15px] font-bold tabular">from {formatBDT(fromPricePaisa)}</span>
+            <span className="text-[15px] font-bold tabular">
+              from {formatBDT(offer.fromPricePaisa)}
+            </span>
             {event.registrationClosesAt ? (
               <span className="text-[12px] text-muted-foreground tabular">
                 closes {formatDhakaShort(event.registrationClosesAt)}
@@ -296,7 +342,10 @@ export default async function PublicEventPage({ params }: Props) {
             ) : null}
           </div>
         ) : null}
-        <div className="flex flex-1 flex-col gap-2">{cta}</div>
+        {/* min-w-0: however long the label, the bar never widens the page. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-2" data-testid="mobile-cta">
+          {cta}
+        </div>
       </div>
     </article>
   );

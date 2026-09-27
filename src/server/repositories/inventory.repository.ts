@@ -31,12 +31,21 @@ export interface InventoryRepository {
    * @throws InventoryStateError when fewer than `quantity` are held.
    */
   convertToSold(ticketTypeId: string, quantity: number, tx?: DbExecutor): Promise<void>;
+  /**
+   * Put `quantity` SOLD tickets back on sale (ticket cancelled after
+   * issue). Distinct from `release`: a cancelled ticket was paid for and
+   * sits in `quantity_sold`, not `quantity_reserved` — releasing it from
+   * the held counter would free a seat some other order is holding.
+   * @throws InventoryStateError when fewer than `quantity` are sold.
+   */
+  releaseSold(ticketTypeId: string, quantity: number, tx?: DbExecutor): Promise<void>;
 }
 
 // Constraint names as generated in drizzle/0000_*.sql. The CHECKs are the
 // backstop: if the WHERE clause ever regressed, Postgres still refuses.
 const AVAILABILITY_CHECK = 'ticket_types_availability_nonneg';
 const RESERVED_CHECK = 'ticket_types_reserved_nonneg';
+const SOLD_CHECK = 'ticket_types_sold_nonneg';
 
 // Defence in depth. The service enforces the 1–10 business rule; the sole
 // writer refuses anything that would move a counter the wrong way, because
@@ -119,5 +128,29 @@ export const inventoryRepository: InventoryRepository = {
       throw err;
     }
     if (rows.length !== 1) throw new InventoryStateError(ticketTypeId, 'convertToSold');
+  },
+
+  async releaseSold(ticketTypeId, quantity, tx = db) {
+    assertPositiveInteger(quantity);
+    let rows: { id: string }[];
+    try {
+      // UPDATE ticket_types SET quantity_sold = quantity_sold - $qty
+      // WHERE id = $id AND quantity_sold >= $qty
+      rows = await tx
+        .update(ticketTypes)
+        .set({
+          quantitySold: sql`${ticketTypes.quantitySold} - ${quantity}`,
+        })
+        .where(
+          and(eq(ticketTypes.id, ticketTypeId), sql`${ticketTypes.quantitySold} >= ${quantity}`),
+        )
+        .returning({ id: ticketTypes.id });
+    } catch (err: unknown) {
+      if (isCheckViolation(err, SOLD_CHECK)) {
+        throw new InventoryStateError(ticketTypeId, 'releaseSold');
+      }
+      throw err;
+    }
+    if (rows.length !== 1) throw new InventoryStateError(ticketTypeId, 'releaseSold');
   },
 };

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { e2eDatabaseUrl } from './tests/e2e/prepare-db';
 
 /**
  * E2E runs against a PRODUCTION build on its own port, not the dev server.
@@ -7,8 +8,9 @@ import { defineConfig, devices } from '@playwright/test';
  * deterministic and is what CI runs. Next 16 keeps dev output in `.next/dev`,
  * so `pnpm dev` can keep running alongside.
  *
- * Needs `.env` (Next loads it for `next start`), Postgres + MinIO from
- * docker compose, and a seeded admin (`pnpm admin:create`).
+ * Needs `.env` (`pnpm test:e2e` loads it), Postgres + MinIO from docker
+ * compose. The suite runs against its own database (see prepare-db.ts):
+ * created, migrated, wiped and seeded with the admin on every run.
  */
 const PORT = 3100;
 const baseURL = `http://localhost:${PORT}`;
@@ -25,7 +27,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `pnpm build && pnpm start -p ${PORT}`,
+    command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && pnpm start -p ${PORT}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
@@ -37,6 +39,7 @@ export default defineConfig({
     // and OG URLs) is deliberately left as configured — the specs assert it.
     env: {
       ...process.env,
+      DATABASE_URL: e2eDatabaseUrl(),
       MAILER: 'log',
       E2E_EXPOSE_MAGIC_LINK: '1',
       APP_ENV: 'test',

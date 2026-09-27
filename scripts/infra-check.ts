@@ -16,6 +16,8 @@ const exec = promisify(execFile);
 const ACCOUNT = process.env.AWS_ACCOUNT_ID?.trim() ?? '';
 const REGION = 'ap-south-1';
 const DOMAIN = 'echoandaura.com';
+/** The production VPS (docs/infra/SERVER.md). */
+const SERVER_IPV4 = '160.25.226.166';
 const DKIM_TOKENS = [
   'tiqho3f6k6gqjjucwewakfvqyjmiu46q',
   'bjtddvusgm23hci2bzarxllb7py7l7kk',
@@ -222,6 +224,11 @@ const checks: Check[] = [
   ),
   dnsCheck('MAIL FROM SPF', 'TXT', `mail.${DOMAIN}`, (l) =>
     l.some((x) => x.includes('include:amazonses.com')) ? null : 'missing SPF on mail.',
+  ),
+  // DNS only on purpose (CLOUDFLARE.md): a proxied record would answer with
+  // Cloudflare's addresses, and the deploy call could meet its bot checks.
+  dnsCheck('deploy → the server, DNS only', 'A', `deploy.${DOMAIN}`, (l) =>
+    l.length === 1 && l[0] === SERVER_IPV4 ? null : `expected exactly ${SERVER_IPV4}`,
   ),
   // ---- local services ----
   {

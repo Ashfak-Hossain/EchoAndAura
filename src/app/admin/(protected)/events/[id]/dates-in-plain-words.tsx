@@ -1,4 +1,5 @@
 import type { EventRecord } from '@/server/repositories/events.repository';
+import { publicVenueLine } from '@/server/lib/venue';
 import { formatDhakaShort } from '@/lib/time';
 
 /**
@@ -11,7 +12,7 @@ function Strong({ children }: { children: React.ReactNode }) {
 
 export function DatesInPlainWords({ event }: { event: EventRecord }) {
   return (
-    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-[18px]">
+    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4.5">
       <h3 className="text-[15px] font-semibold">Dates in plain words</h3>
       <p className="text-sm leading-relaxed text-[#4a4640]">
         {event.registrationOpensAt ? (
@@ -32,6 +33,12 @@ export function DatesInPlainWords({ event }: { event: EventRecord }) {
         )}
         doors open <Strong>{formatDhakaShort(event.startsAt)}</Strong>. All times Dhaka.
       </p>
+      {event.venueHidden ? (
+        <p className="text-sm leading-relaxed text-[#4a4640]" data-testid="venue-private-summary">
+          Venue: <Strong>private</Strong> — the public sees{' '}
+          <Strong>“{publicVenueLine(event)}”</Strong>. Ticket holders get {event.venue}.
+        </p>
+      ) : null}
       <p className="border-t border-border pt-3 font-mono text-xs leading-relaxed text-muted-foreground">
         Stored in UTC · rendered Asia/Dhaka
       </p>

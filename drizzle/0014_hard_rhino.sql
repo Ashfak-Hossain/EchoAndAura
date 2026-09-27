@@ -1,0 +1,3 @@
+ALTER TABLE "orders" ALTER COLUMN "buyer_phone" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN "complimentary_reason" text;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_complimentary_free" CHECK ("orders"."complimentary_reason" IS NULL OR ("orders"."discount_paisa" = "orders"."subtotal_paisa" AND "orders"."bkash_trx_id" IS NULL AND "orders"."promo_code_id" IS NULL));

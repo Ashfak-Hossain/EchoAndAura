@@ -13,6 +13,8 @@ New to the codebase? Read in this order:
 | [DIAGRAMS.md](DIAGRAMS.md)                 | ER, domain class, architecture, order state-machine, and payment sequence diagrams (Mermaid).                                               |
 | [DECISIONS.md](DECISIONS.md)               | Architecture decision records (ADRs). Non-obvious choices, never deleted — superseded entries are marked.                                   |
 | [REQUIREMENTS.md](REQUIREMENTS.md)         | Product scope — what is and isn't in the MVP.                                                                                               |
+| [DEPLOY.md](DEPLOY.md)                     | How code reaches production: CI, images on GHCR, Dokploy, rollback, running a script on the server.                                         |
+| [infra/SERVER.md](infra/SERVER.md)         | The production VPS: how to get in, every change made to it and why, a one-command check, how to rebuild it.                                 |
 | [infra/AWS.md](infra/AWS.md)               | The AWS account: principals, the send-only policy, budgets, SES state, runbooks (rotate key, budget alert). `pnpm infra:check` verifies it. |
 | [infra/CLOUDFLARE.md](infra/CLOUDFLARE.md) | Domain, the authoritative DNS record table, Email Routing, R2 plan, DMARC runbook.                                                          |
 | [infra/SECRETS.md](infra/SECRETS.md)       | Every credential: used by, where deployed, blast radius, how to rotate. Names only — values live in Bitwarden.                              |

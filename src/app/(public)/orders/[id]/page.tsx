@@ -9,8 +9,7 @@ import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-rea
 import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
-import { VERIFICATION_SLA } from '@/content/site';
-import { bkashReceiveNumber, organizerContactEmail } from '@/lib/env.public';
+import { getSiteSettings } from '@/lib/settings';
 import { formatDhakaLong } from '@/lib/time';
 import { submitPaymentAction } from './actions';
 import { CheckingPayment } from './checking-payment';
@@ -64,11 +63,14 @@ function frameOf({ order }: OrderView, now: Date): Frame {
 // left them.
 export default async function OrderPage({ params }: Props) {
   const { id } = await params;
-  const view = await load(id);
-  const { order, event, ticketType, events, tickets } = view;
+  const [view, settings] = await Promise.all([load(id), getSiteSettings()]);
+  const { order, event, ticketType, events, tickets, promoCode } = view;
   const frame = frameOf(view, new Date());
-  const receiveNumber = bkashReceiveNumber();
-  const contactEmail = organizerContactEmail();
+  const receiveNumber = settings.bkashReceiveNumber;
+  const contactEmail = settings.supportEmail;
+  // The bKash menu item differs by account type (B14): personal accounts
+  // receive by "Send Money", merchant accounts by "Payment".
+  const merchant = settings.bkashAccountType === 'merchant';
   const contact = contactEmail ? (
     <>
       {' '}
@@ -83,6 +85,9 @@ export default async function OrderPage({ params }: Props) {
     (e) => e.action === 'payment.submitted' || e.action === 'payment.updated',
   );
   const lastApproval = newestFirst.find((e) => e.action === 'payment.approved');
+  // B13: a comp was never paid for. Its reason is internal and never shown here.
+  const comp = order.complimentaryReason !== null;
+  const compIssued = newestFirst.find((e) => e.action === 'order.comp_issued');
   const lastRejection = newestFirst.find((e) => e.action === 'payment.rejected');
 
   return (
@@ -118,6 +123,13 @@ export default async function OrderPage({ params }: Props) {
             </div>
             <p className="text-sm text-muted-foreground tabular">
               {order.quantity} × {ticketType.name} at <Money paisa={order.unitPricePaisa} />
+              {order.discountPaisa > 0 ? (
+                <span className="text-[#17603b]" data-testid="order-discount">
+                  {' · '}
+                  <Money paisa={order.subtotalPaisa} /> − <Money paisa={order.discountPaisa} />{' '}
+                  {promoCode ? `with ${promoCode}` : 'discount'}
+                </span>
+              ) : null}
             </p>
             {order.holdExpiresAt ? (
               <p className="border-t border-border pt-3 text-sm leading-relaxed">
@@ -134,11 +146,17 @@ export default async function OrderPage({ params }: Props) {
             </h2>
             <ol className="flex flex-col gap-4">
               <Step n={1}>
-                Open the bKash app and choose <strong>Send Money</strong>.
+                Open the bKash app and choose{' '}
+                <strong data-testid="bkash-menu">{merchant ? 'Payment' : 'Send Money'}</strong>.
               </Step>
               <Step n={2}>
                 Send exactly <Money paisa={order.totalPaisa} className="font-semibold" /> to this
-                number — it is a personal account.
+                number
+                {settings.bkashAccountName
+                  ? ` — the account is in the name of ${settings.bkashAccountName}.`
+                  : merchant
+                    ? ' — it is a merchant account.'
+                    : ' — it is a personal account.'}
                 <div className="mt-2">
                   {receiveNumber ? (
                     <CopyField label="bKash number" value={receiveNumber} />
@@ -176,8 +194,8 @@ export default async function OrderPage({ params }: Props) {
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
             <h2 className="text-[15px] font-semibold">What happens next</h2>
             <p className="text-sm leading-relaxed text-[#4a4640]">
-              A person checks your transaction against the bKash statement — {VERIFICATION_SLA}.
-              When it matches, your tickets arrive by email at{' '}
+              A person checks your transaction against the bKash statement —{' '}
+              {settings.verificationPromise}. When it matches, your tickets arrive by email at{' '}
               <span className="font-medium text-foreground">{order.buyerEmail}</span> straight away.
               Nothing else is needed from you.
             </p>
@@ -193,7 +211,7 @@ export default async function OrderPage({ params }: Props) {
       {frame === 'checking' ? (
         <CheckingPayment
           firstName={order.buyerName.split(/\s+/)[0] ?? order.buyerName}
-          slaText={VERIFICATION_SLA}
+          slaText={settings.verificationPromise}
           totalPaisa={order.totalPaisa}
           trxId={order.bkashTrxId ?? ''}
           senderMsisdn={order.bkashSenderMsisdn ?? ''}
@@ -250,9 +268,14 @@ export default async function OrderPage({ params }: Props) {
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
             <h2 className="font-heading text-xl font-semibold">You&apos;re in.</h2>
-            <p className="text-sm leading-relaxed">
-              Payment confirmed
-              {lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''}.{' '}
+            <p className="text-sm leading-relaxed" data-testid="issued-line">
+              {comp
+                ? `Complimentary ${tickets.length === 1 ? 'ticket' : 'tickets'} from ${settings.organizerName}${
+                    compIssued ? `, issued on ${formatDhakaLong(compIssued.createdAt)} (Dhaka)` : ''
+                  }.`
+                : `Payment confirmed${
+                    lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''
+                  }.`}{' '}
               {tickets.length === 1 ? 'Your ticket is' : `${tickets.length} tickets are`} in your
               inbox at <strong>{order.buyerEmail}</strong>.
             </p>
@@ -279,9 +302,11 @@ export default async function OrderPage({ params }: Props) {
               </li>
             ))}
           </ul>
-          <p className="text-sm text-muted-foreground tabular">
-            Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
-          </p>
+          {comp ? null : (
+            <p className="text-sm text-muted-foreground tabular">
+              Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
+            </p>
+          )}
         </>
       ) : null}
 

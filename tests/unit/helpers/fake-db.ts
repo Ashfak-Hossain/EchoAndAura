@@ -39,12 +39,15 @@ export function event(over: Partial<EventRecord> = {}): EventRecord {
     title: 'Live — Dhaka',
     description: null,
     venue: null,
+    venueHidden: false,
+    venueArea: null,
     startsAt: new Date('2026-10-01T13:00:00Z'),
     endsAt: null,
     registrationOpensAt: new Date('2026-09-11T13:00:00Z'),
     registrationClosesAt: new Date('2026-09-26T13:00:00Z'),
     status: 'published',
     imageKey: null,
+    presentingSponsorId: null,
     createdAt: T0,
     updatedAt: T0,
     ...over,
@@ -105,6 +108,8 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
 
   const ticketTypes: TicketTypesRepository = {
     listByEvent: async (eventId) => [...state.types.values()].filter((t) => t.eventId === eventId),
+    listByEvents: async (eventIds) =>
+      [...state.types.values()].filter((t) => eventIds.includes(t.eventId)),
     findById: async (id) => state.types.get(id) ?? null,
     capacityByEvent: () => Promise.reject(new Error('unused')),
     insert: () => Promise.reject(new Error('unused')),
@@ -133,6 +138,12 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       t.quantityReserved -= qty;
       t.quantitySold += qty;
     }),
+    releaseSold: vi.fn(async (id, qty, tx) => {
+      expect(tx).toBe(TX);
+      const t = state.types.get(id);
+      if (!t || t.quantitySold < qty) throw new InventoryStateError(id, 'releaseSold');
+      t.quantitySold -= qty;
+    }),
   };
 
   const orders: OrdersRepository = {
@@ -150,6 +161,7 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         bkashTrxId: null,
         bkashSenderMsisdn: null,
         promoCodeId: null,
+        complimentaryReason: null,
         holdExpiresAt: null,
         createdAt: stamp,
         updatedAt: stamp,
@@ -223,7 +235,26 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         })),
     // Mirrors the repository's WHERE: ORed identifier equality + email
     // substring, ANDed with status / event / created range, newest first.
-    search: async (filter, page) => {
+    totalsByStatus: async (filter) => {
+      const { rows } = await orders.search(
+        { ...filter, status: null },
+        { limit: 100_000, offset: 0 },
+      );
+      const acc = new Map<string, { count: number; totalPaisa: number; compCount: number }>();
+      for (const { order } of rows) {
+        const t = acc.get(order.status) ?? { count: 0, totalPaisa: 0, compCount: 0 };
+        acc.set(order.status, {
+          count: t.count + 1,
+          totalPaisa: t.totalPaisa + order.totalPaisa,
+          compCount: t.compCount + (order.complimentaryReason === null ? 0 : 1),
+        });
+      }
+      return [...acc.entries()].map(([status, t]) => ({
+        status: status as OrderRecord['status'],
+        ...t,
+      }));
+    },
+    search: async (filter, page, sort = { column: 'created', desc: true }) => {
       const t = filter.term;
       const hasTerm = Boolean(t && (t.reference || t.trxId || t.phone || t.email));
       const all = state.orders
@@ -242,7 +273,22 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
           if (filter.createdBefore && o.createdAt >= filter.createdBefore) return false;
           return true;
         })
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        .sort((a, b) => {
+          const key = (o: typeof a): number | string =>
+            sort.column === 'created'
+              ? o.createdAt.getTime()
+              : sort.column === 'total'
+                ? o.totalPaisa
+                : sort.column === 'reference'
+                  ? o.reference
+                  : sort.column === 'status'
+                    ? o.status
+                    : o.buyerName;
+          const ka = key(a);
+          const kb = key(b);
+          const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+          return sort.desc ? -cmp : cmp;
+        });
       return {
         total: all.length,
         rows: all.slice(page.offset, page.offset + page.limit).map((o) => ({
@@ -273,6 +319,9 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
             id: `tk-${state.tickets.length + i + 1}`,
             position: i + 1,
             status: 'issued',
+            checkedInAt: null,
+            checkedInBy: null,
+            checkedInScanId: null,
             createdAt: NOW,
             updatedAt: NOW,
             ...r,
@@ -287,6 +336,49 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
       const row = state.tickets.find((t) => t.code === code);
       return row ? { ...row } : null;
     },
+    findByIdForUpdate: async (id, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      return row ? { ...row } : null;
+    },
+    // Conditional like the real UPDATE … WHERE status = 'issued' AND not checked in.
+    cancel: vi.fn(async (id, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || row.status !== 'issued' || row.checkedInAt) return null;
+      row.status = 'cancelled';
+      row.updatedAt = NOW;
+      return { ...row };
+    }),
+    checkIn: vi.fn(async (id, { gate, scanId, at }, tx) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || row.status !== 'issued' || row.checkedInAt) return null;
+      Object.assign(row, { checkedInAt: at ?? NOW, checkedInBy: gate, checkedInScanId: scanId });
+      return { ...row };
+    }),
+    undoCheckIn: vi.fn(async (id, tx, scanId) => {
+      expect(tx).toBe(TX);
+      const row = state.tickets.find((t) => t.id === id);
+      if (!row || !row.checkedInAt || (scanId && row.checkedInScanId !== scanId)) return null;
+      Object.assign(row, { checkedInAt: null, checkedInBy: null, checkedInScanId: null });
+      return { ...row };
+    }),
+    countIssuedByOrder: async (orderId, tx) => {
+      expect(tx).toBe(TX);
+      return state.tickets.filter((t) => t.orderId === orderId && t.status === 'issued').length;
+    },
+    listForEvent: async (eventId) =>
+      state.tickets
+        .filter((t) => t.eventId === eventId)
+        .sort(
+          (a, b) => a.attendeeName.localeCompare(b.attendeeName) || a.code.localeCompare(b.code),
+        )
+        .map((t) => ({
+          ticket: { ...t },
+          orderReference: state.orders.find((o) => o.id === t.orderId)?.reference ?? '',
+          ticketTypeName: state.types.get(t.ticketTypeId)?.name ?? '',
+        })),
     updateAttendeeName: vi.fn(async (id, expectedName, attendeeName, tx) => {
       expect(tx).toBe(TX);
       const row = state.tickets.find((t) => t.id === id);

@@ -197,12 +197,12 @@ describe('ordersService.createOrder (Postgres)', () => {
 
     // 25 h later: the unsubmitted hold goes, the submitted one waits for a person.
     const later = new Date(NOW.getTime() + 25 * 3_600_000);
-    // Other tests' orders are in the same DB; count only ours.
+    // The job expires every lapsed hold in the database, and other files'
+    // orders share it (the promo suite leaves one at this clock) — so the
+    // bound is every lapsed pending hold, not only this event's.
     const before = (
-      await db.select().from(schema.orders).where(eq(schema.orders.eventId, eventId))
-    ).filter(
-      (o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < later,
-    ).length;
+      await db.select().from(schema.orders).where(eq(schema.orders.status, 'pending_payment'))
+    ).filter((o) => o.holdExpiresAt && o.holdExpiresAt < later).length;
     const result = await svc.expireLapsedHolds(later);
     expect(result.expired).toBeGreaterThanOrEqual(1);
     expect(result.expired).toBeLessThanOrEqual(before);
