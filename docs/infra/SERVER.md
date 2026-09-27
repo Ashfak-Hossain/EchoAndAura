@@ -463,6 +463,85 @@ docker logs echoandaura-app-5nuhfn-migrate-1                                    
 docker exec echoandaura-app-5nuhfn-web-1 node -e "fetch('http://127.0.0.1:3000/api/health').then(async r=>console.log(r.status, await r.text()))"
 ```
 
+### 13. Going public: Cloudflare in front of the site
+
+**Cloudflare zone settings** (checked 2026-09-28, both already correct):
+
+- SSL/TLS encryption mode **Full (strict)**: Cloudflare connects to the
+  server over HTTPS and checks its certificate. **Never "Flexible"**:
+  Cloudflare would then use plain HTTP, Traefik would redirect to HTTPS,
+  and browsers would get "too many redirects".
+- **Always Use HTTPS: off.** Let's Encrypt proves domain control by
+  fetching a file over plain HTTP; if Cloudflare upgraded that request,
+  it would reach Traefik before the certificate exists and issuing would
+  fail. Traefik does the HTTP → HTTPS redirect itself, after the challenge.
+- HSTS: off for now (a months-long browser commitment; Phase 7).
+
+**Traefik trusts Cloudflare's forwarded headers.** The app rate-limits by
+the first address in `X-Forwarded-For` (`src/lib/request-ip.ts`). By
+default Traefik trusts nobody's forwarded headers: it would replace
+Cloudflare's "the visitor is X" with Cloudflare's own address, and every
+buyer would share one rate-limit bucket (the whole country throttled
+together during a sale). Each entrypoint in
+`/etc/dokploy/traefik/traefik.yml` now has:
+
+```yaml
+forwardedHeaders:
+  trustedIPs: [Cloudflare's IPv4 and IPv6 ranges from cloudflare.com/ips, fetched 2026-09-28]
+```
+
+A request from those ranges keeps its `X-Forwarded-For`; a request from
+anywhere else (someone skipping Cloudflare and hitting the IP directly)
+has it replaced, so nobody can fake their address. Added with a script
+that refused to touch an unexpected file, after a dated backup
+(`traefik.yml.bak-2026-09-28`), then `docker restart dokploy-traefik`
+(Traefik reads this file only at start).
+
+- **Undo:** `cp /etc/dokploy/traefik/traefik.yml.bak-2026-09-28 /etc/dokploy/traefik/traefik.yml && docker restart dokploy-traefik`
+- **Watch for:** Dokploy rewrites `traefik.yml` for some settings changes
+  (e.g. the dashboard's own domain or Let's Encrypt email). After any
+  change under Dokploy → Settings → Web Server, check the rule is still
+  there: `grep -c trustedIPs /etc/dokploy/traefik/traefik.yml` must print
+  `2`.
+- **Cloudflare's ranges change rarely**, with notice. Compare with
+  https://www.cloudflare.com/ips/ once a year (with the API key renewal)
+  or when Cloudflare announces a change. The **same list is in the code**
+  (`CLOUDFLARE_RANGES` in `src/lib/client-ip.ts`): change both together.
+
+**Proved on 2026-09-28** with a throwaway `traefik/whoami` container on
+`echoandaura.com/__whoami`, which echoes the headers a request reaches
+the app with (removed right after):
+
+| Request                         | `X-Forwarded-For` at the app                  |
+| ------------------------------- | --------------------------------------------- |
+| Normal, through Cloudflare      | `<visitor>, <Cloudflare edge>`                |
+| Through Cloudflare, with a fake | `1.2.3.4, <visitor>, <Cloudflare edge>`       |
+| Skipping Cloudflare, with fakes | `<sender>` only (Traefik replaced the header) |
+
+So Traefik does its part. The app must then read the list **from the
+right**, skipping Cloudflare, because the left end is the visitor's own
+text: [ADR-037](../DECISIONS.md). `CF-Connecting-IP` passed a fake straight
+through when Cloudflare was skipped, so it is not trusted.
+
+To repeat the test (e.g. after changing Traefik or the ranges):
+
+```sh
+docker run -d --rm --name whoami-test --network dokploy-network \
+  --label traefik.enable=true \
+  --label 'traefik.http.routers.whoami-test.rule=Host(`echoandaura.com`) && PathPrefix(`/__whoami`)' \
+  --label traefik.http.routers.whoami-test.entrypoints=websecure \
+  --label traefik.http.routers.whoami-test.tls.certresolver=letsencrypt \
+  --label traefik.http.routers.whoami-test.priority=1000 \
+  --label traefik.http.services.whoami-test.loadbalancer.server.port=80 \
+  traefik/whoami:latest
+# from a laptop: curl -s https://echoandaura.com/__whoami -H 'X-Forwarded-For: 1.2.3.4' | grep -i forwarded
+docker stop whoami-test    # it echoes headers publicly: never leave it running
+```
+
+Also in `traefik.yml`: `api: insecure: true` is Traefik's own dashboard
+on port 8080 _inside_ the container. That port is not published, so it is
+reachable only from Docker's internal network. Leave it.
+
 ---
 
 ## Verify
@@ -520,15 +599,17 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 
 ## History
 
-| Date       | Change                                                                                                                                                     |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-26 | VPS bought (Ubuntu 22.04 image)                                                                                                                            |
-| 2026-09-27 | Reinstalled with Ubuntu 24.04; updates; SSH keys only; 2 GB swap; automatic security updates on; hostname `echoandaura`                                    |
-| 2026-09-27 | ufw installed and enabled (22, 80, 443, 3000); Docker log limits in `/etc/docker/daemon.json`, before Docker                                               |
-| 2026-09-27 | Dokploy v0.30.7 installed (Docker 28.5.0, Traefik v3.6, Swarm). Owner account created via SSH tunnel; nobody had claimed it in the ~2 h port 3000 was open |
-| 2026-09-27 | Dashboard at https://deploy.echoandaura.com (DNS only, Let's Encrypt). Port 3000 closed; outside scan: only 22, 80, 443 answer                             |
-| 2026-09-27 | Audit of the provider's image: recipes only start qemu-guest-agent; stale recipe logs from other machines removed; one SSH key, root the only shell        |
-| 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside     |
-| 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                  |
-| 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                             |
-| 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                            |
+| Date       | Change                                                                                                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-26 | VPS bought (Ubuntu 22.04 image)                                                                                                                                                           |
+| 2026-09-27 | Reinstalled with Ubuntu 24.04; updates; SSH keys only; 2 GB swap; automatic security updates on; hostname `echoandaura`                                                                   |
+| 2026-09-27 | ufw installed and enabled (22, 80, 443, 3000); Docker log limits in `/etc/docker/daemon.json`, before Docker                                                                              |
+| 2026-09-27 | Dokploy v0.30.7 installed (Docker 28.5.0, Traefik v3.6, Swarm). Owner account created via SSH tunnel; nobody had claimed it in the ~2 h port 3000 was open                                |
+| 2026-09-27 | Dashboard at https://deploy.echoandaura.com (DNS only, Let's Encrypt). Port 3000 closed; outside scan: only 22, 80, 443 answer                                                            |
+| 2026-09-27 | Audit of the provider's image: recipes only start qemu-guest-agent; stale recipe logs from other machines removed; one SSH key, root the only shell                                       |
+| 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside                                    |
+| 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                                                 |
+| 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                                                            |
+| 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                                                           |
+| 2026-09-28 | Cloudflare checked (Full strict, Always Use HTTPS off); Traefik entrypoints trust Cloudflare's ranges for `X-Forwarded-For`                                                               |
+| 2026-09-28 | **Site public**: `echoandaura.com` + `www` (proxied, www → root 301), web domain in Dokploy (Let's Encrypt). whoami test: Traefik trust works; app must read XFF from the right (ADR-037) |

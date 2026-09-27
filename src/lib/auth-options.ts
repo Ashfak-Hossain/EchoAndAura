@@ -4,6 +4,7 @@ import { magicLink } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import * as schema from '@/db/schema';
+import { CLOUDFLARE_RANGES } from '@/lib/client-ip';
 import { MAGIC_LINK_TTL_SECONDS, sendMagicLink } from '@/server/auth/magic-link';
 import { enqueueSignInEmail } from '@/server/queue/producer';
 
@@ -68,6 +69,14 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
     // Table names are plural (users, sessions, accounts, verifications) — see the
     // Auth section of src/db/schema.ts.
     database: drizzleAdapter(db, { provider: 'pg', schema, usePlural: true }),
+    // ADR-037: behind Cloudflare → Traefik, X-Forwarded-For always has two
+    // or more entries. Without trusted proxies better-auth resolves no IP
+    // from such a header and rate-limits /admin/login in one bucket shared
+    // by the whole internet (anyone could keep it locked). With Cloudflare's
+    // ranges it reads from the right, like requestIp().
+    advanced: {
+      ipAddress: { trustedProxies: [...CLOUDFLARE_RANGES] },
+    },
     user: {
       additionalFields: {
         // Read on every session; never accepted from a sign-up/update body.
