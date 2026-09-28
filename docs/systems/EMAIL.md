@@ -154,8 +154,11 @@ Work down; stop at the first hit.
 4. **Queue state:** BullMQ keys live under `bull:orders:*` in Redis;
    `failed` and `delayed` sets show retries in progress. A job stuck in
    `delayed` for minutes is being throttled — check SES quota.
-5. **SES accepted but nothing in the inbox:** SES → Account dashboard →
-   Sending statistics (bounces/complaints). Then have the buyer check
+5. **SES accepted but nothing in the inbox:** a bounce or complaint for
+   that address will have reached the developer's Gmail as an SNS email
+   within about a minute (AWS.md → "Bounce and complaint notifications",
+   which also says what to do). SES → Account dashboard → Sending
+   statistics shows the totals. Then have the buyer check
    spam and search for `tickets@echoandaura.com`. If mail to Gmail lands
    in spam, verify DKIM/SPF/DMARC with `pnpm infra:check` and, in Gmail,
    _Show original_ on a test message.
