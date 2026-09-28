@@ -1,0 +1,55 @@
+name: Release
+
+# ADR-041. A version tag (vX.Y.Z) on a commit that main has already built
+# and deployed. Deploys stay continuous from main (ADR-036): a tag marks a
+# milestone and deploys nothing. It does two things:
+#   - names that commit's images with the version, so a rollback can pin
+#     IMAGE_TAG=v1.0.0 (DEPLOY.md → Rolling back);
+#   - publishes the GitHub Release, with notes generated from the merged PRs
+#     (.github/release.yml).
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/ashfak-hossain
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only what main shipped gets a version: its images exist, and CI
+      # was green on it.
+      - name: The tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A new name for the existing images: nothing is rebuilt, so the
+      # version runs exactly what production ran. Fails if the Deploy
+      # workflow never built this commit.
+      - name: Name the images with the version
+        run: |
+          set -euo pipefail
+          sha="sha-$(git rev-parse --short=7 HEAD)"
+          for image in echoandaura-web echoandaura-worker; do
+            docker buildx imagetools create \
+              -t "$REGISTRY/$image:$GITHUB_REF_NAME" "$REGISTRY/$image:$sha"
+          done
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"

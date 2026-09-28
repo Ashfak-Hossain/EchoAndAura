@@ -1,0 +1,7 @@
+# Every change is reviewed by the maintainer. Money, inventory and the order
+# state machine are called out so a future second owner can be added there.
+*                                   @Ashfak-Hossain
+/src/server/lib/money.ts            @Ashfak-Hossain
+/src/server/services/fulfilment.service.ts @Ashfak-Hossain
+/drizzle/                           @Ashfak-Hossain
+/.github/                           @Ashfak-Hossain

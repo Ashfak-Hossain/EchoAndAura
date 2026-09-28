@@ -1,42 +1,72 @@
 # echoandaura
 
-Single-organizer event ticketing with manual bKash payment verification.
+[![CI](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/ci.yml)
+[![Deploy](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/deploy.yml/badge.svg)](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/deploy.yml)
+[![Uptime](https://uptime.betterstack.com/status-badges/v1/monitor/2yysn.svg)](https://uptime.betterstack.com/?utm_source=status_badge)
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey.svg)](LICENSE)
 
-Public users browse events, register, and pay by bKash transfer. An admin
-verifies each transaction against the bKash statement before tickets are issued
-by email. There is no bKash API integration — the payment model and the
-invariants that protect it are documented in [CLAUDE.md](CLAUDE.md).
+Ticketing for **Echo & Aura**, a live-events organizer in Dhaka:
+**[echoandaura.com](https://echoandaura.com)**.
+
+Buyers pick an event, register, and pay by **bKash transfer**. The
+organizer checks each transaction ID against the bKash statement, and
+approving it sends the tickets by email automatically. At the door, the
+tickets' QR codes are scanned with a phone, including when the phone has
+no signal.
+
+There is no bKash API: payment is verified by a person. The rules that
+protect the money and the seats (integer paisa, an atomic inventory
+update, unique transaction IDs, one fulfilment path, an append-only audit
+trail) are in [CLAUDE.md](CLAUDE.md).
 
 ## Stack
 
-Next.js 16 · React 19 · Node 26 · TypeScript (strict) · Postgres 17 + Drizzle
-(postgres-js) · Redis 7 + BullMQ · Zod · better-auth · pino · Resend + React
-Email · shadcn/ui + Tailwind 4 · Vitest + Playwright · Docker.
+Next.js 16 (App Router) · React 19 · TypeScript (strict) · Node 26 ·
+Postgres 17 + Drizzle · Redis 7 + BullMQ (a separate worker process) ·
+better-auth · Amazon SES + React Email · Cloudflare R2 · Tailwind 4 +
+shadcn/ui · Vitest + Playwright.
 
-## Quick start
+Production is one VPS running Dokploy behind Cloudflare. CI builds the
+images, and every merge to `main` deploys
+([docs/DEPLOY.md](docs/DEPLOY.md)).
 
-See the [Development Guide](docs/DEVELOPMENT.md) for full setup. In short:
+## Run it locally
+
+Needs Node 26, pnpm 11 and Docker. The full guide is
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ```bash
 pnpm install
-cp .env.example .env           # then fill in values
-docker compose up -d           # Postgres + Redis
-pnpm db:migrate && pnpm db:seed
-pnpm dev                       # http://localhost:3000
+cp .env.example .env            # then fill in values (docs/ENVIRONMENT.md)
+docker compose up -d            # Postgres, Redis and MinIO (local R2)
+pnpm db:migrate
+pnpm admin:create               # your admin login
+pnpm db:seed                    # five demo events and ~155 orders
+pnpm dev                        # http://localhost:3000
+pnpm worker                     # second terminal: emails and hold expiry
 ```
 
-`pnpm verify` (typecheck + lint + test + build) is the gate that must pass before
-anything merges.
+`pnpm verify` (typecheck, lint, unit tests, build) must pass before
+anything merges. CI runs it, with the integration tests against a real
+Postgres and Redis.
 
 ## Documentation
 
-- [Development Guide](docs/DEVELOPMENT.md) — setup, scripts, testing, workflow
-- [Architecture](docs/ARCHITECTURE.md) — system design, data model, data flow
-- [Invariants](CLAUDE.md) — the money / inventory / payment rules that must never break
-- [Decisions](docs/DECISIONS.md) — architecture decision records
-- [Requirements](docs/REQUIREMENTS.md) — product scope
-- [Changelog](CHANGELOG.md) — release history
+| Read                                         | For                                                  |
+| -------------------------------------------- | ---------------------------------------------------- |
+| [docs/README.md](docs/README.md)             | the index of every document                          |
+| [CLAUDE.md](CLAUDE.md)                       | the payment model and the invariants                 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | how the system fits together                         |
+| [docs/DECISIONS.md](docs/DECISIONS.md)       | why it is built this way (ADRs)                      |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md)           | what to do when something breaks, and on event night |
+| [CHANGELOG.md](CHANGELOG.md)                 | what each release changed                            |
 
----
+## Security
 
-Private project. Not licensed for reuse or redistribution.
+Please report vulnerabilities privately. [SECURITY.md](SECURITY.md) says
+how.
+
+## License
+
+Proprietary. All rights reserved ([LICENSE](LICENSE)). The code is public
+to read, not to reuse.

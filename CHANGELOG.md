@@ -1,21 +1,20 @@
 # Changelog
 
-All notable changes to this project are documented here, newest first.
-Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
-Entries are added at tag time per [docs/DEVELOPMENT.md § Branching & commits](docs/DEVELOPMENT.md).
+What changed for the organizer and for buyers, per release, newest first.
+Loosely follows [Keep a Changelog](https://keepachangelog.com/). Versions
+are [SemVer](https://semver.org/) tags; how to cut one is in
+[docs/DEVELOPMENT.md → Releases](docs/DEVELOPMENT.md#releases). Every merge
+to `main` deploys, so between releases the merged pull requests are the
+detailed history.
 
 ## [Unreleased]
 
-### Phase 0 — Foundation (2026-09-15)
+Everything before go-live, released together as **1.0.0**. The build log
+is `docs/DECISIONS.md` (ADR-001 onwards) and the pull requests.
 
-Scaffolded and verified; not yet tagged.
-
-- Next.js 16 / React 19 / Node 26 / TypeScript strict; Tailwind 4 + shadcn/ui.
-- Drizzle schema + initial migration `0000_abandoned_rage.sql`; docker-compose
-  (Postgres 17, Redis 7).
-- `src/server/lib/money.ts` (integer paisa) with unit tests; inventory
-  reservation stub (real atomic UPDATE lands in Phase 3).
-- Vitest (unit + integration) including the inventory concurrency test;
-  Playwright config; GitHub Actions CI running `pnpm verify`.
-- Postgres driver: postgres-js. All dependencies pinned to exact versions.
-- `pnpm verify` green.
+- Event pages, registration and bKash payment with manual verification.
+- Tickets by email, with a PDF and a web ticket page.
+- The admin: events, orders, check-in, reports, promo codes and
+  complimentary tickets.
+- A door scanner that also works offline.
+- Production on a monitored VPS, with nightly backups.

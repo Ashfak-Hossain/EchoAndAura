@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm prettier --write --ignore-unknown $CLAUDE_FILE_PATHS 2>/dev/null || true"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh"
           }
         ]
       }
