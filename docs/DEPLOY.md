@@ -3,8 +3,9 @@
 Status: ACTIVE · Last updated: 2026-09-27 · Decision: [ADR-036](DECISIONS.md)
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
-server setup itself (Dokploy, Cloudflare, backups) is in the RUNBOOK once
-Slice D2 is done.
+server itself (Dokploy, backups, disk, monitoring) is recorded in
+[infra/SERVER.md](infra/SERVER.md). What to do when something breaks is in
+[RUNBOOK.md](RUNBOOK.md).
 
 ---
 
@@ -62,7 +63,7 @@ The app, in Dokploy → the compose app → **Environment**:
 schema, so migrations must stay backward compatible: add columns and
 tables freely; remove or rename one only in a later release, after the
 code that used it is gone. If a migration itself damaged data, restore
-from backup (RUNBOOK) — never hand-edit production.
+from backup ([RUNBOOK.md](RUNBOOK.md#restore-from-backup)) — never hand-edit production.
 
 ## Running a script on the server
 

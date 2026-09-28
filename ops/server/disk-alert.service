@@ -1,0 +1,6 @@
+[Unit]
+Description=Telegram alert when the root disk is nearly full (SERVER.md section 18)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/disk-alert

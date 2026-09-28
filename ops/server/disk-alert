@@ -1,0 +1,27 @@
+#!/bin/sh
+# Hourly (disk-alert.timer): a Telegram message when / is above the
+# threshold, at most once a day while it stays high, and one message when it
+# recovers. Installed on the server as /usr/local/sbin/disk-alert.
+# docs/infra/SERVER.md section 18.
+set -eu
+. /etc/echoandaura/alerts.env # TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (mode 600)
+THRESHOLD=${DISK_ALERT_THRESHOLD:-80}
+STAMP=/var/lib/echoandaura/disk-alert.stamp
+used=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+
+send() {
+  curl -fsS -m 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+    --data-urlencode chat_id="$TELEGRAM_CHAT_ID" --data-urlencode text="$1" >/dev/null
+}
+
+if [ "$used" -ge "$THRESHOLD" ]; then
+  # The stamp remembers the last alert, so a full disk sends one message a
+  # day rather than one an hour.
+  if [ ! -f "$STAMP" ] || [ -n "$(find "$STAMP" -mmin +1440)" ]; then
+    send "echoandaura: disk / is at ${used}% (alert at ${THRESHOLD}%). SERVER.md section 17."
+    touch "$STAMP"
+  fi
+elif [ -f "$STAMP" ]; then
+  send "echoandaura: disk / is back to ${used}%."
+  rm -f "$STAMP"
+fi

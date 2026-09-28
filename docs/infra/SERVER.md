@@ -748,6 +748,54 @@ each deploy. The next deploy creates it again.
 **Never** run `docker volume prune` or `docker system prune --volumes`
 here: the Postgres and Redis data live in volumes.
 
+### 18. Monitoring and alerts (2026-09-28)
+
+Something outside the server watches the site, because a check running
+on the server can't report that the server itself is down. Everything
+else reports into one Telegram group and the developer's email. What to
+do when an alert fires is in [../RUNBOOK.md](../RUNBOOK.md). ADR-040
+explains the choices.
+
+| Watches                                                                                                  | How                                                                                                                                                                                   | Alerts           |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| The site can take an order: `https://echoandaura.com/api/health` (Postgres, Redis, **worker heartbeat**) | Better Stack (free plan), every **3 min**, 1 min confirmation, 3 min recovery, 4 regions                                                                                              | email            |
+| The Dokploy dashboard: `https://deploy.echoandaura.com/`                                                 | Better Stack, same settings                                                                                                                                                           | email            |
+| Deploy done, build failed, **database backup** (success and failure), Dokploy restarted                  | Dokploy → Settings → Notifications: `telegram-alerts` and `email-alerts` (Gmail SMTP, `smtp.gmail.com:587`, app password). Docker cleanup, volume backup and server threshold are off | Telegram + email |
+| Disk `/` above **80 %**                                                                                  | `disk-alert.timer` (hourly, up to 5 min random delay) runs `/usr/local/sbin/disk-alert`. It messages at most once a day while the disk stays high, and once when it recovers          | Telegram         |
+
+- **Telegram:** a bot in a private group `echoandaura alerts`, with the
+  developer only for now. Add Raj to the group if he wants the alerts.
+  The bot token and chat ID are in Bitwarden `Telegram alert bot`. On the
+  server they are in `/etc/echoandaura/alerts.env` (root, mode 600).
+- **Why Gmail's SMTP for Dokploy's email, not SES:** the alerts keep
+  arriving when SES is the thing that is broken.
+- **Better Stack's free plan** has email only (no push, no Telegram),
+  3-minute checks and no SSL or domain expiry checks. Worst case, you hear
+  about an outage about 4 minutes in. A Gmail filter on
+  `from:(betterstack.com)` (never spam, always important) makes the email
+  show up as a phone notification.
+- **Disk alert files** are in the repo under `ops/server/`: the script
+  plus its `.service` and `.timer`. They were installed with `scp` to
+  `/tmp`, `install` into `/usr/local/sbin` and `/etc/systemd/system`, then
+  `systemctl enable --now disk-alert.timer`. To change them, edit them in
+  the repo and install again. The script takes `DISK_ALERT_THRESHOLD`
+  for a test, so `DISK_ALERT_THRESHOLD=1 /usr/local/sbin/disk-alert` sends
+  a message now.
+
+**Check:**
+
+- `systemctl list-timers disk-alert.timer` shows the next run.
+- `sha256sum /usr/local/sbin/disk-alert` matches `ops/server/disk-alert`.
+- The Better Stack monitors show Up.
+- Dokploy → Notifications → **Test** posts to the group.
+
+**Not watched yet:**
+
+- CPU and memory. Dokploy's thresholds need its monitoring agent, which
+  costs RAM on a 4 GB box.
+- Certificate and domain expiry (a paid Better Stack feature). The
+  runbook has the dates to watch.
+
 ---
 
 ## Verify
@@ -826,3 +874,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                    |
 | 2026-09-28 | Nightly Postgres backups (§ 16): R2 destination `r2-backups`, `0 21 * * *` UTC (03:00 Dhaka), keep 14. First backup restored on the Mac and matched production exactly                    |
 | 2026-09-28 | Disk 59 % → 49 % (old images, apt cache). Dokploy Daily Docker Cleanup on (never volumes); apt `CleanInterval 7` (§ 17)                                                                   |
+| 2026-09-28 | Monitoring (§ 18): Better Stack on `/api/health` and the dashboard; Dokploy notifications to Telegram + Gmail; hourly disk alert (`ops/server/`)                                          |

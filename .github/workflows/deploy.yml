@@ -108,7 +108,8 @@ jobs:
 
       # The images that will run in production, booted for real: every
       # migration from an empty database, the web server answering its
-      # health check and the home page, the worker staying up.
+      # health check (which includes the worker's heartbeat, ADR-040) and
+      # the home page, the worker staying up.
       - name: Smoke test
         env:
           WEB: ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}

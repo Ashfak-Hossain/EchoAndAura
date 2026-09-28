@@ -20,7 +20,7 @@ New to the codebase? Read in this order:
 | [infra/SECRETS.md](infra/SECRETS.md)       | Every credential: used by, where deployed, blast radius, how to rotate. Names only — values live in Bitwarden.                              |
 | [systems/EMAIL.md](systems/EMAIL.md)       | How an order becomes an email: hooks → queue → worker → SES; retries, audit rows, the "no email arrived" procedure.                         |
 | [../CHANGELOG.md](../CHANGELOG.md)         | What shipped in each tagged release.                                                                                                        |
-| `RUNBOOK.md`                               | Ops — deploy, backup, incident response. _Planned; written once there is infrastructure to document._                                       |
+| [RUNBOOK.md](RUNBOOK.md)                   | When something breaks: where alerts come from, site down, restore from backup, leaked secret, email, disk, the event-night checklist.       |
 
 ## Doc-header convention
 
