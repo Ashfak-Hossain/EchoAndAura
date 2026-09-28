@@ -85,10 +85,61 @@ describe('ses mailer', () => {
       readSesEnv(
         procEnv({
           AWS_SES_REGION: 'ap-south-1',
-          AWS_SES_ACCESS_KEY_ID: 'k',
-          AWS_SES_SECRET_ACCESS_KEY: 's',
+          AWS_SES_ACCESS_KEY_ID: EXAMPLE_KEY_ID,
+          AWS_SES_SECRET_ACCESS_KEY: EXAMPLE_SECRET,
         }),
       ).region,
     ).toBe('ap-south-1');
+  });
+});
+
+// AWS's documented example keys: the right shape, valid nowhere.
+const EXAMPLE_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
+const EXAMPLE_SECRET = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+
+describe('readSesEnv refuses keys that are not keys (2026-09-28)', () => {
+  const procEnv = (vars: Record<string, string>) => vars as unknown as NodeJS.ProcessEnv;
+  const base = {
+    AWS_SES_REGION: 'ap-south-1',
+    AWS_SES_ACCESS_KEY_ID: EXAMPLE_KEY_ID,
+    AWS_SES_SECRET_ACCESS_KEY: EXAMPLE_SECRET,
+  };
+
+  it.each([
+    ['the template placeholder', '<access key id>'],
+    ['a secret key pasted into the id field', EXAMPLE_SECRET],
+    ['a lower-case id', 'akiaiosfodnn7example'],
+    ['a truncated id', 'AKIAIOSFODNN7'],
+    ['an id with a space inside', 'AKIAIOSF ODNN7EXAMPL'],
+  ])('access key id: %s', (_label, value) => {
+    expect(() => readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: value }))).toThrow(
+      /AWS_SES_ACCESS_KEY_ID does not look like/,
+    );
+  });
+
+  it.each([
+    ['the template placeholder', '<secret access key>'],
+    ['the id pasted into the secret field', EXAMPLE_KEY_ID],
+    ['a 39-character secret', EXAMPLE_SECRET.slice(1)],
+  ])('secret: %s', (_label, value) => {
+    expect(() => readSesEnv(procEnv({ ...base, AWS_SES_SECRET_ACCESS_KEY: value }))).toThrow(
+      /AWS_SES_SECRET_ACCESS_KEY does not look like/,
+    );
+  });
+
+  it('never puts the value in the error message', () => {
+    const secret = '<my real secret that must not leak here>';
+    expect(() => readSesEnv(procEnv({ ...base, AWS_SES_SECRET_ACCESS_KEY: secret }))).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining(secret) }),
+    );
+  });
+
+  it('accepts well-formed keys, and temporary (ASIA) ids, with surrounding spaces trimmed', () => {
+    expect(
+      readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: ` ${EXAMPLE_KEY_ID} ` })).accessKeyId,
+    ).toBe(EXAMPLE_KEY_ID);
+    expect(
+      readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: 'ASIAIOSFODNN7EXAMPLE' })).accessKeyId,
+    ).toBe('ASIAIOSFODNN7EXAMPLE');
   });
 });

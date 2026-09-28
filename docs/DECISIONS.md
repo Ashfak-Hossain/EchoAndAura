@@ -2143,6 +2143,15 @@ this server should spare while it is serving a sale.
   (a repo variable) the Deploy workflow skips, and without the Dokploy
   secrets it pushes images but doesn't deploy.
 
+**Found after the first real sales (2026-09-28):** the smoke test boots
+the images on an empty database, so it never renders a ticket. The
+worker image lacked the PDF fonts (the web image gets them through Next's
+file tracing; the worker bundle has none), and a Dokploy Environment still
+held placeholder SES keys; both surfaced only at the first real email.
+The worker now checks both at boot (fonts readable, SES keys shaped like
+keys) and refuses to start otherwise, so the smoke test's "worker stays
+up" catches them, and the smoke test uses AWS's documented example keys.
+
 **Revisit when:** the disk or RAM becomes the limit (a bigger plan comes
 before any architecture change; trimming the worker image to what it
 imports is the first step); zero-downtime deploys matter (two `web`
