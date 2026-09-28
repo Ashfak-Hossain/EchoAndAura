@@ -709,6 +709,45 @@ it, then switch. That belongs in the RUNBOOK (D3). Dokploy's own
 say whether it overwrites the target database. Do not use it on
 production until it has been tested on a scratch database.
 
+### 17. Disk hygiene (2026-09-28)
+
+The disk is 25 GB, and Dokploy recommends 30. Every deploy pulls new web
+and worker images, and the old ones stay behind until something removes
+them.
+
+**One-off cleanup:** before it, 14 of 25 GB were used (59%); after, 12 GB
+(49%).
+
+- `docker image prune --all --force` freed 977 MB. That is less than the
+  sizes listed per image, because old and new images share layers.
+  It removes only images that no container uses. GHCR keeps every image,
+  so a rollback never needs a local copy.
+- `apt-get clean` freed 1.1 GB: 229 `.deb` files from the reinstall
+  and the upgrades.
+
+**Kept clean automatically:**
+
+| What      | How                                                                                                                                                                                                                                                                                                                                                                                              | When                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Docker    | Dokploy → Settings → Web Server → **Daily Docker Cleanup** on (`webServerSettings.enableDockerCleanup`). It runs `container prune`, `image prune --all`, `builder prune --all` and `system prune --all`, and waits for a running deploy to finish first. **It never prunes volumes**: Dokploy leaves `volume prune` out on purpose (checked in the v0.30.7 source), so the database data is safe | `50 23 * * *` server time (UTC), which is 05:50 Dhaka and after the 03:00 backup |
+| apt cache | `/etc/apt/apt.conf.d/52echoandaura-clean`: `APT::Periodic::CleanInterval "7";`, run by the existing `apt-daily` timer (`apt-get clean`)                                                                                                                                                                                                                                                          | every 7 days                                                                     |
+| Logs      | already capped: Docker in section 7, journald by its defaults (~50 MB)                                                                                                                                                                                                                                                                                                                           | always                                                                           |
+
+The daily prune also removes the `migrate` container, which exits after
+each deploy. The next deploy creates it again.
+
+**Check:** `df -h /` shows less than 70% used, and
+`docker system df` shows a small "Reclaimable" figure for images.
+
+**If the disk gets tight anyway:**
+
+- The worker image is 1 GB, against 323 MB for web. Trimming it is an
+  app change (PROGRESS).
+- Otherwise, BengalCloud's next plan (section 3's note).
+
+**Never** run `docker volume prune` or `docker system prune --volumes`
+here: the Postgres and Redis data live in volumes.
+
 ---
 
 ## Verify
@@ -786,3 +825,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                               |
 | 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                    |
 | 2026-09-28 | Nightly Postgres backups (§ 16): R2 destination `r2-backups`, `0 21 * * *` UTC (03:00 Dhaka), keep 14. First backup restored on the Mac and matched production exactly                    |
+| 2026-09-28 | Disk 59 % → 49 % (old images, apt cache). Dokploy Daily Docker Cleanup on (never volumes); apt `CleanInterval 7` (§ 17)                                                                   |
