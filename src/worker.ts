@@ -22,6 +22,7 @@ import { MailerPermanentError, MailerThrottledError } from '@/server/email/maile
 import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
 import { createRedisConnection } from '@/server/queue/connection';
+import { recordWorkerHeartbeat } from '@/server/queue/heartbeat';
 import { renderSignInEmail } from '@/server/email/templates/sign-in';
 import { renderAccountEmail } from '@/server/email/templates/account';
 import { EMAIL_CHANGE_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
@@ -80,6 +81,10 @@ async function main(): Promise<void> {
     ORDERS_QUEUE,
     async (job) => {
       if (job.name === EXPIRE_HOLDS_JOB) {
+        // Before the database work (ADR-040): the heartbeat says "the
+        // worker picks up its jobs"; a Postgres outage is reported by the
+        // health check's own database probe.
+        await recordWorkerHeartbeat(connection);
         const { expired, failed } = await ordersService.expireLapsedHolds();
         if (expired > 0 || failed > 0) logger.info({ expired, failed }, 'expire-holds run');
         // Skipped orders are logged individually; failing the job makes
@@ -196,6 +201,10 @@ async function main(): Promise<void> {
   // Without listeners BullMQ swallows these to console.error — outside pino.
   worker.on('error', (err) => logger.error({ err }, 'worker error'));
   queue.on('error', (err) => logger.error({ err }, 'queue error'));
+  // At boot too, so /api/health is green within seconds of a deploy rather
+  // than after the first scheduled run (the deploy smoke test waits for it).
+  await worker.waitUntilReady();
+  await recordWorkerHeartbeat(connection);
   logger.info({ queue: ORDERS_QUEUE }, 'worker started');
 
   const shutdown = async (signal: string) => {
