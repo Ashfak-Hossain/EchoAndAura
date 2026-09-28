@@ -1,3 +1,4 @@
+import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
 import {
   Document,
@@ -18,21 +19,49 @@ import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
  * name into Latin-1 garbage. react-pdf has no per-glyph fallback across
  * families, so each text run picks its family by script (`fontFor`).
  */
-const FONT_DIR = path.join(process.cwd(), 'src/server/pdf/fonts');
+export const FONT_DIR = path.join(process.cwd(), 'src/server/pdf/fonts');
+const FONTS = {
+  regular: 'NotoSans-Regular.ttf',
+  bold: 'NotoSans-Bold.ttf',
+  bengaliRegular: 'NotoSansBengali-Regular.ttf',
+  bengaliBold: 'NotoSansBengali-Bold.ttf',
+} as const;
 Font.register({
   family: 'Ticket',
   fonts: [
-    { src: path.join(FONT_DIR, 'NotoSans-Regular.ttf') },
-    { src: path.join(FONT_DIR, 'NotoSans-Bold.ttf'), fontWeight: 'bold' },
+    { src: path.join(FONT_DIR, FONTS.regular) },
+    { src: path.join(FONT_DIR, FONTS.bold), fontWeight: 'bold' },
   ],
 });
 Font.register({
   family: 'TicketBengali',
   fonts: [
-    { src: path.join(FONT_DIR, 'NotoSansBengali-Regular.ttf') },
-    { src: path.join(FONT_DIR, 'NotoSansBengali-Bold.ttf'), fontWeight: 'bold' },
+    { src: path.join(FONT_DIR, FONTS.bengaliRegular) },
+    { src: path.join(FONT_DIR, FONTS.bengaliBold), fontWeight: 'bold' },
   ],
 });
+
+/**
+ * The font files a ticket needs that cannot be read. react-pdf only opens
+ * them at the first render, so a missing file failed the first ticket email
+ * (the worker image once shipped without them, 2026-09-28). The worker
+ * checks at boot instead: missing fonts stop it, and the deploy's smoke
+ * test with it.
+ */
+export function missingFontFiles(
+  dir: string = FONT_DIR,
+  readable: (file: string) => boolean = canRead,
+): string[] {
+  return Object.values(FONTS).filter((name) => !readable(path.join(dir, name)));
+}
+function canRead(file: string): boolean {
+  try {
+    accessSync(file, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 // Never break a name or a code across lines.
 Font.registerHyphenationCallback((word) => [word]);
 

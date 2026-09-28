@@ -542,6 +542,78 @@ Also in `traefik.yml`: `api: insecure: true` is Traefik's own dashboard
 on port 8080 _inside_ the container. That port is not published, so it is
 reachable only from Docker's internal network. Leave it.
 
+### 14. Admin accounts and the first real email (2026-09-28)
+
+Admins are created in the worker container (DEPLOY.md § Creating an admin
+account). The password is typed at a hidden prompt, so it never lands in
+the shell history:
+
+```sh
+read -rp 'Email: ' ADMIN_EMAIL
+read -rsp 'Password (hidden): ' ADMIN_PW; echo
+read -rp 'Name: ' ADMIN_NAME
+docker exec echoandaura-app-5nuhfn-worker-1 \
+  node dist/ops/create-admin.mjs "$ADMIN_EMAIL" "$ADMIN_PW" "$ADMIN_NAME"
+unset ADMIN_PW
+```
+
+| Admin | Email                                | Bitwarden                              | Created    |
+| ----- | ------------------------------------ | -------------------------------------- | ---------- |
+| Evan  | the developer's Gmail (SES-verified) | `Admin login (echoandaura app) — Evan` | 2026-09-28 |
+
+**First production email: a password reset to Evan, 2026-09-28.** The
+first attempt failed: SES refused every send with
+`IncompleteSignatureException: Invalid key=value pair (missing
+equal-sign) in Authorization header`. Cause: the two SES lines in
+Dokploy's Environment still held the template placeholders (`<access key
+id>`, `<secret access key>`). Nothing checks their shape, so the worker
+started fine and only the first email failed. Fixed by pasting the real
+keys from Bitwarden (`AWS worker key (SES)`) and redeploying; the retry
+arrived (SES message id `010901a0e671…`), and the reset worked.
+
+**Check the environment's shape without printing any value** (every line
+must say `ok`; `EMAIL_FROM` legitimately contains `< >`):
+
+```sh
+docker exec echoandaura-app-5nuhfn-worker-1 node -e '
+for (const n of ["DATABASE_URL","REDIS_URL","BETTER_AUTH_SECRET","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","AWS_SES_ACCESS_KEY_ID","AWS_SES_SECRET_ACCESS_KEY"]) {
+  const v = process.env[n] ?? "";
+  console.log((/<[^>]*>|Bitwarden/.test(v) ? "PLACEHOLDER " : "ok          ") + n + " (length " + v.length + ")");
+}'
+```
+
+Expected lengths: SES access key id 20 (starts `AKIA`), SES secret 40,
+R2 key id 32, R2 secret 64, `BETTER_AUTH_SECRET` 44.
+
+**The first ticket email failed too** (same day): `ENOENT … /app/src/server/pdf/fonts/NotoSans-Regular.ttf`.
+The ticket PDF reads its fonts from `<cwd>/src/server/pdf/fonts`; the web
+image gets them through Next's file tracing, but the worker image did
+not copy them. Fixed in the `Dockerfile`, and **the worker now checks at
+boot**: it refuses to start if a font is missing or if an SES key does
+not have a key's shape (20 characters `AKIA…`/`ASIA…`, 40 characters),
+with a message that names the problem and never the value. The deploy's
+smoke test ("the worker stays up") therefore stops either mistake before
+production, and a bad edit of the Environment in Dokploy shows at once in
+the worker log. After a failed ticket email, the admin re-sends it from
+the order page.
+
+**An admin address gets no buyer sign-in link, by design.** The buyer
+"email me a sign-in link" form skips any address that belongs to an
+admin (the web log says `magic link requested for an admin email — not
+sent`), while still answering "check your inbox" so admin addresses
+cannot be discovered. Otherwise that inbox alone would open the admin
+console, without the password. Test the buyer side with a non-admin
+address (in the SES sandbox, one that is verified, or any
+`@echoandaura.com` address).
+
+**Reading an email failure:** the worker logs every attempt of a job
+(`jobId`, `name`, `attempt`, the provider's error). `auth.account` jobs
+retry 3 times; after that the request must be made again.
+
+```sh
+docker logs --since 1h echoandaura-app-5nuhfn-worker-1 2>&1 | grep -E 'email sent|"level":50'
+```
+
 ---
 
 ## Verify
@@ -613,3 +685,5 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                                                           |
 | 2026-09-28 | Cloudflare checked (Full strict, Always Use HTTPS off); Traefik entrypoints trust Cloudflare's ranges for `X-Forwarded-For`                                                               |
 | 2026-09-28 | **Site public**: `echoandaura.com` + `www` (proxied, www → root 301), web domain in Dokploy (Let's Encrypt). whoami test: Traefik trust works; app must read XFF from the right (ADR-037) |
+| 2026-09-28 | PR #3 deployed (admin self-service, limiter fix). Evan's admin created. SES keys were template placeholders in Dokploy → fixed; first production email sent and received                  |
+| 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                               |

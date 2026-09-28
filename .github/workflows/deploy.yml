@@ -129,8 +129,8 @@ jobs:
           R2_PUBLIC_URL=http://127.0.0.1:9000/smoke
           MAILER=ses
           AWS_SES_REGION=ap-south-1
-          AWS_SES_ACCESS_KEY_ID=smoke
-          AWS_SES_SECRET_ACCESS_KEY=smoke
+          AWS_SES_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+          AWS_SES_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
           EMAIL_FROM=smoke <smoke@example.com>
           EOF
           docker run --rm --network host --env-file smoke.env "$WORKER" node dist/ops/migrate.mjs
@@ -148,7 +148,9 @@ jobs:
           sleep 5
           test "$(docker inspect -f '{{.State.Running}}' worker)" = true
         # The worker boots with the production mailer (it refuses any other)
-        # on fake keys: an empty database queues no email, so none is sent.
+        # on AWS's documented example keys: the right shape (the worker checks
+        # it at boot), valid nowhere. An empty database queues no email, so
+        # none is sent. It also refuses to boot without the ticket fonts.
 
       - name: Container logs (on failure)
         if: failure()

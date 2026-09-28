@@ -34,8 +34,27 @@ export function readSesEnv(env: NodeJS.ProcessEnv = process.env): SesEnv {
       'AWS_SES_REGION / AWS_SES_ACCESS_KEY_ID / AWS_SES_SECRET_ACCESS_KEY are not set — see docs/ENVIRONMENT.md § Email',
     );
   }
+  // Present is not enough: a placeholder left in the deploy environment
+  // started the worker fine and failed every send with SES's cryptic
+  // "missing equal-sign" (2026-09-28). Check the shape at boot, so a bad
+  // value stops the worker (and the deploy's smoke test) instead. The
+  // message never contains the value.
+  if (!ACCESS_KEY_ID.test(accessKeyId)) {
+    throw new Error(
+      `AWS_SES_ACCESS_KEY_ID does not look like an access key id (20 characters, AKIA… or ASIA…; got ${accessKeyId.length}) — a placeholder left in the environment? See docs/infra/SERVER.md § 14`,
+    );
+  }
+  if (!SECRET_ACCESS_KEY.test(secretAccessKey)) {
+    throw new Error(
+      `AWS_SES_SECRET_ACCESS_KEY does not look like a secret access key (40 characters; got ${secretAccessKey.length}) — a placeholder left in the environment? See docs/infra/SERVER.md § 14`,
+    );
+  }
   return { region, accessKeyId, secretAccessKey };
 }
+
+/** An IAM access key id: AKIA (long-term) or ASIA (temporary) + 16. */
+const ACCESS_KEY_ID = /^(AKIA|ASIA)[A-Z0-9]{16}$/;
+const SECRET_ACCESS_KEY = /^[A-Za-z0-9/+]{40}$/;
 
 /** SES error names that mean "slow down", not "this message is wrong". */
 const THROTTLE_NAMES = new Set([

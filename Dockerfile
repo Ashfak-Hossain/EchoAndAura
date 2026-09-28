@@ -94,5 +94,10 @@ COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
+# The ticket PDF's fonts, read from <cwd>/src/server/pdf/fonts. The web image
+# gets them through Next's file tracing; the worker bundle has no tracing, so
+# without this line every ticket email failed (2026-09-28). The worker
+# refuses to start if they are missing.
+COPY --from=build --chown=node:node /app/src/server/pdf/fonts ./src/server/pdf/fonts
 USER node
 CMD ["node", "dist/worker.mjs"]

@@ -37,6 +37,7 @@ import { closeProducer } from '@/server/queue/producer';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { siteUrl } from '@/lib/env.public';
+import { FONT_DIR, missingFontFiles } from '@/server/pdf/ticket-pdf';
 
 // Redis contents are external input: parse, never cast.
 const emailJobData = z.object({ orderId: z.uuid() });
@@ -48,6 +49,14 @@ const accountEmailJobData = z.discriminatedUnion('kind', [
 ]);
 
 async function main(): Promise<void> {
+  // Fail at boot, not at the first ticket email: the deploy's smoke test
+  // checks that the worker stays up, so this stops a bad image or
+  // environment before it reaches production. selectMailer() below does the
+  // same for the SES keys.
+  const missing = missingFontFiles();
+  if (missing.length > 0) {
+    throw new Error(`ticket fonts missing in ${FONT_DIR}: ${missing.join(', ')}`);
+  }
   const connection = createRedisConnection();
   const queue = new Queue(ORDERS_QUEUE, { connection });
   const mailer = selectMailer();
