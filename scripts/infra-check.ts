@@ -16,6 +16,8 @@ const exec = promisify(execFile);
 const ACCOUNT = process.env.AWS_ACCOUNT_ID?.trim() ?? '';
 const REGION = 'ap-south-1';
 const DOMAIN = 'echoandaura.com';
+/** Bounce + complaint notifications for the domain identity (AWS.md § SES). */
+const SES_FEEDBACK_TOPIC = `arn:aws:sns:${REGION}:${ACCOUNT}:ses-feedback`;
 /** The production VPS (docs/infra/SERVER.md). */
 const SERVER_IPV4 = '160.25.226.166';
 const DKIM_TOKENS = [
@@ -181,6 +183,85 @@ const checks: Check[] = [
     return problems.length
       ? fail(problems.join('; '))
       : pass(`verified · DKIM · MAIL FROM ${r.MailFromAttributes?.MailFromDomain}`);
+  }),
+  // VDM and Auto Validation are billed per message; Auto Validation also
+  // drops "risky" recipients silently, which would lose a buyer's tickets.
+  awsCheck('SES suppression list on; VDM and Auto Validation off', async () => {
+    const r = (await aws(['sesv2', 'get-account', '--region', REGION])) as {
+      VdmAttributes?: { VdmEnabled?: string };
+      SuppressionAttributes?: {
+        SuppressedReasons?: string[];
+        ValidationAttributes?: { ConditionThreshold?: { ConditionThresholdEnabled?: string } };
+      };
+    };
+    const problems: string[] = [];
+    const reasons = r.SuppressionAttributes?.SuppressedReasons ?? [];
+    if (!reasons.includes('BOUNCE') || !reasons.includes('COMPLAINT'))
+      problems.push(`suppression reasons: ${reasons.join(',') || 'none'}`);
+    if (r.VdmAttributes?.VdmEnabled === 'ENABLED') problems.push('VDM enabled');
+    const av = r.SuppressionAttributes?.ValidationAttributes?.ConditionThreshold;
+    if (av?.ConditionThresholdEnabled === 'ENABLED') problems.push('Auto Validation enabled');
+    return problems.length
+      ? fail(problems.join('; '))
+      : pass('BOUNCE + COMPLAINT · VDM off · AV off');
+  }),
+  awsCheck('SES bounces + complaints → SNS ses-feedback, forwarding off', async () => {
+    const r = (await aws([
+      'ses',
+      'get-identity-notification-attributes',
+      '--identities',
+      DOMAIN,
+      '--region',
+      REGION,
+    ])) as {
+      NotificationAttributes: Record<
+        string,
+        { BounceTopic?: string; ComplaintTopic?: string; ForwardingEnabled: boolean }
+      >;
+    };
+    const n = r.NotificationAttributes[DOMAIN];
+    if (!n) return fail('no notification attributes for the domain');
+    const problems: string[] = [];
+    if (n.BounceTopic !== SES_FEEDBACK_TOPIC) problems.push(`bounce → ${n.BounceTopic ?? 'none'}`);
+    if (n.ComplaintTopic !== SES_FEEDBACK_TOPIC)
+      problems.push(`complaint → ${n.ComplaintTopic ?? 'none'}`);
+    // SES turns forwarding back on by itself when it cannot publish to the
+    // topic, so `true` here means the topic or its policy is broken.
+    if (n.ForwardingEnabled)
+      problems.push('email forwarding on (SES re-enables it on publish failure)');
+    return problems.length ? fail(problems.join('; ')) : pass('bounce · complaint → ses-feedback');
+  }),
+  awsCheck('ses-feedback: SES-only publish policy, a confirmed subscriber', async () => {
+    const r = (await aws([
+      'sns',
+      'get-topic-attributes',
+      '--topic-arn',
+      SES_FEEDBACK_TOPIC,
+      '--region',
+      REGION,
+    ])) as { Attributes: { Policy: string; SubscriptionsConfirmed: string } };
+    const policy = JSON.parse(r.Attributes.Policy) as {
+      Statement: {
+        Principal?: { Service?: string };
+        Action?: string;
+        Condition?: { StringEquals?: Record<string, string> };
+      }[];
+    };
+    const identityArn = `arn:aws:ses:${REGION}:${ACCOUNT}:identity/${DOMAIN}`;
+    const sesOk = policy.Statement.some(
+      (s) =>
+        s.Principal?.Service === 'ses.amazonaws.com' &&
+        s.Action === 'sns:Publish' &&
+        s.Condition?.StringEquals?.['AWS:SourceAccount'] === ACCOUNT &&
+        s.Condition.StringEquals['AWS:SourceArn'] === identityArn,
+    );
+    const problems: string[] = [];
+    if (!sesOk) problems.push('policy lacks the scoped ses.amazonaws.com publish statement');
+    const confirmed = Number(r.Attributes.SubscriptionsConfirmed);
+    if (confirmed < 1) problems.push('no confirmed subscription — nobody hears about bounces');
+    return problems.length
+      ? fail(problems.join('; '))
+      : pass(`policy scoped to ${DOMAIN} · ${confirmed} confirmed`);
   }),
   awsCheck('SES production access', async () => {
     const r = (await aws(['sesv2', 'get-account', '--region', REGION])) as {
