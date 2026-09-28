@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# CI only reads the code: its token gets nothing else, so a compromised
+# dependency or step cannot push, tag or touch releases (CodeQL
+# actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -47,11 +53,11 @@ jobs:
       BETTER_AUTH_SECRET: ci-only-placeholder-never-used-outside-ci-000000
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
