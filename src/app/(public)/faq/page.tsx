@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { FaqAccordion } from '@/components/public/faq-accordion';
 import { TocSpy } from '@/components/public/help/client';
 import { ContactCard } from '@/components/public/help/contact';
-import { HelpHeader, HelpMain, overline } from '@/components/public/help/layout';
+import { HelpHeader, HelpMain, overline, tocAside } from '@/components/public/help/layout';
 import { FAQ_TOPICS, faqItems } from '@/content/faq';
 import { HELP_PAGES } from '@/content/policies';
 import { siteUrl } from '@/lib/env.public';
@@ -36,7 +36,7 @@ export default async function FaqPage() {
         lead={metadata.description}
       />
       <div className="grid items-start pt-6 lg:grid-cols-[240px_minmax(0,680px)] lg:gap-x-16 lg:pt-10">
-        <aside className="top-24 hidden flex-col gap-3 lg:flex [@media(min-height:44rem)]:sticky">
+        <aside className={tocAside}>
           <p className={cn(overline, 'text-muted-foreground')}>Topics</p>
           <nav aria-label="FAQ topics" data-toc="">
             <ul className="border-l border-border">

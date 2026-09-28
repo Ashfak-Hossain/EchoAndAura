@@ -21,6 +21,18 @@ export function HelpMain({ children }: { children: ReactNode }) {
 export const overline = 'text-xs font-medium tracking-[0.14em] uppercase';
 
 /**
+ * The desktop table of contents beside the text (policies, FAQ). Always
+ * sticky, and never taller than the window: on a short one (a 1366×768
+ * laptop, or any screen zoomed in) it scrolls on its own instead of
+ * running off the bottom, and scrolling it never moves the page. TocSpy
+ * keeps the highlighted entry inside it. The 6 px padding (cancelled by
+ * the negative margin, so nothing moves) is room for the focus ring, which
+ * reaches 5 px outside a link and a scrolling box would otherwise clip.
+ */
+export const tocAside =
+  'top-24 -mx-1.5 hidden max-h-[calc(100dvh-7rem)] flex-col gap-3 overflow-y-auto overscroll-contain px-1.5 pb-1.5 lg:sticky lg:flex';
+
+/**
  * K1 — overline, h1, one-line purpose (the page's metadata description)
  * and, on policies, "Last updated … (Dhaka)".
  */
