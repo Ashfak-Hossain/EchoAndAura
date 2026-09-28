@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Ashfak-Hossain/EchoAndAura/security/advisories/new
+    about: Privately — please never open a public issue for a vulnerability.
+  - name: A problem with a ticket or an order
+    url: https://echoandaura.com/contact
+    about: Buyers — contact the organizer; this repository is for the code.

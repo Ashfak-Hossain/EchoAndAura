@@ -212,7 +212,36 @@ call a service → map the result).
 - **Conventional commits:** `feat(events): add ticket type editor`,
   `fix(orders): …`, `chore: …`.
 - Commit at each green slice, not at end of day — small commits bisect well.
-- Tag each deploy (`v0.3.0`) and add a `CHANGELOG.md` entry.
+- Merge commits only (no squash or rebase), and GitHub deletes the branch
+  after the merge. The PR template's checklist is the review.
+
+## Releases
+
+Every merge to `main` deploys (ADR-036). A version tag marks a milestone
+and deploys nothing (ADR-041). SemVer: `v1.0.0` at go-live, then `v1.1.0`
+for a batch of features and `v1.0.1` for fixes only.
+
+1. On a branch, add the version's section to `CHANGELOG.md`, written for
+   the organizer (what changed for them and for buyers), and merge it.
+2. Wait for that merge's Deploy to go green.
+3. Tag the merge commit and push the tag:
+   ```bash
+   git switch main && git pull
+   git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+   ```
+4. The **Release** workflow names the deployed images `v1.0.0` (a rollback
+   can pin `IMAGE_TAG=v1.0.0`) and publishes the GitHub Release. Its notes
+   are generated from the merged PRs, grouped by label
+   (`.github/release.yml`), so give PRs a label.
+
+## Dependencies
+
+Versions are pinned exactly (`.npmrc`), never with `^`. Dependabot
+(`.github/dependabot.yml`) opens one grouped PR a week for minor and patch
+bumps, per ecosystem (npm, GitHub Actions, Docker), and one PR per major
+bump. It also opens security fixes as soon as an advisory lands. Treat them
+like any PR: CI must be green, and read the release notes of anything that
+touches money, auth, the queue or the database driver.
 
 ## Definition of Done
 

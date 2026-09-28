@@ -13,7 +13,7 @@ style preferences. Violating them causes financial loss or data corruption.
 
 Next.js 16 App Router · React 19 · Node 26 · TypeScript `strict` · Postgres 17 +
 Drizzle 0.45 (postgres-js driver) · Redis 7 + BullMQ · Zod · better-auth (admin
-password login; optional passwordless buyer sign-in) · pino · Resend + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
+password login; optional passwordless buyer sign-in) · pino · Amazon SES + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
 Playwright · Docker · Timezone `Asia/Dhaka`
 
 > Latest majors were adopted at scaffold time — see [ADR-003](docs/DECISIONS.md).

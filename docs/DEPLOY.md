@@ -55,7 +55,8 @@ The app, in Dokploy → the compose app → **Environment**:
 1. Find the last good version: GitHub → Actions → Deploy → the last green
    run before the bad one. Its summary says `Deploy of sha-abc1234`.
 2. Set `IMAGE_TAG=sha-abc1234` and click **Deploy**. Dokploy pulls that
-   exact version.
+   exact version. A released version works too: `IMAGE_TAG=v1.0.0`
+   (DEVELOPMENT.md → Releases).
 3. Fix forward on a branch as usual. Once the fix is on `main`, set
    `IMAGE_TAG` back to `main` (or delete it) and deploy.
 

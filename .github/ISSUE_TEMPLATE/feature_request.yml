@@ -1,0 +1,20 @@
+name: Feature request
+description: Something new for buyers, the organizer or the door.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Who needs this, and what can't they do today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would solve it
+  - type: textarea
+    id: rules
+    attributes:
+      label: Business rules it touches
+      description: Money, inventory, orders, tickets, check-in — anything CLAUDE.md or REQUIREMENTS.md says about it.
