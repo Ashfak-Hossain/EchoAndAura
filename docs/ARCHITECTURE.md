@@ -203,5 +203,5 @@ External: Cloudflare R2 (covers, logos, backups), Amazon SES (email)
 Nothing is built on the server: the images come from CI, and the server
 only pulls them (`docker-compose.prod.yml`). No load balancer or second
 node — sized for one organizer. How a release and a rollback work:
-[DEPLOY.md](DEPLOY.md). Backups, monitoring and incidents: `docs/RUNBOOK.md`
-(Slice D3).
+[DEPLOY.md](DEPLOY.md). Backups, monitoring and incidents: [RUNBOOK.md](RUNBOOK.md)
+and [infra/SERVER.md](infra/SERVER.md) §§ 16–18.
