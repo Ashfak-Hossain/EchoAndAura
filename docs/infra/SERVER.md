@@ -649,6 +649,105 @@ repeated.**
 The demo for Raj runs on the seeded local database (`pnpm db:seed
 --reset`, `MAILER=log`), never on production.
 
+### 16. Nightly Postgres backups to R2 (2026-09-28)
+
+Dokploy's built-in database backups (ADR-036), written to the private R2
+bucket `echoandaura-backups` ([CLOUDFLARE.md](CLOUDFLARE.md)). Only the
+app's Postgres is backed up. Redis holds queues and rate-limit counters,
+and an email lost with it can be re-sent from the admin.
+
+| Setting                                  | Value                                                                                                                                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Destination (Settings → S3 Destinations) | `r2-backups`: Cloudflare, bucket `echoandaura-backups`, region `auto`, endpoint `https://<account-id>.r2.cloudflarestorage.com` (no bucket in the URL). Key: Bitwarden `Cloudflare R2 backups token` |
+| Backup (the Postgres service → Backups)  | database `echoandaura`, prefix `postgres/`, enabled                                                                                                                                                  |
+| Schedule                                 | `0 21 * * *`: the server's clock is UTC, so this is **03:00 Dhaka**, when nobody is buying                                                                                                           |
+| Retention                                | the latest **14**: two weeks to notice a bad change before its last good copy rotates out                                                                                                            |
+| Format                                   | `pg_dump -Fc --no-acl --no-owner … \| gzip` (Dokploy's command), about 10 kB while the database holds no events                                                                                      |
+| Object name                              | `echoandaura-db-ljctqy/postgres/<UTC timestamp>.sql.gz`: Dokploy puts the service name in front of the prefix                                                                                        |
+| Failure alerts                           | **none yet**; they come in D3, with the uptime alerts. Until then, check that R2 has a file from last night                                                                                          |
+
+The backups hold every order and the buyers' names, emails and phone
+numbers. The bucket has no public name, and its key can reach this
+bucket only.
+
+**Restore test (2026-09-28), off the server:**
+
+1. The first manual backup was downloaded from the R2 dashboard to the
+   developer's Mac.
+2. It was restored into a throwaway `postgres:17` container, not the dev
+   database.
+3. The result matched production: 15 tables, 24 migrations with the same
+   latest one, the same row counts, and the same md5 over every
+   `settings`, `users` and `accounts` row.
+4. The container and the downloaded file were deleted afterwards.
+
+Repeat the test after any change to the backup settings, and before
+the first event.
+
+**Restore into an empty database** (rebuilding the server, "Rebuilding
+from scratch" step 5). Before the app starts:
+
+1. In the R2 dashboard, download the newest file from `echoandaura-backups`.
+2. Copy it to the server with `scp <file> echoandaura:`.
+3. On the server:
+
+```sh
+C=$(docker ps -q -f name=<postgres App Name> | head -1)
+gunzip -c ~/<file>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura --no-owner --exit-on-error
+docker exec $C psql -U echoandaura -d echoandaura -c 'select count(*) from drizzle.__drizzle_migrations'
+rm ~/<file>.sql.gz
+```
+
+It prints nothing when it works. On a database that already has tables,
+it stops at the first one that exists. That is on purpose: this command
+never overwrites anything.
+
+Restoring over live data is a different case, for example undoing a
+bad bulk edit: stop web and worker, restore into a new database, check
+it, then switch. That belongs in the RUNBOOK (D3). Dokploy's own
+**Restore** button has not been tried, and its documentation does not
+say whether it overwrites the target database. Do not use it on
+production until it has been tested on a scratch database.
+
+### 17. Disk hygiene (2026-09-28)
+
+The disk is 25 GB, and Dokploy recommends 30. Every deploy pulls new web
+and worker images, and the old ones stay behind until something removes
+them.
+
+**One-off cleanup:** before it, 14 of 25 GB were used (59%); after, 12 GB
+(49%).
+
+- `docker image prune --all --force` freed 977 MB. That is less than the
+  sizes listed per image, because old and new images share layers.
+  It removes only images that no container uses. GHCR keeps every image,
+  so a rollback never needs a local copy.
+- `apt-get clean` freed 1.1 GB: 229 `.deb` files from the reinstall
+  and the upgrades.
+
+**Kept clean automatically:**
+
+| What      | How                                                                                                                                                                                                                                                                                                                                                                                              | When                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Docker    | Dokploy → Settings → Web Server → **Daily Docker Cleanup** on (`webServerSettings.enableDockerCleanup`). It runs `container prune`, `image prune --all`, `builder prune --all` and `system prune --all`, and waits for a running deploy to finish first. **It never prunes volumes**: Dokploy leaves `volume prune` out on purpose (checked in the v0.30.7 source), so the database data is safe | `50 23 * * *` server time (UTC), which is 05:50 Dhaka and after the 03:00 backup |
+| apt cache | `/etc/apt/apt.conf.d/52echoandaura-clean`: `APT::Periodic::CleanInterval "7";`, run by the existing `apt-daily` timer (`apt-get clean`)                                                                                                                                                                                                                                                          | every 7 days                                                                     |
+| Logs      | already capped: Docker in section 7, journald by its defaults (~50 MB)                                                                                                                                                                                                                                                                                                                           | always                                                                           |
+
+The daily prune also removes the `migrate` container, which exits after
+each deploy. The next deploy creates it again.
+
+**Check:** `df -h /` shows less than 70% used, and
+`docker system df` shows a small "Reclaimable" figure for images.
+
+**If the disk gets tight anyway:**
+
+- The worker image is 1 GB, against 323 MB for web. Trimming it is an
+  app change (PROGRESS).
+- Otherwise, BengalCloud's next plan (section 3's note).
+
+**Never** run `docker volume prune` or `docker system prune --volumes`
+here: the Postgres and Redis data live in volumes.
+
 ---
 
 ## Verify
@@ -695,7 +794,9 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
    IP in this file, CLOUDFLARE.md and `scripts/infra-check.ts`), set the
    Server Domain, close port 3000.
 5. Section 10: the project, Postgres and Redis. **Restore the latest
-   Postgres backup** into the new database before the app starts. The new
+   Postgres backup** into the new database before the app starts
+   (section 16, "Restore into an empty database"), then set up section 16's
+   destination and nightly backup again. The new
    App Names get new suffixes: update this file and the URLs in
    Bitwarden.
 6. Section 11: the Compose app and its Environment, from Bitwarden. Put
@@ -723,3 +824,5 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-28 | PR #3 deployed (admin self-service, limiter fix). Evan's admin created. SES keys were template placeholders in Dokploy → fixed; first production email sent and received                  |
 | 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                               |
 | 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                    |
+| 2026-09-28 | Nightly Postgres backups (§ 16): R2 destination `r2-backups`, `0 21 * * *` UTC (03:00 Dhaka), keep 14. First backup restored on the Mac and matched production exactly                    |
+| 2026-09-28 | Disk 59 % → 49 % (old images, apt cache). Dokploy Daily Docker Cleanup on (never volumes); apt `CleanInterval 7` (§ 17)                                                                   |
