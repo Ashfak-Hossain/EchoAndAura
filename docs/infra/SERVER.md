@@ -627,8 +627,8 @@ repeated.**
 
 1. Backup: `pg_dump -Fc` to `/root/before-wipe-2026-09-28.dump`
    (51,602 bytes, 16 tables of data), copied to the developer's Mac with
-   `scp`. Delete both copies once launch is settled: the dump holds the
-   admin's password hash.
+   `scp`. Both copies were deleted the same day: they held only discarded
+   test data, plus the admin's password hash.
 2. One transaction, with no `CASCADE`, so a missed reference would have
    rolled everything back:
 
@@ -641,10 +641,10 @@ repeated.**
    and `settings` (the organizer settings). Counts after: events,
    ticket types, orders, audit rows, tickets and promo codes all 0;
    users 1, accounts 1, settings 1. The site still answers 200.
-4. The TEST cover image in R2 `echoandaura-media` became an orphan:
-   `events/aaf723b2-c22d-4710-bdcf-c222a4f5ee9e/cover-BlOIeCiND95K.jpg`.
-   Delete it in the Cloudflare dashboard (R2 → `echoandaura-media` → the
-   object → Delete).
+4. The TEST cover image in R2 `echoandaura-media` became an orphan
+   (`events/aaf723b2-c22d-4710-bdcf-c222a4f5ee9e/cover-BlOIeCiND95K.jpg`).
+   It was deleted in the Cloudflare dashboard the same day, and
+   `media.echoandaura.com` now answers 404 for it.
 
 The demo for Raj runs on the seeded local database (`pnpm db:seed
 --reset`, `MAILER=log`), never on production.
@@ -722,4 +722,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-28 | **Site public**: `echoandaura.com` + `www` (proxied, www → root 301), web domain in Dokploy (Let's Encrypt). whoami test: Traefik trust works; app must read XFF from the right (ADR-037) |
 | 2026-09-28 | PR #3 deployed (admin self-service, limiter fix). Evan's admin created. SES keys were template placeholders in Dokploy → fixed; first production email sent and received                  |
 | 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                               |
-| 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept                                                               |
+| 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                    |
