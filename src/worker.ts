@@ -7,6 +7,9 @@
  *     only authority on the 24h hold (ADR-012).
  *   - email.<kind> ({ orderId }): render + send one transactional email
  *     through the configured Mailer, then write the audit row (ADR-016).
+ *   - auth.sign-in ({ to, url }): a buyer's magic link.
+ *   - auth.account (AccountEmail): an admin's password reset, new-email
+ *     confirmation or email-change notice (ADR-038).
  *
  * The schedule is owned here, not by the app: upserting it on boot is
  * idempotent, so restarts and multiple workers never double-schedule.
@@ -20,8 +23,11 @@ import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
 import { createRedisConnection } from '@/server/queue/connection';
 import { renderSignInEmail } from '@/server/email/templates/sign-in';
+import { renderAccountEmail } from '@/server/email/templates/account';
+import { EMAIL_CHANGE_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
 import { MAGIC_LINK_TTL_SECONDS } from '@/server/auth/magic-link';
 import {
+  ACCOUNT_EMAIL_JOB,
   EXPIRE_HOLDS_EVERY_MS,
   EXPIRE_HOLDS_JOB,
   ORDERS_QUEUE,
@@ -35,6 +41,11 @@ import { siteUrl } from '@/lib/env.public';
 // Redis contents are external input: parse, never cast.
 const emailJobData = z.object({ orderId: z.uuid() });
 const signInJobData = z.object({ to: z.email(), url: z.url() });
+const accountEmailJobData = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('password-reset'), to: z.email(), url: z.url() }),
+  z.object({ kind: z.literal('confirm-new-email'), to: z.email(), url: z.url() }),
+  z.object({ kind: z.literal('email-change-notice'), to: z.email(), newEmail: z.email() }),
+]);
 
 async function main(): Promise<void> {
   const connection = createRedisConnection();
@@ -86,6 +97,36 @@ async function main(): Promise<void> {
             replyTo: settings.supportEmail ?? undefined,
           });
           logger.info({ messageId }, 'sign-in email sent');
+          return { messageId };
+        } catch (err: unknown) {
+          if (err instanceof MailerPermanentError) throw new UnrecoverableError(err.message);
+          throw err;
+        }
+      }
+
+      if (job.name === ACCOUNT_EMAIL_JOB) {
+        const parsed = accountEmailJobData.safeParse(job.data);
+        if (!parsed.success) throw new UnrecoverableError(`bad job data: ${parsed.error.message}`);
+        const settings = await env.settings();
+        const ttlSeconds =
+          parsed.data.kind === 'password-reset'
+            ? PASSWORD_RESET_TTL_SECONDS
+            : EMAIL_CHANGE_TTL_SECONDS;
+        const rendered = await renderAccountEmail({
+          ...parsed.data,
+          ...emailSender(env.siteUrl, settings),
+          ttlMinutes: Math.round(ttlSeconds / 60),
+        });
+        try {
+          const { messageId } = await mailer.send({
+            to: parsed.data.to,
+            subject: rendered.subject,
+            html: rendered.html,
+            text: rendered.text,
+            replyTo: settings.supportEmail ?? undefined,
+          });
+          // The kind only: the address and the link stay out of the logs.
+          logger.info({ messageId, kind: parsed.data.kind }, 'account email sent');
           return { messageId };
         } catch (err: unknown) {
           if (err instanceof MailerPermanentError) throw new UnrecoverableError(err.message);

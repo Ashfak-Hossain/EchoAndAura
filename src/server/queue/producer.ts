@@ -1,8 +1,9 @@
 import { Queue } from 'bullmq';
 import { logger } from '@/server/lib/logger';
+import type { AccountEmail } from '@/server/auth/account-emails';
 import type { EmailKind } from '@/server/email/templates/render';
 import { createRedisConnection } from './connection';
-import { EMAIL_JOB_PREFIX, ORDERS_QUEUE, SIGN_IN_JOB } from './names';
+import { ACCOUNT_EMAIL_JOB, EMAIL_JOB_PREFIX, ORDERS_QUEUE, SIGN_IN_JOB } from './names';
 
 /**
  * The app's side of the queue: hand the worker a job after a commit.
@@ -25,7 +26,7 @@ export const ENQUEUE_TIMEOUT_MS = 3_000;
 export interface EmailQueue {
   add(
     name: string,
-    data: { orderId: string } | { to: string; url: string },
+    data: { orderId: string } | { to: string; url: string } | AccountEmail,
     opts: Record<string, unknown>,
   ): Promise<unknown>;
 }
@@ -104,6 +105,37 @@ export async function enqueueSignInEmail(
         // The URL is a bearer token: do not keep it around once sent.
         { ...EMAIL_JOB_OPTIONS, attempts: 3, removeOnComplete: true },
       ),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Admin account email (ADR-038). Like the sign-in link, most carry a bearer
+ * URL, so the job is dropped once sent and there is no dedupe id: every
+ * request is fresh (better-auth's newest token is the valid one).
+ */
+export async function enqueueAccountEmail(
+  email: AccountEmail,
+  opts: { queue?: EmailQueue; timeoutMs?: number } = {},
+): Promise<void> {
+  const q = opts.queue ?? getQueue();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`enqueue ${email.kind} email timed out`)),
+      opts.timeoutMs ?? ENQUEUE_TIMEOUT_MS,
+    );
+  });
+  try {
+    await Promise.race([
+      q.add(ACCOUNT_EMAIL_JOB, email, {
+        ...EMAIL_JOB_OPTIONS,
+        attempts: 3,
+        removeOnComplete: true,
+      }),
       timeout,
     ]);
   } finally {

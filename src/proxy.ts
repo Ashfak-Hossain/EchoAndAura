@@ -2,6 +2,8 @@ import { getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const LOGIN_PATH = '/admin/login';
+/** Pages for a signed-out admin: sign in, and the password reset (ADR-038). */
+const PUBLIC_PATHS = new Set([LOGIN_PATH, '/admin/forgot-password', '/admin/reset-password']);
 
 /**
  * Optimistic auth redirect for the admin area. This is Next 16's `proxy`
@@ -15,7 +17,7 @@ const LOGIN_PATH = '/admin/login';
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === LOGIN_PATH) {
+  if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
   if (!getSessionCookie(request)) {

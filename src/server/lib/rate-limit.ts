@@ -74,10 +74,33 @@ const g = globalThis as unknown as { __rateLimitStore?: RateLimitStore };
  * REDIS_URL then surfaces on that hit, through the limiter's `onError`.
  */
 export function redisRateLimitStore(): RateLimitStore {
+  return withTimeout(
+    {
+      hit: (key, windowSeconds) =>
+        (g.__rateLimitStore ??= createRedisRateLimitStore(
+          createRedisConnection(process.env, 'limiter'),
+        )).hit(key, windowSeconds),
+    },
+    HIT_TIMEOUT_MS,
+  );
+}
+
+/**
+ * The limiter's connection waits for Redis (so the first request after a
+ * start is counted, not refused); this caps the wait, so a Redis outage
+ * answers through the limiter's `onError` instead of hanging the request.
+ */
+export const HIT_TIMEOUT_MS = 2_000;
+export function withTimeout(store: RateLimitStore, ms: number): RateLimitStore {
   return {
-    hit: (key, windowSeconds) =>
-      (g.__rateLimitStore ??= createRedisRateLimitStore(
-        createRedisConnection(process.env, 'producer'),
-      )).hit(key, windowSeconds),
+    hit(key, windowSeconds) {
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`rate limiter: no answer in ${ms} ms`)), ms);
+      });
+      return Promise.race([store.hit(key, windowSeconds), timeout]).finally(() =>
+        clearTimeout(timer),
+      );
+    },
   };
 }

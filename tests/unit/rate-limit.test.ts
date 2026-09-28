@@ -51,3 +51,27 @@ describe('createRateLimiter', () => {
     expect(await createRateLimiter(broken, { onError: 'allow' }).allow([rule])).toBe(true);
   });
 });
+
+describe('withTimeout (ADR-038)', () => {
+  const never: RateLimitStore = { hit: () => new Promise<never>(() => {}) };
+
+  it('a store that never answers is cut off: a deny limiter refuses, an allow limiter lets through', async () => {
+    const { withTimeout } = await import('@/server/lib/rate-limit');
+    const rule = { scope: 's', subject: 'x', limit: 5, windowSeconds: 60 };
+    const started = Date.now();
+    expect(await createRateLimiter(withTimeout(never, 20), { onError: 'deny' }).allow([rule])).toBe(
+      false,
+    );
+    expect(
+      await createRateLimiter(withTimeout(never, 20), { onError: 'allow' }).allow([rule]),
+    ).toBe(true);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
+  it('passes a prompt answer through untouched', async () => {
+    const { withTimeout } = await import('@/server/lib/rate-limit');
+    const store = withTimeout(memoryStore(), 1_000);
+    expect(await store.hit('k', 60)).toBe(1);
+    expect(await store.hit('k', 60)).toBe(2);
+  });
+});

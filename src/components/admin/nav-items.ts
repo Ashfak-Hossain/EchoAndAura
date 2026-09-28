@@ -29,6 +29,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
   { label: 'Sponsors', href: '/admin/sponsors', prefix: true },
   { label: 'Reports', href: '/admin/reports' },
   { label: 'Settings', href: '/admin/settings' },
+  { label: 'Your account', href: '/admin/account' },
 ];
 
 export function isNavItemActive(item: NavItem, pathname: string): boolean {

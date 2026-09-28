@@ -69,12 +69,27 @@ from backup (RUNBOOK) — never hand-edit production.
 In Dokploy → the compose app → the **worker** container → **Terminal**:
 
 ```sh
-node dist/ops/create-admin.mjs raj@example.com 'a-temporary-password' 'Raj'
+node dist/ops/create-admin.mjs raj@example.com 'a-password-of-12-or-more' 'Raj'
 node dist/ops/promote-admin.mjs someone@example.com
 node dist/ops/migrate.mjs      # runs on every deploy anyway
 ```
 
-Give a temporary password and have Raj change it after signing in.
+### Creating an admin account and handing it over
+
+1. Generate the password in Bitwarden (20 characters or more; the
+   minimum is 12) and create the account with `create-admin` as above.
+2. Share the Bitwarden item with the person. Never send a password by
+   chat, SMS or email.
+3. They sign in at `/admin/login` and change it at **Your account**
+   (`/admin/account`) whenever they like. That also signs out every other
+   device.
+
+A forgotten password is reset by the person themselves: **Forgot
+password?** on the sign-in page emails a link, valid for an hour. An
+admin can also move the account to a new email at **Your account**: the
+new address must confirm, and the old one gets a notice (ADR-038). While
+SES is in the sandbox, these emails reach only verified addresses
+(docs/infra/AWS.md).
 
 ## One-time setup (Slice D2)
 

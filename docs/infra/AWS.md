@@ -110,16 +110,16 @@ this document is running — see _Runbooks → A budget alert fired_.
 
 ## SES
 
-| Item               | Value                                                                                                                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Region             | `ap-south-1`                                                                                                                                                                                                       |
-| Domain identity    | `echoandaura.com` — **Verified**, Easy DKIM (RSA 2048, 3 CNAME tokens), MAIL FROM `mail.echoandaura.com`                                                                                                           |
-| Email identity     | the organizer's Gmail — verified so it can _receive_ while the account is in the sandbox                                                                                                                           |
-| Configuration sets | **none.** The identities have no default set. (The wizard's `my-first-configuration-set` was deleted; a dangling default breaks every send with `NotFoundException`.)                                              |
-| Suppression list   | account-level, BOUNCE + COMPLAINT (default)                                                                                                                                                                        |
-| Mail type          | Transactional                                                                                                                                                                                                      |
-| Production access  | **Denied 2026-09-21** (requested 2026-09-20; case id in Bitwarden `AWS ash-admin`). Sandbox until re-granted — 200 msgs/day, 1/s, verified recipients only. Reopen after the domain is live: see the runbook below |
-| Sending in the app | `MAILER=ses`, `EMAIL_FROM="echoandaura <tickets@echoandaura.com>"`, `EMAIL_REPLY_TO=hello@echoandaura.com` — see [../ENVIRONMENT.md](../ENVIRONMENT.md)                                                            |
+| Item               | Value                                                                                                                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Region             | `ap-south-1`                                                                                                                                                                                                                                           |
+| Domain identity    | `echoandaura.com` — **Verified**, Easy DKIM (RSA 2048, 3 CNAME tokens), MAIL FROM `mail.echoandaura.com`                                                                                                                                               |
+| Email identities   | the organizer's Gmail, and the developer's Gmail (added 2026-09-28, for the admin email-change tests) — verified so they can _receive_ while the account is in the sandbox. Any `@echoandaura.com` address can receive too: the domain identity counts |
+| Configuration sets | **none.** The identities have no default set. (The wizard's `my-first-configuration-set` was deleted; a dangling default breaks every send with `NotFoundException`.)                                                                                  |
+| Suppression list   | account-level, BOUNCE + COMPLAINT (default)                                                                                                                                                                                                            |
+| Mail type          | Transactional                                                                                                                                                                                                                                          |
+| Production access  | **Denied 2026-09-21** (requested 2026-09-20; case id in Bitwarden `AWS ash-admin`). Sandbox until re-granted — 200 msgs/day, 1/s, verified recipients only. Reopen after the domain is live: see the runbook below                                     |
+| Sending in the app | `MAILER=ses`, `EMAIL_FROM="echoandaura <tickets@echoandaura.com>"`, `EMAIL_REPLY_TO=hello@echoandaura.com` — see [../ENVIRONMENT.md](../ENVIRONMENT.md)                                                                                                |
 
 What each DNS record does for SES, and the authoritative record list, is
 in [CLOUDFLARE.md](CLOUDFLARE.md). The worker sends raw MIME through the
