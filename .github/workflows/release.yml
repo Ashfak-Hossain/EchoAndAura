@@ -31,7 +31,7 @@ jobs:
       - name: The tag is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
