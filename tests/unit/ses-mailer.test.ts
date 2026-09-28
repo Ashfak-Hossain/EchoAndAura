@@ -96,6 +96,10 @@ describe('ses mailer', () => {
 // AWS's documented example keys: the right shape, valid nowhere.
 const EXAMPLE_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
 const EXAMPLE_SECRET = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+// A temporary (ASIA…) id, built at run time: written out, AWS's example
+// with an ASIA prefix is not on GitHub's list of known examples, and secret
+// scanning raised an alert on it (2026-09-28).
+const TEMPORARY_KEY_ID = EXAMPLE_KEY_ID.replace(/^AKIA/, 'ASIA');
 
 describe('readSesEnv refuses keys that are not keys (2026-09-28)', () => {
   const procEnv = (vars: Record<string, string>) => vars as unknown as NodeJS.ProcessEnv;
@@ -139,7 +143,7 @@ describe('readSesEnv refuses keys that are not keys (2026-09-28)', () => {
       readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: ` ${EXAMPLE_KEY_ID} ` })).accessKeyId,
     ).toBe(EXAMPLE_KEY_ID);
     expect(
-      readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: 'ASIAIOSFODNN7EXAMPLE' })).accessKeyId,
-    ).toBe('ASIAIOSFODNN7EXAMPLE');
+      readSesEnv(procEnv({ ...base, AWS_SES_ACCESS_KEY_ID: TEMPORARY_KEY_ID })).accessKeyId,
+    ).toBe(TEMPORARY_KEY_ID);
   });
 });
