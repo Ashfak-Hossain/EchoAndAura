@@ -10,3 +10,6 @@ export const EMAIL_JOB_PREFIX = 'email.';
 
 /** Magic-link sign-in email: payload `{ to, url }`. Not under `email.` — it has no order. */
 export const SIGN_IN_JOB = 'auth.sign-in';
+
+/** Admin account emails (ADR-038): payload `AccountEmail` (reset, confirm new address, change notice). */
+export const ACCOUNT_EMAIL_JOB = 'auth.account';

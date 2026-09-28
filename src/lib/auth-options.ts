@@ -5,8 +5,16 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import * as schema from '@/db/schema';
 import { CLOUDFLARE_RANGES } from '@/lib/client-ip';
+import { NEW_PASSWORD_MIN, PASSWORD_MAX } from '@/lib/validation/auth';
+import {
+  EMAIL_CHANGE_TTL_SECONDS,
+  PASSWORD_RESET_TTL_SECONDS,
+  sendNewEmailConfirmation,
+  sendPasswordReset,
+} from '@/server/auth/account-emails';
 import { MAGIC_LINK_TTL_SECONDS, sendMagicLink } from '@/server/auth/magic-link';
-import { enqueueSignInEmail } from '@/server/queue/producer';
+import { enqueueAccountEmail, enqueueSignInEmail } from '@/server/queue/producer';
+import { adminAccountsRepository } from '@/server/repositories/admin-accounts.repository';
 
 export interface BuildAuthOptionsInput {
   /**
@@ -65,7 +73,15 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
     // admin from six workers at once, so APP_ENV=test turns it off.
     rateLimit: {
       enabled: process.env.APP_ENV === 'test' ? false : process.env.NODE_ENV === 'production',
+      // ADR-038: every reset is an email to an admin's inbox; the account
+      // pages throttle their own calls (auth.api bypasses this limiter), this
+      // covers the public HTTP endpoint.
+      customRules: { '/request-password-reset': { window: 15 * 60, max: 3 } },
     },
+    // ADR-038: the account page is the only way to change an email, because
+    // it checks the current password first. Over HTTP the endpoint is off;
+    // `auth.api.changeEmail` on the server still works.
+    disabledPaths: ['/change-email'],
     // Table names are plural (users, sessions, accounts, verifications) — see the
     // Auth section of src/db/schema.ts.
     database: drizzleAdapter(db, { provider: 'pg', schema, usePlural: true }),
@@ -82,11 +98,40 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
         // Read on every session; never accepted from a sign-up/update body.
         role: { type: 'string', required: false, defaultValue: 'buyer', input: false },
       },
+      changeEmail: { enabled: true },
     },
     emailAndPassword: {
       enabled: true,
       disableSignUp,
       requireEmailVerification: false,
+      // New passwords only (sign-up, reset, change); sign-in never checks it.
+      minPasswordLength: NEW_PASSWORD_MIN,
+      maxPasswordLength: PASSWORD_MAX,
+      resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_SECONDS,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: ({ user, url }) =>
+        sendPasswordReset(
+          { email: user.email, url },
+          { roleOf: lookupRole, enqueue: enqueueAccountEmail },
+        ),
+    },
+    // Used only by the admin email change (ADR-038): no sign-up
+    // verification, and buyers verify by magic link. `user.email` here is
+    // the address being moved to.
+    emailVerification: {
+      sendOnSignUp: false,
+      expiresIn: EMAIL_CHANGE_TTL_SECONDS,
+      sendVerificationEmail: ({ user, url }) =>
+        sendNewEmailConfirmation(
+          { newEmail: user.email, role: (user as { role?: unknown }).role, url },
+          { enqueue: enqueueAccountEmail },
+        ),
+      // The email moved: sign the account out everywhere, including the
+      // browser that clicked (better-auth just gave it a session). The owner
+      // signs in again with the new address.
+      afterEmailVerification: async (user) => {
+        await adminAccountsRepository.revokeAllSessions(user.id);
+      },
     },
   };
 }

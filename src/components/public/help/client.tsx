@@ -29,7 +29,9 @@ export function TocSpy({ ids }: { ids: string[] }) {
       }
       lastHash = hash;
       for (const a of document.querySelectorAll<HTMLAnchorElement>('[data-toc] a[href^="#"]')) {
-        a.setAttribute('aria-current', a.getAttribute('href') === `#${current}` ? 'true' : 'false');
+        const isCurrent = a.getAttribute('href') === `#${current}`;
+        a.setAttribute('aria-current', isCurrent ? 'true' : 'false');
+        if (isCurrent) keepInList(a);
       }
     };
     const schedule = () => {
@@ -45,6 +47,21 @@ export function TocSpy({ ids }: { ids: string[] }) {
     };
   }, [ids]);
   return null;
+}
+
+/**
+ * When the desktop list is taller than the window it scrolls on its own
+ * (`tocAside`); nudge it just enough to show the highlighted entry. Only
+ * the list's scrollTop moves, never the page: `scrollIntoView` would also
+ * scroll the window, fighting the reader.
+ */
+function keepInList(link: HTMLElement) {
+  const list = link.closest('aside');
+  if (!list || list.scrollHeight <= list.clientHeight) return;
+  const box = list.getBoundingClientRect();
+  const item = link.getBoundingClientRect();
+  if (item.top < box.top) list.scrollTop -= box.top - item.top;
+  else if (item.bottom > box.bottom) list.scrollTop += item.bottom - box.bottom;
 }
 
 /**

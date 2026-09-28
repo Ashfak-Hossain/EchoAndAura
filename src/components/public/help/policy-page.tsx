@@ -3,7 +3,7 @@ import { HELP_PAGES, POLICY_KEYS, type PolicyDoc, type PolicyKey } from '@/conte
 import { cn } from '@/lib/utils';
 import { AnchorLink, PrintLink, TocSpy } from './client';
 import { type ContactSettings, ContactCard } from './contact';
-import { HelpHeader, HelpMain, overline } from './layout';
+import { HelpHeader, HelpMain, overline, tocAside } from './layout';
 
 /**
  * Canvas 5 policy template (A7.1–A7.3): Terms, Privacy and Refunds read
@@ -42,7 +42,7 @@ export function PolicyPage({
       />
 
       <div className="grid items-start pt-6 lg:grid-cols-[240px_minmax(0,680px)] lg:gap-x-16 lg:pt-10 print:block">
-        <aside className="top-24 hidden flex-col gap-3 lg:flex print:hidden [@media(min-height:44rem)]:sticky">
+        <aside className={cn(tocAside, 'print:hidden')}>
           <p className={cn(overline, 'text-muted-foreground')}>On this page</p>
           <nav aria-label="On this page" data-toc="">
             <ol className="border-l border-border">

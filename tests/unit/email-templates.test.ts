@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderAccountEmail } from '@/server/email/templates/account';
 import { EMAIL_KINDS, renderEmail } from '@/server/email/templates/render';
 import type { EmailView } from '@/server/email/templates/view';
 import type { TicketRecord } from '@/server/repositories/tickets.repository';
@@ -248,5 +249,67 @@ describe('email templates', () => {
     ]) {
       expect(joined(r.html)).toContain(s);
     }
+  });
+});
+
+describe('admin account emails (ADR-038)', () => {
+  const sender = {
+    siteUrl: 'https://echoandaura.com',
+    contactEmail: 'hello@echoandaura.com',
+    contactPhone: null,
+    organizerName: 'Raj',
+    organizerAddress: null,
+  };
+  const url =
+    'https://echoandaura.com/api/auth/reset-password/tok-123?callbackURL=%2Fadmin%2Freset-password';
+
+  it('the reset email carries the link, its lifetime and what to do if it was not you', async () => {
+    const r = await renderAccountEmail({
+      kind: 'password-reset',
+      to: 'raj@example.com',
+      url,
+      ...sender,
+      ttlMinutes: 60,
+    });
+    expect(r.subject).toBe('Reset your echoandaura admin password');
+    expect(r.html).toContain(url.replace(/&/g, '&amp;'));
+    expect(r.text).toContain(url);
+    expect(joined(r.html)).toContain('expires in 60 minutes');
+    expect(r.text).toMatch(/did not ask for this/i);
+  });
+
+  it('the confirmation goes with its link; the notice names the new address and has no link', async () => {
+    const confirm = await renderAccountEmail({
+      kind: 'confirm-new-email',
+      to: 'new@example.com',
+      url,
+      ...sender,
+      ttlMinutes: 60,
+    });
+    expect(confirm.subject).toBe('Confirm your new echoandaura admin email');
+    expect(confirm.text).toContain(url);
+
+    const notice = await renderAccountEmail({
+      kind: 'email-change-notice',
+      to: 'raj@example.com',
+      newEmail: 'new@example.com',
+      ...sender,
+      ttlMinutes: 60,
+    });
+    expect(notice.subject).toBe('Your echoandaura admin email is being changed');
+    expect(notice.text).toContain('new@example.com');
+    expect(notice.text).toMatch(/if this was not you/i);
+    expect(notice.html).not.toContain('/api/auth/');
+  });
+
+  it('escapes an address that tries to inject markup', async () => {
+    const notice = await renderAccountEmail({
+      kind: 'email-change-notice',
+      to: 'raj@example.com',
+      newEmail: '<script>x</script>@evil.test',
+      ...sender,
+      ttlMinutes: 60,
+    });
+    expect(notice.html).not.toContain('<script>');
   });
 });

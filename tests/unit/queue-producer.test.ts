@@ -40,3 +40,30 @@ describe('enqueueEmail', () => {
     });
   });
 });
+
+describe('enqueueAccountEmail (ADR-038)', () => {
+  it('queues the payload as is, and drops the job once sent (the link is a key)', async () => {
+    const calls: unknown[][] = [];
+    const q = { add: async (...args: unknown[]) => void calls.push(args) };
+    const { enqueueAccountEmail } = await import('@/server/queue/producer');
+    const email = { kind: 'password-reset', to: 'raj@example.com', url: 'https://x/y' } as const;
+    await enqueueAccountEmail(email, { queue: q });
+    expect(calls).toHaveLength(1);
+    const [name, data, opts] = calls[0] as [string, unknown, Record<string, unknown>];
+    expect(name).toBe('auth.account');
+    expect(data).toEqual(email);
+    expect(opts).toMatchObject({ removeOnComplete: true, attempts: 3 });
+    expect(opts).not.toHaveProperty('jobId');
+  });
+
+  it('rejects within the timeout when Redis never answers', async () => {
+    const stuck = { add: () => new Promise<never>(() => {}) };
+    const { enqueueAccountEmail } = await import('@/server/queue/producer');
+    await expect(
+      enqueueAccountEmail(
+        { kind: 'email-change-notice', to: 'raj@example.com', newEmail: 'new@example.com' },
+        { queue: stuck, timeoutMs: 20 },
+      ),
+    ).rejects.toThrow('timed out');
+  });
+});

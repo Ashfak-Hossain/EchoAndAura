@@ -121,6 +121,34 @@ test.describe('static pages (A7)', () => {
     await expect(page).toHaveURL(/#event-cancelled$/);
   });
 
+  // A short desktop window: a 1366×768 laptop minus the browser's toolbars,
+  // or a taller screen zoomed in. The list used to stop sticking below
+  // 704 px and scrolled out of reach halfway down the page.
+  test('a short desktop window keeps the table of contents in reach', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 650 });
+    for (const path of ['/terms', '/faq']) {
+      await page.goto(path);
+      const aside = page.locator('aside').filter({ has: page.locator('[data-toc]') });
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.6));
+
+      // Still beside the text, and the entry being read is on screen.
+      await expect
+        .poll(async () => (await aside.boundingBox())?.y ?? -1, {
+          message: `${path}: list on screen`,
+        })
+        .toBeGreaterThanOrEqual(0);
+      await expect(aside.locator('[data-toc] a[aria-current="true"]')).toBeInViewport();
+
+      // The last entry can be reached inside the list and followed.
+      const last = aside.locator('[data-toc] a').last();
+      const href = await last.getAttribute('href');
+      await last.scrollIntoViewIfNeeded();
+      await last.click();
+      await expect(page).toHaveURL(new RegExp(`${href}$`));
+      await expect(page.locator(href ?? '#missing')).toBeInViewport();
+    }
+  });
+
   test('FAQ topics jump to their questions', async ({ page }) => {
     await page.goto('/faq');
     const topics = page.getByRole('complementary').getByRole('navigation', { name: 'FAQ topics' });
