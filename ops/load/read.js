@@ -8,6 +8,7 @@
 // browser cache serve those in production), so this is the server's work.
 import http from 'k6/http';
 import { check } from 'k6';
+import { Counter } from 'k6/metrics';
 
 const BASE = __ENV.BASE_URL || 'http://web:3000';
 const EVENT = __ENV.EVENT_SLUG || 'load-test-night';
@@ -43,6 +44,9 @@ export const options = {
   thresholds: {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<1000'],
+    // Only the pages actually served (not the instant 429s): what an
+    // admitted visitor waits.
+    'http_req_duration{expected_response:true}': ['p(95)<1000'],
   },
 };
 
@@ -55,9 +59,15 @@ function pick() {
   return PAGES[0];
 }
 
+// Load shedding (Phase 7.6): Traefik's inFlightReq answers 429 at once when
+// the web already has its cap of requests in flight. Counted apart from
+// real failures: "busy, try again" is the designed answer to overload.
+const busy = new Counter('busy_429');
+
 export default function view() {
   const page = pick();
   const res = http.get(`${BASE}${page.path}`, { tags: { page: page.name } });
+  if (res.status === 429) busy.add(1);
   check(res, { 'status 200': (r) => r.status === 200 });
 }
 
@@ -75,6 +85,18 @@ export function handleSummary(data) {
     droppedIterations: data.metrics.dropped_iterations
       ? data.metrics.dropped_iterations.values.count
       : 0,
+    busy429: data.metrics.busy_429 ? data.metrics.busy_429.values.count : 0,
+    servedRps: Number(
+      (data.metrics.http_reqs.values.rate * (1 - data.metrics.http_req_failed.values.rate)).toFixed(
+        1,
+      ),
+    ),
+    servedP95Ms: Math.round(
+      data.metrics['http_req_duration{expected_response:true}'].values['p(95)'],
+    ),
+    servedP99Ms: Math.round(
+      data.metrics['http_req_duration{expected_response:true}'].values['p(99)'],
+    ),
   };
   return {
     stdout: `${JSON.stringify(line)}\n`,

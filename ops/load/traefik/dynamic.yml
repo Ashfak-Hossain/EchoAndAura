@@ -1,0 +1,20 @@
+# Phase 7.6 (docs/LOAD-TEST.md → Load shedding): the same inFlightReq cap as
+# production, in front of the load stack's web. Production applies it on
+# Traefik's websecure entrypoint (docs/infra/SERVER.md section 21); here one
+# router does the same job for the one site.
+http:
+  middlewares:
+    web-inflight:
+      inFlightReq:
+        amount: {{ env "INFLIGHT_AMOUNT" }}
+  routers:
+    web:
+      rule: PathPrefix(`/`)
+      entryPoints: [web]
+      service: web
+      middlewares: [web-inflight]
+  services:
+    web:
+      loadBalancer:
+        servers:
+          - url: http://web:3000

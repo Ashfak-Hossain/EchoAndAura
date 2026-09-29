@@ -155,6 +155,30 @@ Security → WAF → Custom rules. Free plan: up to 5 rules.
 Bot Fight Mode (Security → Bots) stays **off**: on the free plan it can't
 be skipped for a path, and it would challenge the deploy call.
 
+### Rate limiting (ADR-047)
+
+Security → WAF → Rate limiting rules. Free plan: **one** rule, matching
+on the URL path only (not the method or host), counted per IP over 10
+seconds, blocking for 10 seconds.
+
+| Rule                   | Expression                                            | Rate                        | Action         | Why                                                                                                                                     |
+| ---------------------- | ----------------------------------------------------- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `requests per address` | `(not starts_with(http.request.uri.path, "/_next/"))` | 150 requests / 10 s, per IP | Block for 10 s | One address flooding the site would take the server's in-flight budget (SERVER.md § 21) from everyone else; this refuses it at the edge |
+
+- **What counts:** pages, link prefetches, form posts, `/api/*`, `/door`
+  calls, on both hostnames. Everything under `/_next/` is left out:
+  scripts and styles Cloudflare serves from cache, and resized covers
+  Next serves from its own disk cache.
+- **Why 150:** a person browsing makes a page request plus a few
+  prefetches per link on screen, a few dozen per 10 s at most. Many
+  buyers can share one address on a mobile network (CGNAT), so the limit
+  sits well above one person. At 15 a second, one address uses a small
+  share of the 100 requests in flight.
+- **Blocked visitors** get Cloudflare's 429 page for 10 seconds, then
+  are let back in.
+- **Event night:** door phones and admins at the venue may share one
+  address; scanning is about one request per scan, far under the limit.
+
 ## Runbooks
 
 ### Add or change a DNS record
@@ -248,3 +272,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-09-27 | R2 on (payment method added): buckets `echoandaura-media` (public at `media.`, CORS for presigned PUT) and `echoandaura-backups` (private), one scoped key each |
 | 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                     |
 | 2026-09-30 | WAF custom rule `deploy API - no challenges` (skip for `deploy` `/api/*`); `deploy` A record proxied; Bot Fight Mode confirmed off (ADR-045)                    |
+| 2026-09-30 | Rate limiting rule `requests per address`: path not under `/_next/`, 150 requests / 10 s per IP, block 10 s (the free plan's one rule, ADR-047)                 |
