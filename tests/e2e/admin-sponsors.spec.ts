@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 // Requires a seeded admin (pnpm admin:create) and MinIO (docker compose):
 // logos are stored for real and drawn from storage.

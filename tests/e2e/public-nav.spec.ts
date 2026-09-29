@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 
 // Canvas 6, N1–N4 (plan decision 7). No data needed: the tone and the current
 // link depend only on the path. Whether "Get tickets" shows depends on what

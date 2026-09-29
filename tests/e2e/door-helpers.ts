@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { formatInTimeZone } from 'date-fns-tz';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page } from './test';
 
 /**
  * Shared by the gate-scanner specs (ADR-030 online, ADR-034 offline).

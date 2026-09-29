@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { AuthScreen } from '@/components/admin/auth-screen';
 import { PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
 import { ForgotPasswordForm } from './forgot-password-form';
@@ -7,7 +8,10 @@ import { ForgotPasswordForm } from './forgot-password-form';
 export const metadata: Metadata = { title: 'Forgot password' };
 
 // ADR-038: step 1 of a reset — ask for the address, email a link.
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  // ADR-043: rendered per request, so its scripts get the CSP nonce. Next
+  // would otherwise prerender it (nothing here reads the request).
+  await connection();
   return (
     <AuthScreen
       title="Forgot your password?"

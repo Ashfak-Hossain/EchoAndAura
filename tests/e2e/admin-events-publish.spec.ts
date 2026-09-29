@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 const COVER_FIXTURE = path.join(__dirname, 'fixtures', 'cover.png');
 
