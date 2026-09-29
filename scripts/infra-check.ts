@@ -8,8 +8,7 @@
  * not failed, when the CLI is absent or signed out. Exits 1 on any ✗.
  */
 import { execFile } from 'node:child_process';
-import { request } from 'node:https';
-import { BlockList, isIP } from 'node:net';
+import { BlockList, createConnection, isIP } from 'node:net';
 import { promisify } from 'node:util';
 import { CLOUDFLARE_RANGES } from '@/lib/client-ip';
 
@@ -77,30 +76,27 @@ for (const range of CLOUDFLARE_RANGES) {
 const isCloudflare = (ip: string) => isIP(ip) === 4 && cloudflare.check(ip, 'ipv4');
 
 /**
- * ADR-045: HTTPS straight to the server's address, as the site. Resolves to
- * what happened: a status code, or the connection error. The lockdown drops
- * the packets, so the expected outcome is a timeout.
+ * ADR-045: can anyone open a TCP connection to this port, skipping
+ * Cloudflare? Only the handshake matters (no TLS, no HTTP): if it
+ * completes, the lockdown is off. The lockdown drops the packets, so the
+ * expected outcome is a timeout.
  */
-function direct(ip: string, host: string, timeoutMs: number): Promise<string> {
+function tcpOpens(
+  ip: string,
+  port: number,
+  timeoutMs: number,
+): Promise<{ open: boolean; why: string }> {
   return new Promise((resolve) => {
-    const req = request(
-      {
-        host: ip,
-        port: 443,
-        servername: host,
-        headers: { host },
-        path: '/api/health',
-        timeout: timeoutMs,
-        rejectUnauthorized: false,
-      },
-      (res) => {
-        res.resume();
-        resolve(`HTTP ${res.statusCode}`);
-      },
-    );
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', (err) => resolve(err.message));
-    req.end();
+    const socket = createConnection({ host: ip, port, timeout: timeoutMs });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve({ open: true, why: 'connected' });
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve({ open: false, why: 'timeout' });
+    });
+    socket.once('error', (err) => resolve({ open: false, why: err.message }));
   });
 }
 
@@ -359,12 +355,16 @@ const checks: Check[] = [
       : `expected Cloudflare addresses, got ${l.join(' ')}`,
   ),
   {
-    name: 'origin refuses direct HTTPS (lockdown)',
+    name: 'origin refuses direct 80/443 (lockdown)',
     run: async () => {
-      const outcome = await direct(SERVER_IPV4, DOMAIN, 6000);
-      return outcome.startsWith('HTTP')
-        ? fail(`${SERVER_IPV4} answered ${outcome}: the lockdown is off (SERVER.md § 20)`)
-        : pass(`${SERVER_IPV4}: ${outcome}`);
+      const [https, http] = await Promise.all([
+        tcpOpens(SERVER_IPV4, 443, 6000),
+        tcpOpens(SERVER_IPV4, 80, 6000),
+      ]);
+      if (https.open || http.open) {
+        return fail(`${SERVER_IPV4} accepts connections: the lockdown is off (SERVER.md § 20)`);
+      }
+      return pass(`${SERVER_IPV4}: 443 ${https.why}, 80 ${http.why}`);
     },
   },
   // ---- local services ----

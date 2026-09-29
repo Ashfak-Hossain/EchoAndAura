@@ -935,7 +935,7 @@ the server stops answering anyone else):
 **Check:**
 
 - `pnpm infra:check` (laptop): `deploy → proxied through Cloudflare` and
-  `origin refuses direct HTTPS` are ✓.
+  `origin refuses direct 80/443` are ✓.
 - `https://echoandaura.com/api/health` and the dashboard work as before;
   Better Stack stays green; the next deploy from GitHub succeeds.
 - `systemctl is-enabled origin-lockdown.service` → `enabled`, and after
