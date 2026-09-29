@@ -138,6 +138,18 @@ export class SoldOutError extends DomainError {
   }
 }
 
+/**
+ * This phone number already has the most open orders one buyer may have on
+ * this event (awaiting payment or verification). Stops one person holding
+ * every seat for 24 hours with a handful of orders. Thrown inside the order
+ * transaction, before anything is held.
+ */
+export class TooManyOpenOrdersError extends DomainError {
+  constructor(public readonly limit: number) {
+    super(`This buyer already has ${limit} open orders for this event`);
+  }
+}
+
 /** The order state machine forbids this move (see order-status.ts). */
 export class InvalidOrderTransitionError extends DomainError {
   constructor(

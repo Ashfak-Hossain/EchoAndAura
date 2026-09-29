@@ -76,7 +76,14 @@ export default function buyer() {
   );
   const { body, contentType } = multipart(fields);
   const res = http.post(FORM_URL, body, {
-    headers: { 'Content-Type': contentType, Origin: BASE },
+    // A distinct address per buyer: the app allows 20 new orders per IP per
+    // 15 minutes (Phase 7.6), and a real rush comes from many networks.
+    // With no proxy in front, the app reads this header as the visitor.
+    headers: {
+      'Content-Type': contentType,
+      Origin: BASE,
+      'X-Forwarded-For': `198.18.${Math.floor(vu / 250)}.${(vu % 250) + 1}`,
+    },
     redirects: 0,
     tags: { step: 'submit' },
   });

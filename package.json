@@ -20,7 +20,7 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:integration": "dotenv -e .env -- vitest run --project integration",
-    "test:integration:db": "dotenv -e .env -- vitest run --project integration tests/integration/inventory tests/integration/door tests/integration/sponsors tests/integration/rate-limit tests/integration/worker-heartbeat tests/integration/db-role",
+    "test:integration:db": "dotenv -e .env -- vitest run --project integration tests/integration/inventory tests/integration/door tests/integration/sponsors tests/integration/rate-limit tests/integration/worker-heartbeat tests/integration/db-role tests/integration/orders.buyer-cap",
     "test:e2e": "dotenv -e .env -- playwright test",
     "db:generate": "dotenv -e .env -- drizzle-kit generate",
     "db:migrate": "dotenv -e .env -- drizzle-kit migrate",

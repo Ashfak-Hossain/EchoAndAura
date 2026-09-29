@@ -215,6 +215,12 @@ describe('csv', () => {
     expect(csvField('line\nbreak')).toBe('"line\nbreak"');
     expect(csvField(' padded')).toBe('" padded"');
     expect(csvField('=SUM(A1)')).toBe("'=SUM(A1)");
+    // OWASP's list also has tab and carriage return (Phase 7.6 review).
+    expect(csvField('\t=cmd')).toBe("'\t=cmd");
+    expect(csvField('\r=cmd')).toBe(`"'\r=cmd"`);
+    expect(csvField('@A1')).toBe("'@A1");
+    // Numbers are ours, not user text: a negative stays a number.
+    expect(csvField(-5)).toBe('-5');
     expect(csvField(null)).toBe('');
     expect(csvField(3)).toBe('3');
   });

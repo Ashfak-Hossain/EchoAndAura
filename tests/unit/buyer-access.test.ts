@@ -88,7 +88,7 @@ describe('ordersService.findByReferenceAndPhone / listForBuyer', () => {
   it('lists a buyer’s orders by email, case-insensitively, newest first', async () => {
     const { orders, mk } = await setup();
     await mk('nusrat@example.com', '+8801712345678');
-    await mk('other@example.com', '+8801712345678');
+    await mk('other@example.com', '+8801812345678');
     const b = await mk('nusrat@example.com', '+8801712345678');
     const mine = await orders.listForBuyer(' NUSRAT@example.com ');
     expect(mine).toHaveLength(2);

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * ticket type is not an unthrottled way to test codes. The limiter and the
  * service are mocked; what is under test is the action's wiring.
  */
-const allow = vi.fn(async () => false);
+const allow = vi.fn<(rules: { scope: string }[]) => Promise<boolean>>(async () => false);
 const createOrder = vi.fn();
 const checkPromo = vi.fn();
 
@@ -24,6 +24,12 @@ vi.mock('@/server/container', () => ({ ordersService: { createOrder, checkPromo 
 
 const { registerAction, checkPromoCodeAction } =
   await import('@/app/(public)/events/[slug]/register/actions');
+const { TooManyOpenOrdersError } = await import('@/server/lib/errors');
+
+/** The order limiter says yes, the promo budget is spent: they are separate. */
+const onlyOrdersAllowed = async (rules: { scope: string }[]) =>
+  rules[0]?.scope === 'order-create:ip';
+const scopes = () => allow.mock.calls.map(([rules]) => rules[0]?.scope);
 
 const TT = '5f0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 
@@ -62,9 +68,10 @@ describe('code checks share one throttle', () => {
   });
 
   it('a submit without a code never touches the promo budget', async () => {
+    allow.mockImplementation(onlyOrdersAllowed);
     createOrder.mockResolvedValue({ id: 'o-1' });
     await expect(registerAction('live-dhaka', {}, form())).rejects.toThrow('redirect /orders/o-1');
-    expect(allow).not.toHaveBeenCalled();
+    expect(scopes()).toEqual(['order-create:ip']);
   });
 
   it('Apply spends the same budget and says so when it is spent', async () => {
@@ -86,5 +93,52 @@ describe('code checks share one throttle', () => {
     const r = await checkPromoCodeAction('live-dhaka', { code: 'x', ticketTypeId: 'nope' });
     expect(r).toMatchObject({ ok: false, reason: 'invalid_input' });
     expect(allow).not.toHaveBeenCalled();
+  });
+});
+
+// Phase 7.6 (ADR-046): every order holds seats, so placing them is limited
+// per network as well as per phone (the service's cap).
+describe('placing orders is limited per network', () => {
+  it('spends 20 per IP per 15 minutes and refuses beyond it without touching the service', async () => {
+    const state = await registerAction('live-dhaka', {}, form());
+    expect(state.banner?.title).toBe('Too many orders from this network');
+    expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan' });
+    expect(createOrder).not.toHaveBeenCalled();
+    expect(allow).toHaveBeenCalledWith([
+      {
+        scope: 'order-create:ip',
+        subject: '203.0.113.7',
+        limit: 20,
+        windowSeconds: 15 * 60,
+      },
+    ]);
+  });
+
+  it('an invalid form is answered before spending the budget', async () => {
+    const state = await registerAction('live-dhaka', {}, form({ buyerPhone: '12' }));
+    expect(state.fieldErrors?.buyerPhone).toBeTruthy();
+    expect(allow).not.toHaveBeenCalled();
+  });
+
+  it('is off for the e2e suite (APP_ENV=test), like the sign-in limiter', async () => {
+    vi.stubEnv('APP_ENV', 'test');
+    try {
+      createOrder.mockResolvedValue({ id: 'o-2' });
+      await expect(registerAction('live-dhaka', {}, form())).rejects.toThrow(
+        'redirect /orders/o-2',
+      );
+      expect(allow).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('a phone at its open-order cap gets a banner that says what to do', async () => {
+    allow.mockImplementation(onlyOrdersAllowed);
+    createOrder.mockRejectedValue(new TooManyOpenOrdersError(2));
+    const state = await registerAction('live-dhaka', {}, form());
+    expect(state.banner?.title).toBe('You already have orders waiting for this event');
+    expect(state.banner?.body).toMatch(/2 orders waiting/);
+    expect(state.banner?.body).toMatch(/Find my order/);
   });
 });

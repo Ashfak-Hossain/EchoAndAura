@@ -303,6 +303,21 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         .filter((o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < at)
         .slice(0, limit)
         .map((o) => ({ id: o.id, ticketTypeId: o.ticketTypeId, quantity: o.quantity })),
+    // One caller at a time already (the fake transaction is synchronous);
+    // asserting the tx is what matters: the lock must be taken inside it.
+    lockBuyer: vi.fn(async (_eventId, _phone, tx) => {
+      expect(tx).toBe(TX);
+    }),
+    countOpenForBuyer: vi.fn(async (eventId, phone, at, tx) => {
+      expect(tx).toBe(TX);
+      return state.orders.filter(
+        (o) =>
+          o.eventId === eventId &&
+          o.buyerPhone === phone &&
+          (o.status === 'pending_verification' ||
+            (o.status === 'pending_payment' && o.holdExpiresAt !== null && o.holdExpiresAt > at)),
+      ).length;
+    }),
   };
 
   const tickets: TicketsRepository = {

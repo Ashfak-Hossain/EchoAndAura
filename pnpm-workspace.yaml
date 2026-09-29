@@ -9,3 +9,8 @@ allowBuilds:
 # lightningcss is only used for CSS transforms (Tailwind), never in our tests.
 overrides:
   lightningcss: 1.32.0
+  # drizzle-kit's old loader (@esbuild-kit) pins esbuild 0.18, which has a
+  # dev-server advisory (GHSA-67mh-4wv8-2f99). We never run esbuild's dev
+  # server, but a clean `pnpm audit` keeps real advisories visible. 0.25.12
+  # is already in the lockfile (Phase 7.6 review).
+  '@esbuild-kit/core-utils>esbuild': 0.25.12

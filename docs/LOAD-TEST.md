@@ -79,6 +79,11 @@ the same moment, the way a browser without JavaScript does, for 100 seats:
 `check.sql` afterwards: 100 seats, 100 held, 0 left over, 100 orders in
 `pending_payment`, 100 audit rows. No oversell.
 
+Re-run after the order limits (ADR-046: two open orders per phone, 20 new
+orders per network per 15 minutes), each buyer on its own address: the
+same 100 / 100 / 0 / 0, submit median 1.4 s, p95 2.0 s. The per-buyer lock
+and the limiter cost nothing measurable.
+
 **Production, gently** (through Cloudflare, read-only, 3 views/s for 30 s
 on `/`, `/events`, `/faq`): 91 requests, 0 failed, median 90 ms, p95
 263 ms. That includes the round trip to Cloudflare's edge.

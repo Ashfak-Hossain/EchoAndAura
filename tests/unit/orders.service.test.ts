@@ -9,10 +9,15 @@ import {
   RegistrationClosedError,
   SoldOutError,
   TicketTypeNotFoundError,
+  TooManyOpenOrdersError,
   TrxIdAlreadyUsedError,
 } from '@/server/lib/errors';
 import { createInventoryService } from '@/server/services/inventory.service';
-import { type CreateOrderInput, createOrdersService } from '@/server/services/orders.service';
+import {
+  type CreateOrderInput,
+  createOrdersService,
+  MAX_OPEN_ORDERS_PER_BUYER,
+} from '@/server/services/orders.service';
 import { NOW, event, fakeDb, ticketType } from './helpers/fake-db';
 
 function build(
@@ -195,6 +200,73 @@ describe('ordersService.createOrder', () => {
     });
     await expect(build(db).createOrder(input)).rejects.toBeInstanceOf(SoldOutError);
     expect(db.inventoryRepo.reserve).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Phase 7.6: a few orders must not be able to hold a whole event for 24 h.
+describe('ordersService.createOrder: open orders per buyer', () => {
+  const one = { ...input, quantity: 1, attendeeNames: ['Nusrat Jahan'] };
+  const roomy = () =>
+    fakeDb({ events: [event()], ticketTypes: [ticketType({ quantityTotal: 50 })] });
+
+  it(`allows ${MAX_OPEN_ORDERS_PER_BUYER} open orders per phone, refuses the next and holds nothing for it`, async () => {
+    const db = roomy();
+    const svc = build(db);
+    for (let i = 0; i < MAX_OPEN_ORDERS_PER_BUYER; i++) await svc.createOrder(one);
+
+    await expect(svc.createOrder(one)).rejects.toBeInstanceOf(TooManyOpenOrdersError);
+    expect(db.state.orders).toHaveLength(MAX_OPEN_ORDERS_PER_BUYER);
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(MAX_OPEN_ORDERS_PER_BUYER);
+    expect(db.state.events).toHaveLength(MAX_OPEN_ORDERS_PER_BUYER);
+    expect(db.txCalls.rolledBack).toBe(1);
+  });
+
+  it('checks under the buyer lock, inside the transaction, before holding a seat', async () => {
+    const db = roomy();
+    await build(db).createOrder(one);
+    expect(db.orders.lockBuyer).toHaveBeenCalledWith('ev-1', one.buyerPhone, expect.anything());
+    const lock = vi.mocked(db.orders.lockBuyer).mock.invocationCallOrder[0]!;
+    const count = vi.mocked(db.orders.countOpenForBuyer).mock.invocationCallOrder[0]!;
+    const hold = vi.mocked(db.inventoryRepo.reserve).mock.invocationCallOrder[0]!;
+    expect(lock).toBeLessThan(count);
+    expect(count).toBeLessThan(hold);
+  });
+
+  it('counts an order awaiting verification as open', async () => {
+    const db = roomy();
+    const svc = build(db);
+    await svc.createOrder(one);
+    await svc.createOrder(one);
+    db.state.orders[0]!.status = 'pending_verification';
+    await expect(svc.createOrder(one)).rejects.toBeInstanceOf(TooManyOpenOrdersError);
+  });
+
+  it('frees the slot once a hold has lapsed, even before the expiry job runs', async () => {
+    const db = roomy();
+    const svc = build(db);
+    await svc.createOrder(one);
+    await svc.createOrder(one);
+    db.state.orders[0]!.holdExpiresAt = new Date(NOW.getTime() - 1);
+    await expect(svc.createOrder(one)).resolves.toMatchObject({ status: 'pending_payment' });
+  });
+
+  it('frees the slot for orders that are paid, issued, rejected, expired or cancelled', async () => {
+    const db = roomy();
+    const svc = build(db);
+    await svc.createOrder(one);
+    await svc.createOrder(one);
+    db.state.orders[0]!.status = 'issued';
+    db.state.orders[1]!.status = 'rejected';
+    await svc.createOrder(one);
+    await expect(svc.createOrder(one)).resolves.toMatchObject({ status: 'pending_payment' });
+  });
+
+  it('never limits a different phone', async () => {
+    const db = roomy();
+    const svc = build(db);
+    await svc.createOrder(one);
+    await svc.createOrder(one);
+    await expect(svc.createOrder({ ...one, buyerPhone: '+8801812345678' })).resolves.toBeTruthy();
   });
 });
 
