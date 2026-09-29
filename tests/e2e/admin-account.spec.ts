@@ -1,19 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { expect, type Page, test } from './test';
-import { e2eDatabaseUrl } from './prepare-db';
+import { e2eAppDatabaseUrl } from './prepare-db';
 
 /**
  * ADR-038: an admin's own password and email — change password, forgot →
  * reset, change email. Each test makes its own admin with the real
- * create-admin script, so the shared e2e admin is never touched. Links are
+ * create-admin script (as the app role, like the worker in production),
+ * so the shared e2e admin is never touched. Links are
  * read through the test seam (APP_ENV=test, E2E_EXPOSE_MAGIC_LINK=1).
  */
 
 function newAdmin(password: string) {
   const email = `e2e-acct-${randomBytes(4).toString('hex')}@example.com`;
   execFileSync('pnpm', ['exec', 'tsx', 'scripts/create-admin.ts', email, password, 'E2E Admin'], {
-    env: { ...process.env, DATABASE_URL: e2eDatabaseUrl() },
+    env: { ...process.env, DATABASE_URL: e2eAppDatabaseUrl() },
     stdio: 'pipe',
   });
   return email;

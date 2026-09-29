@@ -30,6 +30,8 @@ test.describe('security headers (ADR-043)', () => {
       expect(csp).toContain("frame-ancestors 'none'");
       expect(csp).toContain("'strict-dynamic'");
       expect(csp).not.toContain('wasm-unsafe-eval');
+      // Storage uploads are for signed-in admin pages only, not sign-in or reset.
+      expect(csp).toContain("connect-src 'self';");
       // Next stamps the same nonce on its scripts.
       const nonce = nonceOf(csp);
       expect(nonce).toBeTruthy();

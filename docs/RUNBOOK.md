@@ -117,11 +117,18 @@ whether fixing forward is cheaper.
    server, then restore it into a **new** database:
    ```sh
    docker exec $C psql -U echoandaura -d postgres -c 'CREATE DATABASE echoandaura_restore'
-   gunzip -c ~/<backup>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura_restore --no-owner --exit-on-error
+   gunzip -c ~/<backup>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura_restore --no-owner --no-acl --exit-on-error
    docker exec $C psql -U echoandaura -d echoandaura_restore -c 'select count(*) from orders'
    ```
-4. **Swap the names.** The app's role is a superuser (Dokploy's default),
-   so it can rename databases:
+   Give the app's role its rights on the restored copy. `--no-acl` above
+   left the backup's grants out; they come from the repo instead
+   (ADR-044). Without this step the app can't read a single table:
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/Ashfak-Hossain/EchoAndAura/main/ops/db/app-role.sql \
+     | docker exec -i $C psql -v ON_ERROR_STOP=1 -U echoandaura -d echoandaura_restore
+   ```
+4. **Swap the names.** As the owner, `echoandaura` (a superuser); the
+   app's own role (`echoandaura_app`, ADR-044) can't rename databases:
    ```sh
    docker exec $C psql -U echoandaura -d postgres \
      -c "ALTER DATABASE echoandaura RENAME TO echoandaura_broken_$(date +%Y%m%d)" \

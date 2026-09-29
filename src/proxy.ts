@@ -22,8 +22,9 @@ const PUBLIC_PATHS = new Set([LOGIN_PATH, '/admin/forgot-password', '/admin/rese
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const admin = isAdminPath(pathname);
-  if (admin && !PUBLIC_PATHS.has(pathname) && !getSessionCookie(request)) {
+  // The signed-in admin pages (a signed-out one only sees sign-in and reset).
+  const admin = isAdminPath(pathname) && !PUBLIC_PATHS.has(pathname);
+  if (admin && !getSessionCookie(request)) {
     return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
   }
 

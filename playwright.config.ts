@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { e2eDatabaseUrl } from './tests/e2e/prepare-db';
+import { e2eAppDatabaseUrl, e2eDatabaseUrl } from './tests/e2e/prepare-db';
 
 /**
  * E2E runs against a PRODUCTION build on its own port, not the dev server.
@@ -27,7 +27,9 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && pnpm start -p ${PORT}`,
+    // prepare-db runs as the owner (it migrates and wipes); the server runs
+    // as the app role, like production (ADR-044).
+    command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && DATABASE_URL='${e2eAppDatabaseUrl()}' pnpm start -p ${PORT}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
