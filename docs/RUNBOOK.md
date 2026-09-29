@@ -101,46 +101,79 @@ Backups: nightly at 03:00 Dhaka, the latest 14 kept, in R2
 **Into an empty database** (a rebuilt server): SERVER.md § 16,
 "Restore into an empty database". Tested on 2026-09-28.
 
-**Over live data** (a bad migration, a wrong bulk change). **Not
-rehearsed yet. Rehearse it on a scratch database before the first
-event.** It loses everything written since that backup, so first decide
-whether fixing forward is cheaper.
+**Over live data** (a bad migration, a wrong bulk change). **Rehearsed
+on 2026-09-29** on scratch databases: about 5 minutes end to end, almost
+all of it getting the backup from R2 onto the server; the dump, the
+restore, the grants and the swap took seconds each (a small database; it
+grows with the orders). It loses everything written since that backup,
+so first decide whether fixing forward is cheaper.
 
 1. **Stop writes.** Dokploy → the compose app → **Stop**. Web and worker
-   go down, and Better Stack will alert: expected.
-2. **Keep what is there now.** It holds the orders placed since the backup:
+   go down, and Better Stack will alert: expected. This is also what lets
+   step 4 work: Postgres refuses to rename a database anyone is
+   connected to ("is being accessed by other users").
+2. **Keep what is there now.** It holds the orders placed since the
+   backup. `umask 077` makes the file readable by root only, since it
+   holds buyer data:
    ```sh
    C=$(docker ps -q -f name=echoandaura-db-ljctqy | head -1)
+   umask 077
    docker exec $C pg_dump -U echoandaura -d echoandaura -Fc > ~/pre-restore-$(date +%F-%H%M).dump
+   ls -lh ~/pre-restore-*.dump      # -rw------- root
    ```
-3. Download the chosen backup from the R2 dashboard. `scp` it to the
-   server, then restore it into a **new** database:
+3. **Get the backup onto the server.** Cloudflare → R2 →
+   `echoandaura-backups` → `echoandaura-db-ljctqy/postgres/` → the
+   chosen file → Download. The download is named with its folder in
+   front, e.g. `echoandaura-db-ljctqy_postgres_2026-09-28T21-00-00-188Z.sql.gz`.
+   From the laptop: `scp ~/Downloads/<that file> echoandaura:`. Then, on
+   the server, restore it into a **new** database:
+
    ```sh
+   B=~/echoandaura-db-ljctqy_postgres_<timestamp>.sql.gz
+   chmod 600 $B
    docker exec $C psql -U echoandaura -d postgres -c 'CREATE DATABASE echoandaura_restore'
-   gunzip -c ~/<backup>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura_restore --no-owner --no-acl --exit-on-error
-   docker exec $C psql -U echoandaura -d echoandaura_restore -c 'select count(*) from orders'
+   gunzip -c $B | docker exec -i $C pg_restore -U echoandaura -d echoandaura_restore --no-owner --no-acl --exit-on-error
+   docker exec $C psql -U echoandaura -d echoandaura_restore \
+     -c 'select (select count(*) from users) as users, (select count(*) from orders) as orders, (select count(*) from drizzle.__drizzle_migrations) as migrations'
    ```
+
+   `pg_restore` prints nothing when it works. Check the counts look like
+   the date of the backup.
+
    Give the app's role its rights on the restored copy. `--no-acl` above
    left the backup's grants out; they come from the repo instead
    (ADR-044). Without this step the app can't read a single table:
+
    ```sh
    curl -fsSL https://raw.githubusercontent.com/Ashfak-Hossain/EchoAndAura/main/ops/db/app-role.sql \
      | docker exec -i $C psql -v ON_ERROR_STOP=1 -U echoandaura -d echoandaura_restore
+   docker exec -it $C psql -h localhost -U echoandaura_app -d echoandaura_restore -c 'select count(*) from users'
    ```
+
+   The last command asks for the app role's password (Bitwarden
+   `Postgres app role (prod)`) and must print a count.
+
 4. **Swap the names.** As the owner, `echoandaura` (a superuser); the
-   app's own role (`echoandaura_app`, ADR-044) can't rename databases:
+   app's own role (`echoandaura_app`, ADR-044) can't rename databases.
+   The app role's rights belong to the database, not its name, so they
+   move with it:
    ```sh
    docker exec $C psql -U echoandaura -d postgres \
      -c "ALTER DATABASE echoandaura RENAME TO echoandaura_broken_$(date +%Y%m%d)" \
      -c 'ALTER DATABASE echoandaura_restore RENAME TO echoandaura'
+   docker exec $C psql -U echoandaura -d postgres -c '\l echoandaura*'
    ```
 5. Dokploy → the compose app → **Deploy**. Check `/api/health`, the
    admin, one order.
 6. **Reconcile** the orders placed between the backup and the incident.
    They are in `echoandaura_broken_…` and in the pre-restore dump. Check
    them against the bKash statement. Buyers have their order emails.
-7. Drop `echoandaura_broken_…` and delete the dumps after a week, once
-   nobody needs them. They hold buyer data.
+7. **Clean up** after a week, once nobody needs them. They hold buyer
+   data. Also delete the download from the laptop.
+   ```sh
+   docker exec $C psql -U echoandaura -d postgres -c 'DROP DATABASE echoandaura_broken_<date>'
+   rm ~/pre-restore-*.dump ~/echoandaura-db-ljctqy_postgres_*.sql.gz
+   ```
 
 ## A secret leaked
 
@@ -203,6 +236,8 @@ is buyers waiting for their tickets, and messages to the organizer.
 - [ ] `/api/health` is ok, and the Better Stack monitors are green.
 - [ ] No merges to `main` from now until the event is over. Every merge
       deploys.
+- [ ] No Dokploy update since a week before the event (see
+      [Updating Dokploy](#updating-dokploy)).
 - [ ] Verification queue empty. Last emails sent (no `email.failed` on
       recent orders).
 - [ ] Admin → the event → **Check-in** → print the sheet **and** download
@@ -227,6 +262,24 @@ is buyers waiting for their tickets, and messages to the organizer.
 - [ ] Every door phone has synced (the gate pass shows its offline scan count).
 - [ ] Look at the check-in page: the conflicts list, if any (ADR-034).
 - [ ] Revoke the gate passes.
+
+## Updating Dokploy
+
+Dokploy shows "New version available" on its dashboard. It runs the
+deploys, the backups and the alerts, so an update is a change to
+production even though the site keeps running while the panel restarts.
+
+- **Read the release notes first** (the link in the dialog, or
+  `gh release view <version> -R Dokploy/dokploy`).
+- **Update only for a reason:** a security fix, or a fix to something
+  used here (deploys, backups, notifications, Traefik, Docker cleanup).
+  A release with nothing for us waits for the next one. (2026-09-29:
+  v0.30.8 was one HubSpot chat-widget fix; skipped.)
+- **Never in event week** (from 7 days before an event until it is over).
+- **When you do:** at a quiet hour, right after a successful nightly
+  backup. Afterwards: the dashboard opens, `/api/health` is ok, and
+  Notifications → **Test** reaches the alert group. Add a row to
+  [infra/SERVER.md](infra/SERVER.md) → History.
 
 ## Dates to watch
 
