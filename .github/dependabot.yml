@@ -13,6 +13,11 @@ updates:
       timezone: Asia/Dhaka
     open-pull-requests-limit: 5
     labels: [dependencies]
+    ignore:
+      # The door scanner runs the zxing-wasm that barcode-detector pins
+      # exactly, and serves its .wasm from public/vendor/. It moves only with
+      # barcode-detector, by hand (docs/DEVELOPMENT.md → Dependencies).
+      - dependency-name: zxing-wasm
     groups:
       minor-and-patch:
         update-types: [minor, patch]
