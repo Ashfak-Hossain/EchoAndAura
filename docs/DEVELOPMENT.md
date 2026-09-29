@@ -243,6 +243,18 @@ bump. It also opens security fixes as soon as an advisory lands. Treat them
 like any PR: CI must be green, and read the release notes of anything that
 touches money, auth, the queue or the database driver.
 
+**The door scanner's decoder is upgraded by hand** (ADR-030). `barcode-detector`
+pins an exact `zxing-wasm`, the scanner runs that copy, and its `.wasm` is
+served from `public/vendor/`. Dependabot ignores `zxing-wasm`. To upgrade:
+
+1. Bump `barcode-detector`, and set our `zxing-wasm` to the version it now
+   pins.
+2. Copy `node_modules/zxing-wasm/dist/reader/zxing_reader.wasm` to
+   `public/vendor/zxing_reader-<version>.wasm`, delete the old file, and
+   update `ZXING_WASM_URL` in `src/app/door/decoder.ts`.
+3. `tests/unit/door-rules.test.ts` fails until the versions agree and the
+   file's SHA-256 matches. Then test a real scan on a phone.
+
 ## Definition of Done
 
 A change is done when all of these hold:

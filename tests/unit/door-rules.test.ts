@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ZXING_WASM_SHA256, ZXING_WASM_VERSION } from 'zxing-wasm/reader';
 import { ZXING_WASM_URL } from '@/app/door/decoder';
@@ -141,6 +142,26 @@ describe('door page platform checks', () => {
 });
 
 describe('self-hosted QR decoder', () => {
+  // The scanner runs the zxing-wasm that barcode-detector depends on (it pins
+  // an exact version), not our own top-level entry. Ours exists so the test
+  // below can read the checksum; the two must be the same version, or the
+  // served .wasm would match one and be loaded by the other's glue code.
+  // Upgrade both together, by hand (ADR-030); Dependabot ignores zxing-wasm.
+  it('pins the same zxing-wasm that barcode-detector runs', () => {
+    // Resolve the way the ponyfill does: from inside barcode-detector, through
+    // exported entry points only (neither package exports package.json).
+    const fromDetector = createRequire(require.resolve('barcode-detector/ponyfill'));
+    // Walk up to the package root (dist/ folders carry their own stub
+    // package.json with only a "type").
+    const manifest = (dir: string): { name?: string; version?: string } =>
+      existsSync(join(dir, 'package.json'))
+        ? (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name?: string })
+        : {};
+    let dir = dirname(fromDetector.resolve('zxing-wasm/reader'));
+    while (manifest(dir).name !== 'zxing-wasm' && dirname(dir) !== dir) dir = dirname(dir);
+    expect(manifest(dir)).toMatchObject({ name: 'zxing-wasm', version: ZXING_WASM_VERSION });
+  });
+
   it('serves exactly the .wasm the pinned zxing-wasm ships', () => {
     expect(ZXING_WASM_URL).toContain(ZXING_WASM_VERSION);
     const file = readFileSync(join(process.cwd(), 'public', ZXING_WASM_URL));
