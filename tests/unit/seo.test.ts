@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DESCRIPTION_MAX,
   HOME_TAGLINE,
+  HOME_TITLE,
   buildEventMetadata,
   buildHomeMetadata,
   siteUrl,
@@ -53,8 +54,10 @@ describe('buildEventMetadata', () => {
     expect(m.description).toBe(
       'Thu 1 Oct 2026, 19:00 (Dhaka) · ICCB Hall 4, Dhaka · tickets from ৳800.00',
     );
-    expect((m.openGraph as { images?: unknown[] }).images).toEqual([]);
-    expect((m.twitter as { card?: string }).card).toBe('summary');
+    // No cover: no image key at all, so the generated site image applies (ADR-042).
+    expect(m.openGraph).not.toHaveProperty('images');
+    expect(m.twitter).not.toHaveProperty('images');
+    expect((m.twitter as { card?: string }).card).toBe('summary_large_image');
   });
 
   // ADR-029: the share text names the public area, never a private venue —
@@ -116,7 +119,8 @@ describe('buildHomeMetadata', () => {
       },
       siteUrl: site,
     });
-    expect(m.title).toEqual({ absolute: 'echoandaura' });
+    expect(m.title).toEqual({ absolute: HOME_TITLE });
+    expect(HOME_TITLE).toBe('echoandaura · Live events and tickets in Dhaka');
     expect(m.description).toContain(
       'Next: Echo & Aura Live — Dhaka — Thu 1 Oct 2026, 19:00 (Dhaka)',
     );
@@ -127,10 +131,10 @@ describe('buildHomeMetadata', () => {
     expect(og.images).toEqual([{ url: cover, width: 1200, height: 630, alt: event.title }]);
   });
 
-  it('falls back to the brand line with no image when dormant', () => {
+  it('falls back to the brand line and the generated share image when dormant', () => {
     const m = buildHomeMetadata({ featured: null, siteUrl: site });
     expect(m.description).toBe(HOME_TAGLINE);
-    expect((m.openGraph as { images?: unknown[] }).images).toEqual([]);
-    expect((m.twitter as { card?: string }).card).toBe('summary');
+    expect(m.openGraph).not.toHaveProperty('images');
+    expect((m.twitter as { card?: string }).card).toBe('summary_large_image');
   });
 });

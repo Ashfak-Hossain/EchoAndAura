@@ -870,3 +870,38 @@ describe('eventsService — private venue', () => {
     expect(shown).toMatchObject({ venue: secret, venueHidden: false, venueArea: null });
   });
 });
+
+describe('eventsService.getSitemapEvents (ADR-042)', () => {
+  const row = (slug: string, status: EventRecord['status'], updatedAt: string): EventRecord => ({
+    id: `id-${slug}`,
+    slug,
+    title: slug,
+    description: null,
+    venue: 'ICCB',
+    venueHidden: false,
+    venueArea: null,
+    startsAt,
+    endsAt: null,
+    registrationOpensAt: null,
+    registrationClosesAt: null,
+    status,
+    imageKey: null,
+    presentingSponsorId: null,
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date(updatedAt),
+  });
+
+  it('lists every event with a public page, and never a draft', async () => {
+    const { repo } = fakeRepo([
+      row('live', 'published', '2026-09-20T00:00:00Z'),
+      row('last-year', 'archived', '2026-01-05T00:00:00Z'),
+      row('secret-plan', 'draft', '2026-09-21T00:00:00Z'),
+    ]);
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const entries = await svc.getSitemapEvents();
+    expect(entries.map((e) => e.slug).sort()).toEqual(['last-year', 'live']);
+    expect(entries.find((e) => e.slug === 'live')?.updatedAt).toEqual(
+      new Date('2026-09-20T00:00:00Z'),
+    );
+  });
+});

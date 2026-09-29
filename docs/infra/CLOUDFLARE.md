@@ -201,6 +201,23 @@ curl -s -o /dev/null -w '%{http_code}\n' -X PUT -d x https://media.echoandaura.c
 and a mail to `hello@echoandaura.com` from any outside account arrives in
 the organizer's Gmail within a minute.
 
+## Search engines
+
+The app serves `robots.txt`, `sitemap.xml` and structured data itself
+(ADR-042). Two things live outside the code:
+
+- **Cloudflare's managed robots.txt** (Security → Bots, or AI Crawl
+  Control, depending on the dashboard version) was serving a
+  comments-only `robots.txt` before the app had one. With it on,
+  Cloudflare adds its content-signals comments to ours. Check that
+  `https://echoandaura.com/robots.txt` shows the app's `Disallow` lines
+  and the `Sitemap:` line.
+- **Google Search Console and Bing Webmaster Tools:** add the domain
+  property, verify it with the TXT record they give (add it in DNS here,
+  unproxied, and list it in the record table), then submit
+  `https://echoandaura.com/sitemap.xml`. Bing can import the site from
+  Search Console instead.
+
 ## History
 
 | Date       | Change                                                                                                                                                          |

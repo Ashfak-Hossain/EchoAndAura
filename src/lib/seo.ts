@@ -56,18 +56,26 @@ export function buildEventMetadata({
       title,
       description,
       locale: 'en_GB',
-      images: coverUrl
-        ? [{ url: coverUrl, width: 1200, height: 630, alt: `Cover image for ${title}` }]
-        : [],
+      // No cover: leave images out, so the site's generated share image
+      // (src/app/opengraph-image.tsx) is used instead of none (ADR-042).
+      ...(coverUrl
+        ? { images: [{ url: coverUrl, width: 1200, height: 630, alt: `Cover image for ${title}` }] }
+        : {}),
     },
     twitter: {
-      card: coverUrl ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title,
       description,
-      images: coverUrl ? [coverUrl] : [],
+      ...(coverUrl ? { images: [coverUrl] } : {}),
     },
   };
 }
+
+/**
+ * The home page's <title> (ADR-042): the brand plus what the site is, which
+ * is what people search for. Other pages keep the "Page · echoandaura" template.
+ */
+export const HOME_TITLE = `${SITE_NAME} · Live events and tickets in Dhaka`;
 
 export const HOME_TAGLINE =
   'Live events in Dhaka — named tickets, paid by bKash, checked by a person.';
@@ -92,23 +100,25 @@ export function buildHomeMetadata({ featured, siteUrl }: HomeMetadataInput): Met
   const image = featured?.coverUrl ?? null;
 
   return {
-    title: { absolute: SITE_NAME },
+    title: { absolute: HOME_TITLE },
     description,
     alternates: { canonical: siteUrl },
     openGraph: {
       type: 'website',
       siteName: SITE_NAME,
       url: siteUrl,
-      title: SITE_NAME,
+      title: HOME_TITLE,
       description,
       locale: 'en_GB',
-      images: image ? [{ url: image, width: 1200, height: 630, alt: featured?.title ?? '' }] : [],
+      ...(image
+        ? { images: [{ url: image, width: 1200, height: 630, alt: featured?.title ?? '' }] }
+        : {}),
     },
     twitter: {
-      card: image ? 'summary_large_image' : 'summary',
-      title: SITE_NAME,
+      card: 'summary_large_image',
+      title: HOME_TITLE,
       description,
-      images: image ? [image] : [],
+      ...(image ? { images: [image] } : {}),
     },
   };
 }
