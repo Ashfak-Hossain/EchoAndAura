@@ -949,6 +949,75 @@ the script, `src/lib/client-ip.ts` and Traefik's `trustedIPs` together,
 then reinstall the script (step 3) and `systemctl restart
 origin-lockdown.service`.
 
+### 21. A cap on requests in flight (2026-09-30, ADR-047)
+
+**Why:** the load test ([LOAD-TEST.md](../LOAD-TEST.md)) showed how the web
+fails under a flood: requests queue inside Node until its heap (half the
+container's 1 GB) fills, and the process crashes and restarts. Traefik's
+`inFlightReq` middleware answers **429 at once** when the site already has
+its cap of requests in progress, so the web never holds more than it can
+work through. Over the cap a visitor gets Traefik's plain "Too Many
+Requests" and tries again (a friendlier page would need a server that
+isn't the overloaded web; not worth it at this size).
+
+**The cap is 100**, per host (Traefik's default groups by the `Host`
+header, so `echoandaura.com` shares one budget; the dashboard has its
+own). Chosen on the load stack (LOAD-TEST.md → Load shedding): with 100
+in flight the web stayed near 250 MB even at 220 views/s, far from the
+heap limit, so it cannot crash; and 200 buyers pressing "Register" at
+the same moment all got an answer (100 held, 100 refused who would have
+found it sold out). A cap of 40 served a sustained flood faster, but
+turned away 160 of those 200 buyers at once: the on-sale moment matters
+more.
+
+**Steps:**
+
+1. **The middleware**, as a new file in Traefik's dynamic directory
+   (Traefik picks it up by itself; nothing uses it yet):
+   ```sh
+   cat > /etc/dokploy/traefik/dynamic/inflight.yml <<'EOF'
+   # SERVER.md section 21 / ADR-047: at most 100 requests in progress per
+   # host; over that, 429 at once instead of queueing inside Node.
+   http:
+     middlewares:
+       inflight-cap:
+         inFlightReq:
+           amount: 100
+   EOF
+   ```
+2. **Put it on the `websecure` entrypoint**, so every router on 443 gets
+   it, including the app's (Dokploy generates those from labels, so a
+   per-router middleware would not survive a redeploy). Back up first,
+   then add two lines under `websecure`'s `http:`:
+   ```sh
+   cd /etc/dokploy/traefik
+   cp traefik.yml traefik.yml.bak-2026-09-30
+   grep -c '^    http:$' traefik.yml        # must print 1 (websecure's)
+   sed -i 's/^    http:$/    http:\n      middlewares:\n        - inflight-cap@file/' traefik.yml
+   diff traefik.yml.bak-2026-09-30 traefik.yml
+   ```
+   The diff must show exactly the two added lines, before `tls:`.
+3. **Restart Traefik** (it reads `traefik.yml` only at start; the site is
+   away for a few seconds): `docker restart dokploy-traefik`, then
+   `docker logs dokploy-traefik --since 2m 2>&1 | grep -i error` prints
+   nothing new.
+
+**Check:**
+
+- The site and the dashboard load; `https://echoandaura.com/api/health`
+  is ok.
+- Traefik reports the middleware on the app's router:
+  `docker exec dokploy-traefik wget -qO- http://localhost:8080/api/http/routers | grep -o '"middlewares":\[[^]]*\]' | sort | uniq -c`
+  shows `inflight-cap@file` on the `websecure` routers.
+
+- **Undo:** `cp /etc/dokploy/traefik/traefik.yml.bak-2026-09-30 /etc/dokploy/traefik/traefik.yml && docker restart dokploy-traefik`
+  (the dynamic file can stay; unused it does nothing).
+- **Watch for:** the same Dokploy rewrite as section 13. After any change
+  under Dokploy → Settings → Web Server:
+  `grep -c inflight-cap /etc/dokploy/traefik/traefik.yml` must print `1`.
+- **Change the cap** by editing `inflight.yml`: Traefik reloads it without
+  a restart. Re-measure on the load stack first (LOAD-TEST.md).
+
 ---
 
 ## Verify
@@ -1034,3 +1103,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-29 | App's own DB role (§ 19): `echoandaura_app` created from `ops/db/app-role.sql`, password via `\password` (Bitwarden `Postgres app role (prod)`); `MIGRATE_DATABASE_URL` = owner; `DATABASE_URL` switched and redeployed. Checked: 12 connections as the app role, `delete from order_events` refused, health ok                                                                                                             |
 | 2026-09-29 | Restore over live data rehearsed (RUNBOOK): live dumped (read-only), the 2026-09-28 21:00 UTC backup restored into scratch `echoandaura_rehearsal` with `--no-acl` + `app-role.sql`, app role read it and was refused on `order_events`, rename swap done between scratch databases. ~5 min, mostly the R2 download. Scratch databases dropped, dump and backup copy deleted; live `echoandaura` untouched                  |
 | 2026-09-30 | Origin lockdown (§ 20): WAF skip rule for `deploy` `/api/*`, `deploy` proxied; `origin-lockdown` + `.service` installed and enabled (15 IPv4 / 7 IPv6 Cloudflare ranges in `DOCKER-USER`); ufw 80/443 deleted (only OpenSSH left). Checked: direct 80/443 time out, site/dashboard/API through Cloudflare fine, worker reaches SES; **rebooted**: rules back on their own, all containers up in <1 min, `infra:check` green |
+| 2026-09-30 | In-flight cap (§ 21): `dynamic/inflight.yml` (`inflight-cap`, `inFlightReq` 100); `traefik.yml` backed up (`.bak-2026-09-30`) and the middleware added to `websecure`; Traefik restarted; both HTTPS routers carry it, site and health ok (ADR-047). A `python:3-alpine` image pulled by mistake during a check was removed                                                                                                 |

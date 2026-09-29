@@ -59,6 +59,27 @@ services:
       R2_BUCKET: load
       R2_PUBLIC_URL: https://media.echoandaura.com
 
+  # Load shedding (Phase 7.6): Traefik in front, as on the server, with the
+  # inFlightReq cap. Same two cores: on the server Traefik shares them too.
+  # k6 reaches it as BASE_URL=http://traefik.
+  traefik:
+    <<: *cpus
+    image: traefik:v3.6
+    profiles: [shed]
+    depends_on: [web]
+    command:
+      - --entrypoints.web.address=:80
+      # k6 stands in for Cloudflare: keep its per-buyer X-Forwarded-For,
+      # as production trusts Cloudflare's ranges (SERVER.md section 13).
+      - --entrypoints.web.forwardedHeaders.insecure=true
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+    environment:
+      INFLIGHT_AMOUNT: ${INFLIGHT_AMOUNT:-100}
+    volumes:
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    ports: ['127.0.0.1:3300:80']
+    mem_limit: 256m
+
   # The load generator, on the OTHER cores: it must not take CPU from the
   # "server" it is measuring. Inside this network, so it can post to
   # http://web:3000 with a matching Origin (Next's server-action check).

@@ -23,6 +23,9 @@ const FORM_URL = `${BASE}/events/${EVENT}/register`;
 const held = new Counter('orders_held');
 const soldOut = new Counter('told_sold_out');
 const errors = new Counter('unexpected_answers');
+// Through Traefik's in-flight cap (--profile shed, Phase 7.6): "busy, try
+// again" at once. Counted apart: a designed answer, not a broken one.
+const busy = new Counter('busy_429');
 
 export const options = {
   scenarios: {
@@ -53,6 +56,10 @@ function multipart(fields) {
 
 export default function buyer() {
   const page = http.get(FORM_URL, { tags: { step: 'form' } });
+  if (page.status === 429) {
+    busy.add(1);
+    return;
+  }
   if (!check(page, { 'form 200': (r) => r.status === 200 })) {
     errors.add(1);
     return;
@@ -93,6 +100,8 @@ export default function buyer() {
     held.add(1);
   } else if (res.status === 200 && /sold out/i.test(res.body)) {
     soldOut.add(1);
+  } else if (res.status === 429) {
+    busy.add(1);
   } else {
     errors.add(1);
     console.warn(`buyer ${vu}: HTTP ${res.status} ${location} ${String(res.body).slice(0, 200)}`);
@@ -108,6 +117,7 @@ export function handleSummary(data) {
     held: count('orders_held'),
     soldOut: count('told_sold_out'),
     unexpected: count('unexpected_answers'),
+    busy429: count('busy_429'),
     submitMedMs: submit ? Math.round(submit.values.med) : null,
     submitP95Ms: submit ? Math.round(submit.values['p(95)']) : null,
     submitMaxMs: submit ? Math.round(submit.values.max) : null,
