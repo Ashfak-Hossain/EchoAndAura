@@ -8,7 +8,9 @@
  * not failed, when the CLI is absent or signed out. Exits 1 on any ✗.
  */
 import { execFile } from 'node:child_process';
+import { BlockList, createConnection, isIP } from 'node:net';
 import { promisify } from 'node:util';
+import { CLOUDFLARE_RANGES } from '@/lib/client-ip';
 
 const exec = promisify(execFile);
 
@@ -64,6 +66,38 @@ async function dig(type: string, name: string): Promise<string[]> {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
+}
+
+const cloudflare = new BlockList();
+for (const range of CLOUDFLARE_RANGES) {
+  const [network = '', bits = ''] = range.split('/');
+  cloudflare.addSubnet(network, Number(bits), network.includes(':') ? 'ipv6' : 'ipv4');
+}
+const isCloudflare = (ip: string) => isIP(ip) === 4 && cloudflare.check(ip, 'ipv4');
+
+/**
+ * ADR-045: can anyone open a TCP connection to this port, skipping
+ * Cloudflare? Only the handshake matters (no TLS, no HTTP): if it
+ * completes, the lockdown is off. The lockdown drops the packets, so the
+ * expected outcome is a timeout.
+ */
+function tcpOpens(
+  ip: string,
+  port: number,
+  timeoutMs: number,
+): Promise<{ open: boolean; why: string }> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: ip, port, timeout: timeoutMs });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve({ open: true, why: 'connected' });
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve({ open: false, why: 'timeout' });
+    });
+    socket.once('error', (err) => resolve({ open: false, why: err.message }));
+  });
 }
 
 function dnsCheck(
@@ -312,11 +346,27 @@ const checks: Check[] = [
   dnsCheck('MAIL FROM SPF', 'TXT', `mail.${DOMAIN}`, (l) =>
     l.some((x) => x.includes('include:amazonses.com')) ? null : 'missing SPF on mail.',
   ),
-  // DNS only on purpose (CLOUDFLARE.md): a proxied record would answer with
-  // Cloudflare's addresses, and the deploy call could meet its bot checks.
-  dnsCheck('deploy → the server, DNS only', 'A', `deploy.${DOMAIN}`, (l) =>
-    l.length === 1 && l[0] === SERVER_IPV4 ? null : `expected exactly ${SERVER_IPV4}`,
+  // ADR-045: proxied, like the site, since the server accepts web traffic
+  // from Cloudflare only. A WAF skip rule keeps Cloudflare's bot checks off
+  // /api/*, where GitHub's deploy call goes (CLOUDFLARE.md).
+  dnsCheck('deploy → proxied through Cloudflare', 'A', `deploy.${DOMAIN}`, (l) =>
+    l.length > 0 && l.every(isCloudflare)
+      ? null
+      : `expected Cloudflare addresses, got ${l.join(' ')}`,
   ),
+  {
+    name: 'origin refuses direct 80/443 (lockdown)',
+    run: async () => {
+      const [https, http] = await Promise.all([
+        tcpOpens(SERVER_IPV4, 443, 6000),
+        tcpOpens(SERVER_IPV4, 80, 6000),
+      ]);
+      if (https.open || http.open) {
+        return fail(`${SERVER_IPV4} accepts connections: the lockdown is off (SERVER.md § 20)`);
+      }
+      return pass(`${SERVER_IPV4}: 443 ${https.why}, 80 ${http.why}`);
+    },
+  },
   // ---- local services ----
   {
     name: 'Postgres answers (DATABASE_URL)',

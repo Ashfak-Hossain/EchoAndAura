@@ -27,10 +27,12 @@ and one zone; no API tokens exist yet (R2 will add one).
 All mail records are **DNS only** (grey cloud). Proxying a DKIM CNAME or
 an MX host breaks it silently. The app's own `A`/`AAAA` records arrive
 with deployment (Phase 6) and are proxied, like `media` (R2).
-The one exception is `deploy`, the Dokploy dashboard: it stays DNS only,
-because its only users are the owner and GitHub's deploy call (bot
-protection in front of it could block the call), and Traefik gets its
-Let's Encrypt certificate directly ([SERVER.md](SERVER.md)).
+`deploy`, the Dokploy dashboard, was DNS only until 2026-09-29. It is
+proxied now (ADR-045): the server answers web traffic from Cloudflare
+only, so a DNS-only record would lead nowhere. A WAF custom rule keeps
+Cloudflare's challenges off `deploy`'s `/api/*`, where GitHub's deploy
+call goes ([SERVER.md § 20](SERVER.md)). Traefik still renews its Let's
+Encrypt certificate: the HTTP challenge arrives through Cloudflare.
 
 | Type   | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                            |
 | ------ | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -44,7 +46,7 @@ Let's Encrypt certificate directly ([SERVER.md](SERVER.md)).
 | MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | SES custom MAIL FROM — bounces return to SES                                                                                               |
 | TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                          |
 | A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                    | Proxied  | the app                                                                                                                                    |
-| A      | `deploy`                                      | `160.25.226.166`                                                       | DNS only | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27                                                    |
+| A      | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                      |
 | R2     | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27 |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
@@ -142,6 +144,17 @@ has no public name.
 How uploads work end-to-end: [../systems/STORAGE.md](../systems/STORAGE.md)
 (written with Phase 6) and ADR-007.
 
+## Security rules (WAF)
+
+Security → WAF → Custom rules. Free plan: up to 5 rules.
+
+| Rule                         | Expression                                                                                | Action                                                                                     | Why                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy API - no challenges` | `(http.host eq "deploy.echoandaura.com" and starts_with(http.request.uri.path, "/api/"))` | Skip: remaining custom rules, Browser Integrity Check, Security Level, User Agent Blocking | GitHub's deploy call is a script, not a browser; a challenge would fail every deploy. Dokploy's API key still guards it (ADR-045) |
+
+Bot Fight Mode (Security → Bots) stays **off**: on the free plan it can't
+be skipped for a path, and it would challenge the deploy call.
+
 ## Runbooks
 
 ### Add or change a DNS record
@@ -194,7 +207,7 @@ dig +short TXT _dmarc.echoandaura.com
 dig +short MX echoandaura.com                                   # three route*.mx.cloudflare.net
 dig +short MX mail.echoandaura.com                              # feedback-smtp.ap-south-1.amazonses.com
 dig +short TXT mail.echoandaura.com
-dig +short A deploy.echoandaura.com                             # 160.25.226.166 (DNS only)
+dig +short A deploy.echoandaura.com                             # Cloudflare addresses (proxied), never 160.25.226.166
 curl -s -o /dev/null -w '%{http_code}\n' https://media.echoandaura.com/            # 404: the bucket can't be listed
 curl -s -o /dev/null -w '%{http_code}\n' -X PUT -d x https://media.echoandaura.com/x # 401: no unsigned uploads
 ```
@@ -234,3 +247,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-09-27 | `deploy` A record (DNS only) for the Dokploy dashboard                                                                                                          |
 | 2026-09-27 | R2 on (payment method added): buckets `echoandaura-media` (public at `media.`, CORS for presigned PUT) and `echoandaura-backups` (private), one scoped key each |
 | 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                     |
+| 2026-09-30 | WAF custom rule `deploy API - no challenges` (skip for `deploy` `/api/*`); `deploy` A record proxied; Bot Fight Mode confirmed off (ADR-045)                    |

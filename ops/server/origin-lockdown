@@ -1,0 +1,106 @@
+#!/bin/sh
+# Only Cloudflare may open connections to the web ports (ADR-045). Anyone
+# else who finds the server's address gets nothing, instead of the site
+# without Cloudflare's DDoS protection in front of it.
+#
+# Docker publishes Traefik's ports around ufw (NAT, then the FORWARD chain),
+# so the rule goes in DOCKER-USER, the chain Docker leaves to us. Installed
+# as /usr/local/sbin/origin-lockdown and run by origin-lockdown.service at
+# boot and whenever Docker restarts. docs/infra/SERVER.md section 20.
+#
+#   origin-lockdown          apply (safe to re-run)
+#   origin-lockdown status   show the rules
+#   origin-lockdown remove   undo, if the site stops answering after a change
+set -eu
+IFACE=${ORIGIN_LOCKDOWN_IFACE:-eth0}
+CHAIN=ORIGIN-LOCKDOWN
+
+# BEGIN CLOUDFLARE RANGES
+# https://www.cloudflare.com/ips/, fetched 2026-09-28. The same list is in
+# src/lib/client-ip.ts (a unit test keeps them equal) and in Traefik's
+# trusted IPs (SERVER.md section 13): change all three together.
+V4="
+173.245.48.0/20
+103.21.244.0/22
+103.22.200.0/22
+103.31.4.0/22
+141.101.64.0/18
+108.162.192.0/18
+190.93.240.0/20
+188.114.96.0/20
+197.234.240.0/22
+198.41.128.0/17
+162.158.0.0/15
+104.16.0.0/13
+104.24.0.0/14
+172.64.0.0/13
+131.0.72.0/22
+"
+V6="
+2400:cb00::/32
+2606:4700::/32
+2803:f800::/32
+2405:b500::/32
+2405:8100::/32
+2a06:98c0::/29
+2c0f:f248::/32
+"
+# END CLOUDFLARE RANGES
+
+# New connections arriving from the internet (eth0) for 80/443. After Docker's
+# NAT the destination port is Traefik's, the same 80/443. --ctdir ORIGINAL
+# leaves alone the replies to connections the containers make themselves
+# (SES, R2, Telegram), which also come in on eth0.
+hooks() {
+  echo "-i $IFACE -p tcp -m multiport --dports 80,443 -m conntrack --ctdir ORIGINAL -j $CHAIN"
+  echo "-i $IFACE -p udp --dport 443 -m conntrack --ctdir ORIGINAL -j $CHAIN"
+}
+
+apply() { # $1 iptables|ip6tables, $2 ranges
+  ipt=$1
+  # The chain is refilled in place; while it is empty it lets everything
+  # through (RETURN), so a re-run never blocks Cloudflare, even briefly.
+  $ipt -w -N "$CHAIN" 2>/dev/null || $ipt -w -F "$CHAIN"
+  for range in $2; do
+    $ipt -w -A "$CHAIN" -s "$range" -j RETURN
+  done
+  $ipt -w -A "$CHAIN" -j DROP
+  hooks | while read -r rule; do
+    # shellcheck disable=SC2086 # the rule is meant to split into arguments
+    $ipt -w -C DOCKER-USER $rule 2>/dev/null || $ipt -w -I DOCKER-USER 1 $rule
+  done
+}
+
+remove() { # $1 iptables|ip6tables
+  ipt=$1
+  hooks | while read -r rule; do
+    # shellcheck disable=SC2086
+    while $ipt -w -C DOCKER-USER $rule 2>/dev/null; do $ipt -w -D DOCKER-USER $rule; done
+  done
+  $ipt -w -F "$CHAIN" 2>/dev/null || true
+  $ipt -w -X "$CHAIN" 2>/dev/null || true
+}
+
+case ${1:-apply} in
+  apply)
+    apply iptables "$V4"
+    apply ip6tables "$V6"
+    echo "origin-lockdown: applied on $IFACE ($(echo $V4 | wc -w | tr -d " ") IPv4, $(echo $V6 | wc -w | tr -d " ") IPv6 ranges)"
+    ;;
+  status)
+    for ipt in iptables ip6tables; do
+      echo "== $ipt DOCKER-USER"
+      $ipt -w -S DOCKER-USER
+      echo "== $ipt $CHAIN: $($ipt -w -S "$CHAIN" 2>/dev/null | grep -c RETURN || true) ranges allowed"
+    done
+    ;;
+  remove)
+    remove iptables
+    remove ip6tables
+    echo "origin-lockdown: removed; 80/443 are open to everyone again"
+    ;;
+  *)
+    echo "usage: origin-lockdown [apply|status|remove]" >&2
+    exit 2
+    ;;
+esac

@@ -235,7 +235,10 @@ an "external port". It would be published through Docker, around the
 firewall, straight to the internet.
 
 **Check:** `ufw status verbose` shows `deny (incoming)` and exactly three
-rules: OpenSSH, 80/tcp, 443/tcp (each twice: IPv4 and IPv6).
+rules: OpenSSH, 80/tcp, 443/tcp (each twice: IPv4 and IPv6). Since
+section 20 only OpenSSH is left: the 80/443 rules only ever opened IPv6
+(IPv4 web traffic never reaches ufw), and Cloudflare reaches the server
+over IPv4.
 
 ### 7. Docker log limits
 
@@ -310,8 +313,9 @@ The dashboard lives at **https://deploy.echoandaura.com**, the only way
 in. GitHub's Deploy workflow calls the same address (`DOKPLOY_URL`).
 
 1. Cloudflare DNS: `A deploy → 160.25.226.166`, **DNS only** (grey
-   cloud). It's for the owner and GitHub, not for visitors, and bot
-   protection in front of it could block the deploy call. See
+   cloud) at first, because bot protection in front of it could block
+   the deploy call. **Proxied since section 20**, with a WAF rule that
+   keeps Cloudflare's challenges off `/api/*`. See
    [CLOUDFLARE.md](CLOUDFLARE.md).
 2. Dokploy → Settings → Web Server → Server Domain:
    `deploy.echoandaura.com`, certificate **Let's Encrypt**, HTTPS on.
@@ -340,7 +344,7 @@ docker service update --publish-rm "published=3000,target=3000,mode=host" dokplo
 ```
 
 No ufw rule is needed for this: the tunnel arrives from inside the
-server.
+server, so the origin lockdown (section 20) doesn't stop it either.
 
 **Check** (from a laptop): `nc -z -G 5 160.25.226.166 3000` fails
 (closed); `curl -sI https://deploy.echoandaura.com` answers `200` with a
@@ -478,7 +482,8 @@ docker exec echoandaura-app-5nuhfn-web-1 node -e "fetch('http://127.0.0.1:3000/a
   fetching a file over plain HTTP; if Cloudflare upgraded that request,
   it would reach Traefik before the certificate exists and issuing would
   fail. Traefik does the HTTP → HTTPS redirect itself, after the challenge.
-- HSTS: off for now (a months-long browser commitment; Phase 7).
+- HSTS: Cloudflare's setting stays off; the app sends its own header
+  since ADR-043 (a year, subdomains included, no preload).
 
 **Traefik trusts Cloudflare's forwarded headers.** The app rate-limits by
 the first address in `X-Forwarded-For` (`src/lib/request-ip.ts`). By
@@ -866,6 +871,84 @@ needs):
     -c 'delete from order_events where false'
   ```
 
+### 20. Only Cloudflare reaches the web ports (2026-09-30, ADR-045)
+
+**Why:** the server's address is public (the DNS-only `deploy` record
+gave it away, and DNS history and certificate logs keep it). Anyone could send HTTPS straight to it and reach the site
+without Cloudflare in front: no DDoS protection, no WAF, no rate limits
+added there. Rate-limit keys were already safe (ADR-037); this closes
+the rest.
+
+**How the traffic flows, and where each part is closed:**
+
+| Path                              | How it reaches Traefik                                    | Closed by                                                                                                                   |
+| --------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| IPv4 80/443 (Cloudflare's way in) | Docker NAT on `eth0`, then the `FORWARD` chain (not ufw)  | `ops/server/origin-lockdown`: `DOCKER-USER` jumps to `ORIGIN-LOCKDOWN`, which allows Cloudflare's ranges and drops the rest |
+| IPv6 80/443                       | `docker-proxy` listening on `[::]`, through ufw (`INPUT`) | ufw: the 80/443 rules deleted. Cloudflare reaches the server over IPv4 only (no AAAA)                                       |
+| UDP 443 (HTTP/3)                  | Docker NAT                                                | the same `ORIGIN-LOCKDOWN` chain                                                                                            |
+| SSH 22                            | ufw                                                       | unchanged (keys only, section 2)                                                                                            |
+
+The script also sets the same rules for IPv6 in `DOCKER-USER`, in case
+Docker ever starts NAT-ing IPv6. `--ctdir ORIGINAL` keeps the replies to
+the containers' own outgoing connections (SES, R2, Telegram) out of it.
+The Cloudflare ranges in the script must equal `src/lib/client-ip.ts`
+(a unit test checks) and Traefik's trusted IPs (section 13).
+
+**Steps** (in this order: the dashboard must be behind Cloudflare before
+the server stops answering anyone else):
+
+1. **Cloudflare → Security → WAF → Custom rules → Create rule.**
+   - Name: `deploy API - no challenges`
+   - Expression (Edit expression):
+     `(http.host eq "deploy.echoandaura.com" and starts_with(http.request.uri.path, "/api/"))`
+   - Action: **Skip** → "All remaining custom rules", and under "More
+     components to skip": **Browser Integrity Check**, **Security
+     Level**, **User Agent Blocking**.
+   - Deploy. Dokploy's API key still guards every call; this only stops
+     Cloudflare from challenging GitHub's.
+2. **Cloudflare → DNS:** `deploy` → **Proxied** (orange cloud). Check:
+   the dashboard opens and signs in; `curl -s -o /dev/null -w '%{http_code}\n' https://deploy.echoandaura.com/api/compose.one`
+   prints `401` (Dokploy's answer), not `403` (a Cloudflare challenge).
+3. **Install the lockdown** (from the laptop, in the repo):
+   ```sh
+   scp ops/server/origin-lockdown ops/server/origin-lockdown.service echoandaura:/tmp/
+   ```
+   then on the server:
+   ```sh
+   install -m 755 /tmp/origin-lockdown /usr/local/sbin/origin-lockdown
+   install -m 644 /tmp/origin-lockdown.service /etc/systemd/system/origin-lockdown.service
+   systemctl daemon-reload
+   systemctl enable --now origin-lockdown.service
+   origin-lockdown status
+   ```
+   **If the site stops answering:** `origin-lockdown remove` opens 80/443
+   to everyone again at once; then find out why.
+4. **Close IPv6 80/443 in ufw:**
+   ```sh
+   ufw delete allow 80/tcp
+   ufw delete allow 443/tcp
+   ufw status
+   ```
+   Only OpenSSH (IPv4 and IPv6) is left. IPv4 web traffic never passed
+   through these rules.
+
+**Check:**
+
+- `pnpm infra:check` (laptop): `deploy → proxied through Cloudflare` and
+  `origin refuses direct 80/443` are ✓.
+- `https://echoandaura.com/api/health` and the dashboard work as before;
+  Better Stack stays green; the next deploy from GitHub succeeds.
+- `systemctl is-enabled origin-lockdown.service` → `enabled`, and after
+  a reboot `origin-lockdown status` shows the rules again.
+
+**Emergency way in** is unchanged (section 9): the SSH tunnel arrives from
+inside the server, so the lockdown never blocks it.
+
+**Cloudflare changes its ranges** (rarely; cloudflare.com/ips): update
+the script, `src/lib/client-ip.ts` and Traefik's `trustedIPs` together,
+then reinstall the script (step 3) and `systemctl restart
+origin-lockdown.service`.
+
 ---
 
 ## Verify
@@ -887,7 +970,8 @@ ssh echoandaura '
   df -h / | tail -1
   [ -f /var/run/reboot-required ] && echo "REBOOT PENDING" || echo "no reboot pending"
 '
-# From outside: only 22, 80 and 443 may answer.
+# From outside: only 22 may answer. 80 and 443 answer Cloudflare only
+# (section 20), so from a laptop they time out and read as closed.
 for p in 22 80 443 2377 3000 5432 6379 7946; do
   nc -z -G 3 160.25.226.166 $p 2>/dev/null && echo "$p open" || echo "$p closed"
 done
@@ -927,25 +1011,26 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-26 | VPS bought (Ubuntu 22.04 image)                                                                                                                                                                                                                                                                                                                                                                            |
-| 2026-09-27 | Reinstalled with Ubuntu 24.04; updates; SSH keys only; 2 GB swap; automatic security updates on; hostname `echoandaura`                                                                                                                                                                                                                                                                                    |
-| 2026-09-27 | ufw installed and enabled (22, 80, 443, 3000); Docker log limits in `/etc/docker/daemon.json`, before Docker                                                                                                                                                                                                                                                                                               |
-| 2026-09-27 | Dokploy v0.30.7 installed (Docker 28.5.0, Traefik v3.6, Swarm). Owner account created via SSH tunnel; nobody had claimed it in the ~2 h port 3000 was open                                                                                                                                                                                                                                                 |
-| 2026-09-27 | Dashboard at https://deploy.echoandaura.com (DNS only, Let's Encrypt). Port 3000 closed; outside scan: only 22, 80, 443 answer                                                                                                                                                                                                                                                                             |
-| 2026-09-27 | Audit of the provider's image: recipes only start qemu-guest-agent; stale recipe logs from other machines removed; one SSH key, root the only shell                                                                                                                                                                                                                                                        |
-| 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside                                                                                                                                                                                                                                                     |
-| 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                                                                                                                                                                                                                                                                  |
-| 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                                                                                                                                                                                                                                                                             |
-| 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                                                                                                                                                                                                                                                                            |
-| 2026-09-28 | Cloudflare checked (Full strict, Always Use HTTPS off); Traefik entrypoints trust Cloudflare's ranges for `X-Forwarded-For`                                                                                                                                                                                                                                                                                |
-| 2026-09-28 | **Site public**: `echoandaura.com` + `www` (proxied, www → root 301), web domain in Dokploy (Let's Encrypt). whoami test: Traefik trust works; app must read XFF from the right (ADR-037)                                                                                                                                                                                                                  |
-| 2026-09-28 | PR #3 deployed (admin self-service, limiter fix). Evan's admin created. SES keys were template placeholders in Dokploy → fixed; first production email sent and received                                                                                                                                                                                                                                   |
-| 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                                                                                                                                                                                                                                                |
-| 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                                                                                                                                                                                                                                     |
-| 2026-09-28 | Nightly Postgres backups (§ 16): R2 destination `r2-backups`, `0 21 * * *` UTC (03:00 Dhaka), keep 14. First backup restored on the Mac and matched production exactly                                                                                                                                                                                                                                     |
-| 2026-09-28 | Disk 59 % → 49 % (old images, apt cache). Dokploy Daily Docker Cleanup on (never volumes); apt `CleanInterval 7` (§ 17)                                                                                                                                                                                                                                                                                    |
-| 2026-09-28 | Monitoring (§ 18): Better Stack on `/api/health` and the dashboard; Dokploy notifications to Telegram + Gmail; hourly disk alert (`ops/server/`)                                                                                                                                                                                                                                                           |
-| 2026-09-29 | App's own DB role (§ 19): `echoandaura_app` created from `ops/db/app-role.sql`, password via `\password` (Bitwarden `Postgres app role (prod)`); `MIGRATE_DATABASE_URL` = owner; `DATABASE_URL` switched and redeployed. Checked: 12 connections as the app role, `delete from order_events` refused, health ok                                                                                            |
-| 2026-09-29 | Restore over live data rehearsed (RUNBOOK): live dumped (read-only), the 2026-09-28 21:00 UTC backup restored into scratch `echoandaura_rehearsal` with `--no-acl` + `app-role.sql`, app role read it and was refused on `order_events`, rename swap done between scratch databases. ~5 min, mostly the R2 download. Scratch databases dropped, dump and backup copy deleted; live `echoandaura` untouched |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-26 | VPS bought (Ubuntu 22.04 image)                                                                                                                                                                                                                                                                                                                                                                                             |
+| 2026-09-27 | Reinstalled with Ubuntu 24.04; updates; SSH keys only; 2 GB swap; automatic security updates on; hostname `echoandaura`                                                                                                                                                                                                                                                                                                     |
+| 2026-09-27 | ufw installed and enabled (22, 80, 443, 3000); Docker log limits in `/etc/docker/daemon.json`, before Docker                                                                                                                                                                                                                                                                                                                |
+| 2026-09-27 | Dokploy v0.30.7 installed (Docker 28.5.0, Traefik v3.6, Swarm). Owner account created via SSH tunnel; nobody had claimed it in the ~2 h port 3000 was open                                                                                                                                                                                                                                                                  |
+| 2026-09-27 | Dashboard at https://deploy.echoandaura.com (DNS only, Let's Encrypt). Port 3000 closed; outside scan: only 22, 80, 443 answer                                                                                                                                                                                                                                                                                              |
+| 2026-09-27 | Audit of the provider's image: recipes only start qemu-guest-agent; stale recipe logs from other machines removed; one SSH key, root the only shell                                                                                                                                                                                                                                                                         |
+| 2026-09-27 | App Postgres 17 (1 GiB) and Redis 7 (256 MiB) in Dokploy project `echoandaura`; no external ports; reachable on `dokploy-network`, closed from outside                                                                                                                                                                                                                                                                      |
+| 2026-09-27 | Compose app `echoandaura-app` (Git source, `main`, Autodeploy off) with its Environment; not deployed yet. Dokploy 2FA on                                                                                                                                                                                                                                                                                                   |
+| 2026-09-27 | `vm.overcommit_memory = 1` for Redis snapshots (`/etc/sysctl.d/99-redis.conf`)                                                                                                                                                                                                                                                                                                                                              |
+| 2026-09-27 | **First deploy**: PR #1 (`bf87d7e`) → CI → Deploy → Dokploy in ~10½ min; 15 tables; web healthy, worker running. Not public yet                                                                                                                                                                                                                                                                                             |
+| 2026-09-28 | Cloudflare checked (Full strict, Always Use HTTPS off); Traefik entrypoints trust Cloudflare's ranges for `X-Forwarded-For`                                                                                                                                                                                                                                                                                                 |
+| 2026-09-28 | **Site public**: `echoandaura.com` + `www` (proxied, www → root 301), web domain in Dokploy (Let's Encrypt). whoami test: Traefik trust works; app must read XFF from the right (ADR-037)                                                                                                                                                                                                                                   |
+| 2026-09-28 | PR #3 deployed (admin self-service, limiter fix). Evan's admin created. SES keys were template placeholders in Dokploy → fixed; first production email sent and received                                                                                                                                                                                                                                                    |
+| 2026-09-28 | Ticket email failed (worker image lacked the PDF fonts). Fix: fonts copied; worker refuses to boot without fonts or with malformed SES keys                                                                                                                                                                                                                                                                                 |
+| 2026-09-28 | Test data removed (§ 15): backup first, then event/order tables emptied in one transaction; admin account and settings kept; backups and the orphaned R2 cover deleted                                                                                                                                                                                                                                                      |
+| 2026-09-28 | Nightly Postgres backups (§ 16): R2 destination `r2-backups`, `0 21 * * *` UTC (03:00 Dhaka), keep 14. First backup restored on the Mac and matched production exactly                                                                                                                                                                                                                                                      |
+| 2026-09-28 | Disk 59 % → 49 % (old images, apt cache). Dokploy Daily Docker Cleanup on (never volumes); apt `CleanInterval 7` (§ 17)                                                                                                                                                                                                                                                                                                     |
+| 2026-09-28 | Monitoring (§ 18): Better Stack on `/api/health` and the dashboard; Dokploy notifications to Telegram + Gmail; hourly disk alert (`ops/server/`)                                                                                                                                                                                                                                                                            |
+| 2026-09-29 | App's own DB role (§ 19): `echoandaura_app` created from `ops/db/app-role.sql`, password via `\password` (Bitwarden `Postgres app role (prod)`); `MIGRATE_DATABASE_URL` = owner; `DATABASE_URL` switched and redeployed. Checked: 12 connections as the app role, `delete from order_events` refused, health ok                                                                                                             |
+| 2026-09-29 | Restore over live data rehearsed (RUNBOOK): live dumped (read-only), the 2026-09-28 21:00 UTC backup restored into scratch `echoandaura_rehearsal` with `--no-acl` + `app-role.sql`, app role read it and was refused on `order_events`, rename swap done between scratch databases. ~5 min, mostly the R2 download. Scratch databases dropped, dump and backup copy deleted; live `echoandaura` untouched                  |
+| 2026-09-30 | Origin lockdown (§ 20): WAF skip rule for `deploy` `/api/*`, `deploy` proxied; `origin-lockdown` + `.service` installed and enabled (15 IPv4 / 7 IPv6 Cloudflare ranges in `DOCKER-USER`); ufw 80/443 deleted (only OpenSSH left). Checked: direct 80/443 time out, site/dashboard/API through Cloudflare fine, worker reaches SES; **rebooted**: rules back on their own, all containers up in <1 min, `infra:check` green |
