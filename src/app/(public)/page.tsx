@@ -3,6 +3,8 @@ import { publicVenue } from '@/server/lib/venue';
 import { SupportedBy } from '@/components/public/sponsors/supported-by';
 import { getSiteSettings } from '@/lib/settings';
 import { buildHomeMetadata, siteUrl } from '@/lib/seo';
+import { buildHomeJsonLd } from '@/lib/structured-data';
+import { JsonLd } from '@/components/json-ld';
 import { getPublicSponsors } from '@/lib/sponsors';
 import { DormantHero } from './home/dormant-hero';
 import { FollowBlock } from './home/follow-block';
@@ -49,6 +51,16 @@ export default async function HomePage() {
 
   return (
     <main className="home-page flex flex-1 flex-col">
+      {/* ADR-042: who runs the site, for search engines and AI assistants. */}
+      <JsonLd
+        data={buildHomeJsonLd({
+          siteUrl: siteUrl(),
+          logoUrl: `${siteUrl()}/icon`,
+          facebookPageUrl: settings.facebookPageUrl,
+          supportEmail: settings.supportEmail,
+          supportPhone: settings.supportPhone,
+        })}
+      />
       {featured ? (
         <Hero featured={featured} now={new Date()} />
       ) : (

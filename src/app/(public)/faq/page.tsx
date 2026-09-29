@@ -6,7 +6,10 @@ import { ContactCard } from '@/components/public/help/contact';
 import { HelpHeader, HelpMain, overline, tocAside } from '@/components/public/help/layout';
 import { FAQ_TOPICS, faqItems } from '@/content/faq';
 import { HELP_PAGES } from '@/content/policies';
+import { JsonLd } from '@/components/json-ld';
 import { siteUrl } from '@/lib/env.public';
+import { nodeText } from '@/lib/node-text';
+import { buildFaqJsonLd } from '@/lib/structured-data';
 import { getSiteSettings } from '@/lib/settings';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +33,12 @@ export default async function FaqPage() {
   }));
   return (
     <HelpMain>
+      {/* ADR-042: the questions and answers as data, for AI assistants and search. */}
+      <JsonLd
+        data={buildFaqJsonLd(
+          items.map((i) => ({ question: i.question, answer: nodeText(i.answer) })),
+        )}
+      />
       <HelpHeader
         eyebrow="Help & policies"
         title="Questions people ask"

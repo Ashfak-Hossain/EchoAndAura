@@ -174,6 +174,15 @@ export function createEventsService(
     },
 
     /**
+     * The sitemap (ADR-042): every event with a public page — published or
+     * archived, never a draft — and when it last changed.
+     */
+    async getSitemapEvents(): Promise<{ slug: string; updatedAt: Date }[]> {
+      const visible = await repo.listByStatus(['published', 'archived']);
+      return visible.map((e) => ({ slug: e.slug, updatedAt: e.updatedAt }));
+    },
+
+    /**
      * The archive read model (A6): everything that has happened, newest
      * first. One events query; no capacity query, nothing here is on sale.
      */

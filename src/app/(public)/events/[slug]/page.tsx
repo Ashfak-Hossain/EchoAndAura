@@ -11,11 +11,13 @@ import { formatBDT } from '@/server/lib/money';
 import { VENUE_PRIVATE_NOTE, publicVenue, publicVenueLine } from '@/server/lib/venue';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { PresentedBy } from '@/components/public/sponsors/presented-by';
+import { JsonLd } from '@/components/json-ld';
 import { RichText } from '@/components/rich-text';
 import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import { getSiteSettings } from '@/lib/settings';
 import { getPublicSponsors } from '@/lib/sponsors';
 import { buildEventMetadata, siteUrl } from '@/lib/seo';
+import { buildEventJsonLd } from '@/lib/structured-data';
 import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { EventCta } from './cta';
@@ -135,6 +137,8 @@ export default async function PublicEventPage({ params }: Props) {
 
   return (
     <article className="flex flex-1 flex-col" data-phase={phase}>
+      {/* ADR-042: what search engines and AI assistants read about this event. */}
+      <JsonLd data={buildEventJsonLd({ event, ticketTypes, coverUrl, siteUrl: siteUrl(), now })} />
       {/* Title band: the cover as a darkened backdrop on desktop, on top on mobile */}
       <section className={cn('relative overflow-hidden bg-[#14120f] text-background')}>
         <div

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EventRecord } from '@/server/repositories/events.repository';
 import { offerSummary } from '@/server/lib/event-offer';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
@@ -435,8 +435,13 @@ describe('HomePage (H1)', () => {
   const order = (out: string, ids: string[]) => ids.map((id) => out.indexOf(`id="${id}"`));
 
   beforeEach(() => {
+    // The page's structured data needs the public origin (ADR-042).
+    vi.stubEnv('SITE_URL', 'https://echoandaura.com');
     getSettings.mockResolvedValue(settings());
     listPublic.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('with a show: hero, also upcoming, how it works, past, follow — in that order, in one main', async () => {
@@ -465,6 +470,13 @@ describe('HomePage (H1)', () => {
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(out).not.toContain('data-testid="home-dormant"');
+    // ADR-042: who runs the site, as schema.org data inside the one <main>.
+    const ld = /<script type="application\/ld\+json">(.*?)<\/script>/.exec(out)?.[1] ?? '';
+    expect(JSON.parse(ld)['@graph'][0]).toMatchObject({
+      '@type': 'Organization',
+      url: 'https://echoandaura.com',
+      sameAs: ['https://facebook.com/echoandaura'],
+    });
   });
 
   it('between shows: the dormant band leads, and the follow block is not repeated', async () => {

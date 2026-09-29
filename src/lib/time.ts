@@ -25,6 +25,14 @@ export function dhakaDay(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, 'yyyy-MM-dd');
 }
 
+/**
+ * ISO 8601 with Dhaka's offset, e.g. "2026-10-10T19:00:00+06:00". For
+ * machines that should also see the local time (structured data, ADR-042).
+ */
+export function toDhakaIso(date: Date): string {
+  return formatInTimeZone(date, DHAKA_TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
+
 /** Human display, e.g. "1 Oct 2026, 19:00". */
 export function formatDhaka(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, HH:mm');
