@@ -1,0 +1,72 @@
+# Phase 7.5 load test (docs/LOAD-TEST.md): the production web image on the
+# laptop, squeezed to the server's size. Not used by the dev setup or CI.
+#
+# Every container is pinned to the SAME two CPUs (`cpuset: '0,1'`), so web,
+# Postgres and Redis compete for them the way they do on the 2-vCPU server,
+# and each gets the production memory limit. The worker is left out: under
+# NODE_ENV=production it insists on SES and would try to email every test
+# order; registrations only queue their emails in Redis, as on the server.
+#
+#   docker build --target web --build-arg R2_PUBLIC_URL=https://media.echoandaura.com -t echoandaura-web:load .
+#   docker compose -f ops/load/docker-compose.yml up -d
+#   docker compose -f ops/load/docker-compose.yml down -v     # afterwards
+name: echoandaura-load
+
+x-cpus: &cpus
+  cpuset: '0,1'
+
+services:
+  postgres:
+    <<: *cpus
+    image: postgres:17
+    environment:
+      POSTGRES_USER: load
+      POSTGRES_PASSWORD: load
+      POSTGRES_DB: echoandaura_load
+    ports: ['127.0.0.1:55432:5432']
+    mem_limit: 1g
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U load -d echoandaura_load']
+      interval: 2s
+      retries: 30
+
+  redis:
+    <<: *cpus
+    image: redis:7
+    ports: ['127.0.0.1:56379:6379']
+    mem_limit: 256m
+
+  web:
+    <<: *cpus
+    image: echoandaura-web:load
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    ports: ['127.0.0.1:3200:3000']
+    mem_limit: 1g
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: warn
+      DATABASE_URL: postgresql://load:load@postgres:5432/echoandaura_load
+      REDIS_URL: redis://redis:6379
+      SITE_URL: http://localhost:3200
+      BETTER_AUTH_URL: http://localhost:3200
+      BETTER_AUTH_SECRET: load-test-only-not-a-real-secret-000000000=
+      # Storage is never reached by the pages under test (no uploads).
+      R2_ENDPOINT: http://storage.invalid
+      R2_ACCESS_KEY_ID: load
+      R2_SECRET_ACCESS_KEY: load
+      R2_BUCKET: load
+      R2_PUBLIC_URL: https://media.echoandaura.com
+
+  # The load generator, on the OTHER cores: it must not take CPU from the
+  # "server" it is measuring. Inside this network, so it can post to
+  # http://web:3000 with a matching Origin (Next's server-action check).
+  k6:
+    image: grafana/k6:latest
+    profiles: [tools]
+    cpuset: '2-5'
+    depends_on: [web]
+    volumes:
+      - ./:/scripts:ro
+      - ./results:/results
