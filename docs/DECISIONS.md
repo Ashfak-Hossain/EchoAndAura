@@ -2522,11 +2522,20 @@ What was missing:
   and links the sitemap.
 - **`/.well-known/security.txt`** (RFC 9116), pointing at SECURITY.md's
   channels, with a rolling six-month `Expires`.
-- **Per request, not at build.** `robots.txt`, the sitemap, security.txt
-  and the root layout's metadata render per request: at build time
-  `SITE_URL` is a placeholder, and a prerendered file would advertise
-  `build-placeholder.invalid`. The root layout sets `metadataBase`, so
-  generated images get absolute URLs.
+- **Per request, not at build.** At build time `SITE_URL` is a
+  placeholder, and a prerendered file would advertise
+  `build-placeholder.invalid`. So:
+  - `robots.txt`, the sitemap and security.txt render per request;
+  - `metadataBase` and the Open Graph defaults live in the **public**
+    layout, which renders per request anyway;
+  - the share image sits in `(public)/`.
+
+  The root layout's metadata stays static and holds no URL. It also
+  covers the pages Next prerenders (the 404 page,
+  `/admin/forgot-password`). A first version set `metadataBase` in the
+  root layout: the Dockerfile's placeholder check refused the image, and
+  production kept the previous deploy.
+
 - **Generated images, built once:** the default share card
   (`opengraph-image`, `twitter-image`, 1200×630), the icon (512 px, also
   the Organization logo) and the Apple icon. They use the Noto Sans the
