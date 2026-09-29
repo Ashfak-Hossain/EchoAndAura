@@ -34,8 +34,30 @@ const nextConfig: NextConfig = {
     // of a 5 MB source would cost CPU for no visible gain.
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
   },
+  // ADR-043: no `X-Powered-By: Next.js` advert.
+  poweredByHeader: false,
   headers() {
     return Promise.resolve([
+      {
+        // ADR-043: every response. First on purpose: a later rule that
+        // sets the same header (the /door rules below) wins. The CSP is
+        // per request, so it lives in src/proxy.ts instead.
+        source: '/:path*',
+        headers: [
+          // A year of HTTPS-only, subdomains included (deploy, media are
+          // HTTPS already). No `preload`: leaving the browser list is slow.
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Old browsers; modern ones follow the CSP's frame-ancestors.
+          { key: 'X-Frame-Options', value: 'DENY' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), payment=()',
+          },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        ],
+      },
       {
         // ADR-030: the gate scanner. No referrer (the page once carried
         // the pass code in its fragment), no framing, and only this origin

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 // Requires a seeded admin (pnpm admin:create), MinIO, and — for the sign-in
 // flow — E2E_EXPOSE_MAGIC_LINK=1 on the server under test.

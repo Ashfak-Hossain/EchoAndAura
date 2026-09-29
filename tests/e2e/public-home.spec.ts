@@ -1,10 +1,11 @@
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 // Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
 const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
 const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
+const HOME_TITLE = 'echoandaura · Live events and tickets in Dhaka';
 const SITE = (
   process.env.SITE_URL ??
   process.env.BETTER_AUTH_URL ??
@@ -118,11 +119,12 @@ test.describe('home page (A1)', () => {
       // Share preview of the home page names the next event and uses its cover.
       const meta = (p: string) =>
         page.locator(`head meta[property="${p}"]`).getAttribute('content');
-      expect(await meta('og:title')).toBe('echoandaura');
+      // ADR-042: the home title says what the site is.
+      expect(await meta('og:title')).toBe(HOME_TITLE);
       expect(await meta('og:url')).toBe(SITE);
       expect(await meta('og:description')).toContain(`Next: ${title}`);
       expect(await meta('og:image')).toMatch(/\/cover-.+\.png$/);
-      await expect(page).toHaveTitle('echoandaura');
+      await expect(page).toHaveTitle(HOME_TITLE);
     } finally {
       // Unpublish so a re-run's event (a few minutes later) is the hero next time.
       await page.goto(`${editUrl}?tab=publish`);

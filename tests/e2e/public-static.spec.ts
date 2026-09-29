@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test';
 
 // A7: the static pages. No data needed — they read only the environment.
 const PAGES = [

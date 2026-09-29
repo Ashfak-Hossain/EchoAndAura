@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 import sharp from 'sharp';
 
 // Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).

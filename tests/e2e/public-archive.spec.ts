@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test';
 
 // Requires a seeded admin (pnpm admin:create) — the archive is fed by
 // creating and archiving an event through the admin, like public-event.spec.

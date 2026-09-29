@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from './test';
 import { e2eDatabaseUrl } from './prepare-db';
 
 /**

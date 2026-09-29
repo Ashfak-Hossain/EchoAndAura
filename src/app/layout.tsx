@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 /**
- * Static on purpose: this also covers the pages Next prerenders at build
- * (the 404 page, /admin/forgot-password), where SITE_URL is only a
+ * Static on purpose: this also covers any page Next prerenders at build
+ * (today only its global error page, ADR-043), where SITE_URL is only a
  * placeholder. Anything built from the site URL (metadataBase, the share
  * image) lives in the public layout, which renders per request (ADR-042).
  */
