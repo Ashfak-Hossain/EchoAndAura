@@ -32,19 +32,20 @@ because its only users are the owner and GitHub's deploy call (bot
 protection in front of it could block the call), and Traefik gets its
 Let's Encrypt certificate directly ([SERVER.md](SERVER.md)).
 
-| Type   | Name (relative)                               | Content                                                            | Proxy    | Owner / purpose                                                                                                                            |
-| ------ | --------------------------------------------- | ------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| CNAME  | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`              | DNS only | SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                               |
-| CNAME  | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`              | DNS only | SES Easy DKIM (2 of 3)                                                                                                                     |
-| CNAME  | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`              | DNS only | SES Easy DKIM (3 of 3)                                                                                                                     |
-| TXT    | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all` | —        | SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                               |
-| TXT    | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`               | —        | DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                              |
-| MX     | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)    | —        | Cloudflare Email Routing — inbound mail                                                                                                    |
-| MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                      | —        | SES custom MAIL FROM — bounces return to SES                                                                                               |
-| TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                          |
-| A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                | Proxied  | the app                                                                                                                                    |
-| A      | `deploy`                                      | `160.25.226.166`                                                   | DNS only | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27                                                    |
-| R2     | `media`                                       | the `echoandaura-media` bucket                                     | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27 |
+| Type   | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                            |
+| ------ | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| CNAME  | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                               |
+| CNAME  | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (2 of 3)                                                                                                                     |
+| CNAME  | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (3 of 3)                                                                                                                     |
+| TXT    | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`     | —        | SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                               |
+| TXT    | `@`                                           | `google-site-verification=S3DYisjK96_Pj68G62eYa0CZZ3q8k8pM1_e4FaRmDWU` | —        | Google Search Console owns the domain property (ADR-042). Bing imported the site from it. **Deleting it drops Search Console access**      |
+| TXT    | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`                   | —        | DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                              |
+| MX     | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Routing — inbound mail                                                                                                    |
+| MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | SES custom MAIL FROM — bounces return to SES                                                                                               |
+| TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                          |
+| A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                    | Proxied  | the app                                                                                                                                    |
+| A      | `deploy`                                      | `160.25.226.166`                                                       | DNS only | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27                                                    |
+| R2     | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27 |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
 leave it.
@@ -212,11 +213,18 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
   Cloudflare adds its content-signals comments to ours. Check that
   `https://echoandaura.com/robots.txt` shows the app's `Disallow` lines
   and the `Sitemap:` line.
-- **Google Search Console and Bing Webmaster Tools:** add the domain
-  property, verify it with the TXT record they give (add it in DNS here,
-  unproxied, and list it in the record table), then submit
-  `https://echoandaura.com/sitemap.xml`. Bing can import the site from
-  Search Console instead.
+- **Google Search Console** (done 2026-09-29): a Domain property for
+  `echoandaura.com`, verified by the `google-site-verification` TXT on
+  `@` (record table above). The sitemap `https://echoandaura.com/sitemap.xml`
+  was submitted, with status Success.
+- **Bing Webmaster Tools** (done 2026-09-29): imported from Search
+  Console, verification and sitemap included. Bing's index also feeds
+  Copilot and DuckDuckGo.
+- **When an event is published:** it joins the sitemap on its own. For
+  faster indexing, use Search Console → URL Inspection → Request
+  indexing. Check it with the Rich Results Test
+  (https://search.google.com/test/rich-results), which should find an
+  Event with its offers.
 
 ## History
 
@@ -225,3 +233,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-09-20 | DKIM CNAMEs, SPF (merged Cloudflare + SES), DMARC `p=none`, MAIL FROM MX/TXT, Email Routing `hello@`                                                            |
 | 2026-09-27 | `deploy` A record (DNS only) for the Dokploy dashboard                                                                                                          |
 | 2026-09-27 | R2 on (payment method added): buckets `echoandaura-media` (public at `media.`, CORS for presigned PUT) and `echoandaura-backups` (private), one scoped key each |
+| 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                     |

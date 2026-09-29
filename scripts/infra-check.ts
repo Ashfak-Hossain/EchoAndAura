@@ -290,6 +290,12 @@ const checks: Check[] = [
       return 'missing include:_spf.mx.cloudflare.net';
     return null;
   }),
+  // ADR-042: Search Console's domain property hangs on this record.
+  dnsCheck('Google Search Console verification TXT', 'TXT', DOMAIN, (l) =>
+    l.some((x) => x.includes('google-site-verification='))
+      ? null
+      : 'missing: Search Console loses the domain',
+  ),
   dnsCheck('DMARC published', 'TXT', `_dmarc.${DOMAIN}`, (l) =>
     l.some((x) => x.includes('v=DMARC1')) ? null : 'no DMARC record',
   ),
