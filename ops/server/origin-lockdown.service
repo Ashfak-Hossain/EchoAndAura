@@ -1,0 +1,14 @@
+[Unit]
+Description=Only Cloudflare may reach ports 80 and 443 (SERVER.md section 20)
+# DOCKER-USER exists once Docker is up. PartOf: when Docker restarts, this
+# runs again, so its rules are always in place while the site is.
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/origin-lockdown apply
+
+[Install]
+WantedBy=docker.service
