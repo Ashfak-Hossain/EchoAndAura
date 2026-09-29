@@ -10,9 +10,11 @@ export type CsvValue = string | number | null | undefined;
 export function csvField(value: CsvValue): string {
   if (value === null || value === undefined) return '';
   const s = String(value);
-  // A leading = + - @ would be executed as a formula by spreadsheets when
-  // the cell is untrusted user text (a buyer's name): neutralise it.
-  const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+  // A leading = + - @ (or a tab or CR, which spreadsheets also read as the
+  // start of a formula) would be executed when the cell is untrusted user
+  // text, a buyer's name: neutralise it. Numbers are ours, never text to
+  // defuse, and must stay numbers in the sheet.
+  const safe = typeof value === 'string' && /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
   return /[",\r\n]|^\s|\s$/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 

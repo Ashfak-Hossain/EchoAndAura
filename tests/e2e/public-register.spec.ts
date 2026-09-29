@@ -221,4 +221,34 @@ test.describe('registration (A3 → A4)', () => {
     await expect(page.getByText('Awaiting payment')).toBeVisible();
     await expect(page.getByLabel(/transaction id \(trxid\)/i)).toHaveValue(edited);
   });
+
+  // Phase 7.6: a few orders from one phone must not hold a whole event.
+  test('one mobile number gets two open orders per event; the third is refused with a way forward', async ({
+    page,
+  }) => {
+    await signIn(page);
+    const slug = await publishedEvent(page, `Cap ${Date.now()}`);
+
+    const order = async () => {
+      await page.goto(`/events/${slug}/register`);
+      await page.getByRole('radio', { name: /general/i }).check();
+      await page.getByLabel('Full name').fill('Tanvir Alam');
+      await page.getByLabel('Email address').fill('tanvir@example.com');
+      await page.getByLabel('Mobile number').fill('1799999999');
+      await page.getByLabel(/I agree to the terms/).check();
+      await page.getByRole('button', { name: /continue to payment/i }).click();
+    };
+
+    await order();
+    await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
+    await order();
+    await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
+
+    await order();
+    await expect(page.getByText('You already have orders waiting for this event')).toBeVisible();
+    await expect(page.getByText(/This mobile number has 2 orders waiting/)).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/events/${slug}/register$`));
+    // What the buyer typed stays.
+    await expect(page.getByLabel('Full name')).toHaveValue('Tanvir Alam');
+  });
 });

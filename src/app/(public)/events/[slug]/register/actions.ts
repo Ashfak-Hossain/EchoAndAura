@@ -10,6 +10,7 @@ import {
   SoldOutError,
   TicketTypeNotFoundError,
   TicketTypeNotOnSaleError,
+  TooManyOpenOrdersError,
 } from '@/server/lib/errors';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
 import { requestIp } from '@/lib/request-ip';
@@ -32,6 +33,22 @@ export interface RegistrationFormState {
 const promoLimiter = createRateLimiter(redisRateLimitStore(), { onError: 'allow' });
 const PROMO_LIMIT = { limit: 20, windowSeconds: 60 };
 const TOO_MANY = 'Too many tries. Please wait a minute and try again.';
+
+// Phase 7.6: every order holds seats for 24 hours, so placing them is
+// throttled per network too (the service also caps open orders per phone).
+// Generous on purpose: Bangladeshi mobile carriers put many buyers behind
+// one address (CGNAT). A limiter outage lets the order through; the
+// per-phone cap still holds. Off for the e2e suite (APP_ENV=test), which
+// registers from one address all run, like the sign-in limiter.
+const orderLimiter = createRateLimiter(redisRateLimitStore(), { onError: 'allow' });
+const ORDER_LIMIT = { limit: 20, windowSeconds: 15 * 60 };
+
+async function orderAllowed(): Promise<boolean> {
+  if (process.env.APP_ENV === 'test') return true;
+  return orderLimiter.allow([
+    { scope: 'order-create:ip', subject: await requestIp(), ...ORDER_LIMIT },
+  ]);
+}
 
 async function promoCheckAllowed(): Promise<boolean> {
   return promoLimiter.allow([
@@ -58,6 +75,16 @@ export async function registerAction(
 
   if (parsed.data.promoCode && !(await promoCheckAllowed())) {
     return { fieldErrors: { promoCode: TOO_MANY }, values };
+  }
+
+  if (!(await orderAllowed())) {
+    return {
+      banner: {
+        title: 'Too many orders from this network',
+        body: 'Please wait a few minutes and try again. Nothing has been charged.',
+      },
+      values,
+    };
   }
 
   let orderId: string;
@@ -152,6 +179,12 @@ function toBanner(err: unknown): NonNullable<RegistrationFormState['banner']> {
     return {
       title: 'That ticket type is not on sale',
       body: 'Its sales window is over or has not started. Choose another ticket type.',
+    };
+  }
+  if (err instanceof TooManyOpenOrdersError) {
+    return {
+      title: 'You already have orders waiting for this event',
+      body: `This mobile number has ${err.limit} orders waiting for payment or checking. Pay for one, or let its 24-hour hold end, before ordering again. You can find them with Find my order.`,
     };
   }
   if (err instanceof InvalidQuantityError) {

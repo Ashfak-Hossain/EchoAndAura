@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   ilike,
   inArray,
@@ -118,6 +119,18 @@ export interface OrdersRepository {
   /** `pending_payment` orders whose hold passed before `now`, oldest first. */
   listLapsedHolds(now: Date, limit: number): Promise<LapsedHold[]>;
   /**
+   * Serialises order creation for one buyer phone on one event until `tx`
+   * ends (a transaction-scoped advisory lock), so two submits at once can't
+   * both pass the open-order cap. Other buyers never wait on it.
+   */
+  lockBuyer(eventId: string, phone: string, tx: DbExecutor): Promise<void>;
+  /**
+   * The orders this phone still holds seats with on this event: awaiting
+   * verification, or awaiting payment with a hold that hasn't lapsed yet
+   * (a lapsed one no longer counts, even before the expiry job runs).
+   */
+  countOpenForBuyer(eventId: string, phone: string, now: Date, tx: DbExecutor): Promise<number>;
+  /**
    * B7: every `pending_verification` order, oldest submission first. The
    * trxID submission is the last write, so `updated_at` is the queue clock.
    * Unbounded on purpose — a single organizer's queue is tens of rows; the
@@ -177,6 +190,29 @@ export const ordersRepository: OrdersRepository = {
     // would otherwise deadlock (found in review). Nobody updates the key.
     const [row] = await tx.select().from(orders).where(eq(orders.id, id)).for('no key update');
     return row ?? null;
+  },
+
+  async lockBuyer(eventId, phone, tx) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`order-buyer:${eventId}:${phone}`}, 0))`,
+    );
+  },
+
+  async countOpenForBuyer(eventId, phone, now, tx) {
+    const [row] = await tx
+      .select({ n: count() })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.eventId, eventId),
+          eq(orders.buyerPhone, phone),
+          or(
+            eq(orders.status, 'pending_verification'),
+            and(eq(orders.status, 'pending_payment'), gt(orders.holdExpiresAt, now)),
+          ),
+        ),
+      );
+    return row?.n ?? 0;
   },
 
   async findByReference(reference) {

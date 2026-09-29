@@ -12,6 +12,7 @@ import {
   TicketTypeNotOnSaleError,
   EventNotFoundError,
   PromoCodeNotValidError,
+  TooManyOpenOrdersError,
 } from '@/server/lib/errors';
 import { eventPhase } from '@/server/lib/event-phase';
 import { logger } from '@/server/lib/logger';
@@ -225,6 +226,15 @@ export function matchedField(row: QueueRow, term: OrdersSearchFilter['term']): M
   return null;
 }
 
+/**
+ * Open orders (awaiting payment or verification) one phone number may have
+ * on one event. Each holds up to 10 seats for 24 hours, so without a cap a
+ * few scripted orders could hold a whole event (Phase 7.6 review). Two
+ * leaves room for a second order for friends; decided with the user,
+ * 2026-09-30.
+ */
+export const MAX_OPEN_ORDERS_PER_BUYER = 2;
+
 export function createOrdersService({
   orders,
   tickets,
@@ -269,7 +279,8 @@ export function createOrdersService({
     /**
      * @throws EventNotFoundError (unknown slug or draft), RegistrationClosedError,
      *   TicketTypeNotFoundError (not this event's), TicketTypeNotOnSaleError,
-     *   AttendeeNamesMismatchError, SoldOutError, InvalidQuantityError
+     *   AttendeeNamesMismatchError, SoldOutError, InvalidQuantityError,
+     *   TooManyOpenOrdersError (this phone already has MAX_OPEN_ORDERS_PER_BUYER)
      */
     async createOrder(input: CreateOrderInput): Promise<OrderRecord> {
       const at = now();
@@ -328,6 +339,17 @@ export function createOrdersService({
         const ref = reference();
         try {
           const created = await runInTransaction(async (tx) => {
+            // One buyer can't hold the event hostage: a phone number may have
+            // MAX_OPEN_ORDERS_PER_BUYER orders awaiting payment or
+            // verification per event. The lock makes count-then-hold safe
+            // against the same buyer submitting twice at once; it is keyed
+            // on this buyer only, so nobody else waits.
+            await orders.lockBuyer(event.id, input.buyerPhone, tx);
+            const open = await orders.countOpenForBuyer(event.id, input.buyerPhone, at, tx);
+            if (open >= MAX_OPEN_ORDERS_PER_BUYER) {
+              throw new TooManyOpenOrdersError(MAX_OPEN_ORDERS_PER_BUYER);
+            }
+
             const held = await inventory.hold(ticketType.id, input.quantity, tx);
             if (!held) throw new SoldOutError(ticketType.id, input.quantity);
 

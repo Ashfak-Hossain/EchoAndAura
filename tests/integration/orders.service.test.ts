@@ -79,7 +79,9 @@ describe('ordersService.createOrder (Postgres)', () => {
     quantity,
     buyerName: 'Nusrat Jahan',
     buyerEmail: 'nusrat@example.com',
-    buyerPhone: '+8801712345678',
+    // A different buyer each time: one phone may hold only
+    // MAX_OPEN_ORDERS_PER_BUYER open orders per event (orders.buyer-cap.test.ts).
+    buyerPhone: `+88017${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`,
     attendeeNames: Array.from({ length: quantity }, (_, i) => `Guest ${i + 1}`),
   });
 

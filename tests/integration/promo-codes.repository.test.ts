@@ -196,7 +196,12 @@ describe('promoCodesRepository (Postgres)', () => {
     const a = await orders.createOrder({ ...base, promoCode: `gen${tag.toLowerCase()}` });
     expect(a).toMatchObject({ subtotalPaisa: 240_000, discountPaisa: 36_000, totalPaisa: 204_000 });
     const b = await orders.createOrder({ ...base, promoCode: `GEN${tag}` });
-    const c = await orders.createOrder({ ...base, promoCode: `GEN${tag}` });
+    // A second buyer: one phone may hold only two open orders per event (Phase 7.6).
+    const c = await orders.createOrder({
+      ...base,
+      buyerPhone: '+8801812345678',
+      promoCode: `GEN${tag}`,
+    });
     // One verified, one still pending, one expired (counts nowhere but "ever used").
     await db.update(schema.orders).set({ status: 'issued' }).where(eq(schema.orders.id, a.id));
     await db.update(schema.orders).set({ status: 'expired' }).where(eq(schema.orders.id, c.id));
