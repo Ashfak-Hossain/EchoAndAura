@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import postgres from 'postgres';
 
 /**
@@ -20,6 +21,23 @@ export function e2eDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   if (!base) throw new Error('DATABASE_URL (or E2E_DATABASE_URL) must be set for the e2e suite');
   const url = new URL(base);
   url.pathname = `${url.pathname.replace(/\/$/, '')}_e2e`;
+  return url.toString();
+}
+
+/**
+ * ADR-044: the suite's server runs as the least-privilege app role, as in
+ * production, so every page and action in the suite also proves the role's
+ * grants are enough. The password only exists on the local and CI
+ * Postgres; the integration test uses the same one, so the two suites
+ * can't lock each other out.
+ */
+export const APP_ROLE = 'echoandaura_app';
+export const LOCAL_APP_ROLE_PASSWORD = 'echoandaura-app-local-only';
+
+export function e2eAppDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const url = new URL(e2eDatabaseUrl(env));
+  url.username = APP_ROLE;
+  url.password = LOCAL_APP_ROLE_PASSWORD;
   return url.toString();
 }
 
@@ -60,6 +78,9 @@ export async function prepareDatabase(url: string): Promise<void> {
         stdio: 'inherit',
       });
     }
+    // Run as the owner, like production (SERVER.md § 19).
+    await sql.unsafe(readFileSync('ops/db/app-role.sql', 'utf8'));
+    await sql.unsafe(`alter role ${APP_ROLE} password '${LOCAL_APP_ROLE_PASSWORD}'`);
   } finally {
     await sql.end();
   }

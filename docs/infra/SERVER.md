@@ -357,8 +357,10 @@ Postgres 16, which holds only Dokploy's settings.
 | Postgres | `echoandaura-db-ljctqy`    | `postgres:17` | 1 GiB        | `echoandaura-db-ljctqy-data`    | `Postgres (prod)`: password, `DATABASE_URL` |
 | Redis    | `echoandaura-redis-t1myan` | `redis:7`     | 256 MiB      | `echoandaura-redis-t1myan-data` | `Redis (prod)`: password, `REDIS_URL`       |
 
-- Database `echoandaura`, user `echoandaura` (the app's own user, not
-  the `postgres` superuser). No extensions are needed.
+- Database `echoandaura`, user `echoandaura`. It is the image's
+  `POSTGRES_USER`, so it is a **superuser** and owns every table. Since
+  § 19 only migrations and backups use it; the app connects as
+  `echoandaura_app`. No extensions are needed.
 - Dokploy appends a random suffix to each App Name. The host names above
   are the real ones, and they are what `DATABASE_URL` and `REDIS_URL`
   point at.
@@ -408,7 +410,8 @@ Dokploy project `echoandaura` → `production` → Compose app
 
 | Variable                                                               | From Bitwarden                                                                              |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                                         | `Postgres (prod)`                                                                           |
+| `DATABASE_URL`                                                         | `Postgres app role (prod)` (§ 19)                                                           |
+| `MIGRATE_DATABASE_URL`                                                 | `Postgres (prod)`: the owner, for the `migrate` service only (§ 19)                         |
 | `REDIS_URL`                                                            | `Redis (prod)`                                                                              |
 | `SITE_URL`, `BETTER_AUTH_URL`                                          | `https://echoandaura.com` (not secret)                                                      |
 | `BETTER_AUTH_SECRET`                                                   | `BETTER_AUTH_SECRET (prod)` (`openssl rand -base64 32`)                                     |
@@ -693,7 +696,7 @@ from scratch" step 5). Before the app starts:
 
 ```sh
 C=$(docker ps -q -f name=<postgres App Name> | head -1)
-gunzip -c ~/<file>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura --no-owner --exit-on-error
+gunzip -c ~/<file>.sql.gz | docker exec -i $C pg_restore -U echoandaura -d echoandaura --no-owner --no-acl --exit-on-error
 docker exec $C psql -U echoandaura -d echoandaura -c 'select count(*) from drizzle.__drizzle_migrations'
 rm ~/<file>.sql.gz
 ```
@@ -701,6 +704,12 @@ rm ~/<file>.sql.gz
 It prints nothing when it works. On a database that already has tables,
 it stops at the first one that exists. That is on purpose: this command
 never overwrites anything.
+
+Then create the app's role and grants (section 19, steps 3–5, with
+the password already in Bitwarden). A backup holds the tables, not the
+roles: `--no-acl` leaves out its grants (they name a role a rebuilt
+server doesn't have yet, which would stop the restore), and
+`app-role.sql` puts them back from the repo.
 
 Restoring over live data is a different case, for example undoing a
 bad bulk edit: stop web and worker, restore into a new database, check
@@ -796,6 +805,65 @@ explains the choices.
 - Certificate and domain expiry (a paid Better Stack feature). The
   runbook has the dates to watch.
 
+### 19. The app's own database role (ADR-044)
+
+Until this step, the web app and the worker connected as `echoandaura`,
+a superuser: a SQL injection or a bug would have had every right in the
+cluster. Now:
+
+| Role              | Used by                                             | Can                                                                                                                                       |
+| ----------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `echoandaura`     | `migrate` (`MIGRATE_DATABASE_URL`), Dokploy backups | everything (owner, superuser)                                                                                                             |
+| `echoandaura_app` | web and worker (`DATABASE_URL`)                     | read, insert, update, delete rows in `public`; **not** update or delete `order_events` and `door_scans`; no schema changes, no `TRUNCATE` |
+
+The grants are in the repo: [`ops/db/app-role.sql`](../../ops/db/app-role.sql).
+It holds no password and is safe to re-run. CI checks it on every push
+(`tests/integration/db-role.test.ts`).
+
+**Steps, in this order** (so no deploy ever runs without the variable it
+needs):
+
+1. **Before merging the PR:** Dokploy → the compose app → Environment:
+   add `MIGRATE_DATABASE_URL` with the **same value** as the current
+   `DATABASE_URL`. Save. Nothing restarts.
+2. Merge. The Deploy workflow deploys as usual; `migrate` now reads
+   `MIGRATE_DATABASE_URL`.
+3. On the server, create the role and its grants, straight from `main`:
+   ```sh
+   C=$(docker ps -q -f name=echoandaura-db-ljctqy | head -1)
+   curl -fsSL https://raw.githubusercontent.com/Ashfak-Hossain/EchoAndAura/main/ops/db/app-role.sql \
+     | docker exec -i $C psql -v ON_ERROR_STOP=1 -U echoandaura -d echoandaura
+   ```
+4. Give it a password. Generate 32 letters and digits (no symbols) in
+   Bitwarden, new item `Postgres app role (prod)`, then type it at the
+   prompt (twice). `\password` keeps it out of shell history and logs:
+   ```sh
+   docker exec -it $C psql -U echoandaura -d echoandaura -c '\password echoandaura_app'
+   ```
+5. Check the login (prompts for the password):
+   ```sh
+   docker exec -it $C psql -h localhost -U echoandaura_app -d echoandaura \
+     -c 'select current_user, (select count(*) from orders) as orders'
+   ```
+6. Save the URL in the Bitwarden item:
+   `postgresql://echoandaura_app:<password>@echoandaura-db-ljctqy:5432/echoandaura`.
+   Dokploy → Environment: set `DATABASE_URL` to it. Save, then **Deploy**.
+
+**Check:**
+
+- `/api/health` says `ok`, and an admin can sign in.
+- Web and worker connect as the app role (nothing but `migrate`, backups
+  and your own psql should show `echoandaura`):
+  ```sh
+  docker exec $C psql -U echoandaura -d echoandaura -c \
+    "select usename, count(*) from pg_stat_activity where datname = 'echoandaura' group by 1"
+  ```
+- The audit trail is protected (must say `permission denied`):
+  ```sh
+  docker exec -it $C psql -h localhost -U echoandaura_app -d echoandaura \
+    -c 'delete from order_events where false'
+  ```
+
 ---
 
 ## Verify
@@ -843,7 +911,9 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
    Server Domain, close port 3000.
 5. Section 10: the project, Postgres and Redis. **Restore the latest
    Postgres backup** into the new database before the app starts
-   (section 16, "Restore into an empty database"), then set up section 16's
+   (section 16, "Restore into an empty database"), then create the app's
+   role (section 19, steps 3–5, with the password already in Bitwarden
+   `Postgres app role (prod)`), then set up section 16's
    destination and nightly backup again. The new
    App Names get new suffixes: update this file and the URLs in
    Bitwarden.

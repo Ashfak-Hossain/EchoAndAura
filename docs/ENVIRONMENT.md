@@ -26,7 +26,8 @@ variable, because the image build needs it (ADR-033). See
 | Variable                                                                                    | Required           | First needed | Purpose                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------------------------------- | ------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                       | Yes                | Phase 0      | Credentials for the local Postgres container                                                                                                                                                                                                  |
-| `DATABASE_URL`                                                                              | Yes                | Phase 0      | App's Postgres connection string                                                                                                                                                                                                              |
+| `DATABASE_URL`                                                                              | Yes                | Phase 0      | App's Postgres connection string. In production: the least-privilege `echoandaura_app` role (ADR-044), never the owner                                                                                                                        |
+| `MIGRATE_DATABASE_URL`                                                                      | Production only    | Phase 7      | The `migrate` service's connection string: the database owner, which runs migrations (ADR-044). Not given to web or worker                                                                                                                    |
 | `TEST_DATABASE_URL`                                                                         | No                 | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`)                                                                                                                                                                          |
 | `REDIS_URL`                                                                                 | Yes                | Phase 3      | BullMQ: the worker consumes; the app enqueues email jobs after each commit (fails fast and logs if Redis is down — the order stands)                                                                                                          |
 | `LOG_LEVEL`                                                                                 | No                 | Phase 3      | pino level for services and the worker (default `debug` locally, `info` in production)                                                                                                                                                        |
@@ -58,8 +59,11 @@ variable, because the image build needs it (ADR-033). See
   defaults already match, so local dev works out of the box.
 - `DATABASE_URL` must point at those values:
   `postgresql://<user>:<password>@localhost:5432/<db>`.
-- **Production:** use a managed Postgres (or the VPS container) and set
-  `DATABASE_URL` to its connection string.
+- **Production** (ADR-044): two connection strings to the same database.
+  `DATABASE_URL` (web and worker) uses the `echoandaura_app` role, which
+  can read and write rows but not change the schema or rewrite the audit
+  trails. `MIGRATE_DATABASE_URL` (only the `migrate` service) uses the
+  owner, `echoandaura`. Local dev and CI use one owner URL for both.
 
 ### Redis
 

@@ -9,8 +9,8 @@
 # (set in its UI, copied from Bitwarden) — no secret is ever in the repo.
 # `${VAR:?…}` makes a deploy refuse to start when a required one is missing.
 # The SES keys go to the worker only (the web never sends email). The auth
-# settings go to both: the worker runs the create-admin script, and it holds
-# the database password anyway, which is full control.
+# settings go to both: the worker runs the create-admin script, and its
+# database role can write the admin rows anyway.
 #
 # IMAGE_TAG: `main` (the default, the latest green build) or `sha-<commit>`
 # to pin a version — that is how a rollback works (docs/DEPLOY.md).
@@ -53,7 +53,9 @@ services:
     command: ['node', 'dist/ops/migrate.mjs']
     restart: 'no'
     environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy}
+      # ADR-044: migrations run as the database owner; web and worker get
+      # DATABASE_URL, the least-privilege app role (ops/db/app-role.sql).
+      DATABASE_URL: ${MIGRATE_DATABASE_URL:?Set MIGRATE_DATABASE_URL in Dokploy}
     mem_limit: 256m
     logging: *logging
     networks: [dokploy-network]
