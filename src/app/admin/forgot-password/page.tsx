@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { AuthScreen } from '@/components/admin/auth-screen';
+import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
 import { ForgotPasswordForm } from './forgot-password-form';
 
@@ -27,7 +28,10 @@ export default async function ForgotPasswordPage() {
         </p>
       }
     >
-      <ForgotPasswordForm ttlMinutes={PASSWORD_RESET_TTL_SECONDS / 60} />
+      <ForgotPasswordForm
+        ttlMinutes={PASSWORD_RESET_TTL_SECONDS / 60}
+        siteKey={readTurnstileConfig().siteKey}
+      />
     </AuthScreen>
   );
 }

@@ -35,6 +35,14 @@ flow stays correct under a rush (the atomic hold, invariant 2).
 - **No worker:** in production mode it insists on real SES and would have
   emailed every test order. Registrations queue their emails in Redis, as
   on the server; the worker's own CPU use is small next to the web's.
+- **The bot check runs on Cloudflare's test keys** (ADR-048, since
+  2026-10-02): the web runs with `APP_ENV=local`, because `production`
+  refuses test keys and `test` would switch off the per-network order
+  limit. `register.js` sends the test widget's dummy token, and the
+  server asks Cloudflare's siteverify about each submit as in production,
+  so the rush needs internet. The runs above predate the bot check; its
+  round trip (tens of milliseconds) lands in the submit times of later
+  runs.
 - **Page views are HTML only.** k6 doesn't fetch images, scripts or
   styles; Cloudflare and browser caches serve those in production.
 - **Scaled to the server** with a CPU benchmark (`ops/load/bench.js`, the

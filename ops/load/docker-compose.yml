@@ -45,7 +45,13 @@ services:
     ports: ['127.0.0.1:3200:3000']
     mem_limit: 1g
     environment:
-      APP_ENV: production
+      # Not production: that refuses Turnstile's test keys (ADR-048), and
+      # register.js has no browser to solve a real challenge. Not test
+      # either: that turns off the per-network order limiter the rush
+      # exercises. `local` changes only the bot check (test keys; the
+      # dummy token passes) and the admin env chip; `next start` still
+      # runs NODE_ENV=production.
+      APP_ENV: local
       LOG_LEVEL: warn
       DATABASE_URL: postgresql://load:load@postgres:5432/echoandaura_load
       REDIS_URL: redis://redis:6379

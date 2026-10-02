@@ -8,6 +8,7 @@ import { promoAppliesTo, promoDiscountPaisa, promoDiscountPerTicket } from '@/se
 import { Button } from '@/components/button';
 import { FieldHint } from '@/components/form-field';
 import { Money } from '@/components/money';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BD_MOBILE_PREFIX } from '@/lib/validation/orders';
@@ -34,6 +35,8 @@ interface Props {
   registrationClosesAt: string | null;
   /** From the buyer's session, when signed in. */
   prefill?: { name: string; email: string } | null;
+  /** ADR-048: read by the page at request time (images are built without it). */
+  siteKey: string;
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -50,6 +53,7 @@ export function RegistrationForm({
   options,
   registrationClosesAt,
   prefill,
+  siteKey,
 }: Props) {
   const [state, formAction, pending] = useActionState(action, {});
   // After an action React resets uncontrolled inputs; seeding from the last
@@ -493,6 +497,9 @@ export function RegistrationForm({
         </label>
         {errors.terms ? <FieldError>{errors.terms}</FieldError> : null}
       </div>
+
+      {/* In the flow, not the sticky bar: a challenge must not cover the form on mobile. */}
+      <TurnstileWidget siteKey={siteKey} action="register" resetSignal={state} />
 
       {/* Sticky on mobile (design A3), inline on desktop */}
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur lg:static lg:border-0 lg:bg-transparent lg:p-0">

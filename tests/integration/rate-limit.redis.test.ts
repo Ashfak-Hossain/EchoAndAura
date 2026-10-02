@@ -23,8 +23,10 @@ describe('rate limiter on a real Redis', () => {
   it('a brand-new limiter connection counts its very first hit', async () => {
     const store = createRedisRateLimitStore(fresh('limiter'));
     const key = `ratelimit:test:${randomBytes(6).toString('hex')}`;
+    expect(await store.peek(key)).toBe(0);
     expect(await store.hit(key, 30)).toBe(1);
     expect(await store.hit(key, 30)).toBe(2);
+    expect(await store.peek(key)).toBe(2);
   });
 
   it('(why) the fail-fast producer connection refuses that same first command', async () => {

@@ -3,13 +3,20 @@
 import { useActionState } from 'react';
 import { Button } from '@/components/button';
 import { Field, FormAlert, FormSuccess } from '@/components/form-field';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import { Input } from '@/components/ui/input';
 import { requestPasswordResetAction, type ForgotPasswordState } from './actions';
 
 const initialState: ForgotPasswordState = {};
 
 /** The answer never says whether the address is an admin's (ADR-038). */
-export function ForgotPasswordForm({ ttlMinutes }: { ttlMinutes: number }) {
+export function ForgotPasswordForm({
+  ttlMinutes,
+  siteKey,
+}: {
+  ttlMinutes: number;
+  siteKey: string;
+}) {
   const [state, formAction, pending] = useActionState(requestPasswordResetAction, initialState);
 
   if (state.sentTo) {
@@ -50,6 +57,7 @@ export function ForgotPasswordForm({ ttlMinutes }: { ttlMinutes: number }) {
           className="h-12 text-base"
         />
       </Field>
+      <TurnstileWidget siteKey={siteKey} action="password-reset" resetSignal={state} />
       <Button type="submit" disabled={pending} className="h-12 w-full text-base">
         {pending ? 'Sending…' : 'Send a reset link'}
       </Button>

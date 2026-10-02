@@ -1,10 +1,11 @@
 # Cloudflare
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-09-27
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
 
 Cloudflare holds the **domain** (registrar + authoritative DNS), receives
-mail for `hello@` (**Email Routing**), and will hold event cover images
-(**R2**, from Phase 6). It does not run the app. Every DNS record that
+mail for `hello@` (**Email Routing**), holds event cover images
+(**R2**), and checks for bots on the public forms
+(**Turnstile**, ADR-048). It does not run the app. Every DNS record that
 exists is in the table below — if a record is not here, it should not be
 in the zone. `pnpm infra:check` resolves each one.
 
@@ -179,6 +180,42 @@ seconds, blocking for 10 seconds.
 - **Event night:** door phones and admins at the venue may share one
   address; scanning is about one request per scan, far under the limit.
 
+## Turnstile
+
+The bot check on five public forms: registration, Find my order, buyer
+sign-in, admin login, admin forgot password (ADR-048), on the free
+plan. The browser solves a challenge from Cloudflare's script; the
+web sends the token to siteverify with the secret before doing anything.
+
+| Item          | Value                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------- |
+| Widget        | `echoandaura forms`                                                                     |
+| Hostnames     | `echoandaura.com` (the server also checks the solved-on host against `SITE_URL`'s host) |
+| Mode          | Managed (the widget renders `interaction-only`: most visitors never see it)             |
+| Pre-clearance | No                                                                                      |
+| Keys          | Bitwarden `Cloudflare Turnstile` → Dokploy, the compose app's Environment               |
+| Used by       | web only: `TURNSTILE_SITE_KEY` (public, sent to every browser), `TURNSTILE_SECRET_KEY`  |
+
+**Create the widget (once).** Cloudflare dashboard → **Turnstile** (in
+the account menu; search "Turnstile" if it has moved) → **Add widget**:
+
+1. Widget name `echoandaura forms`.
+2. Hostname management → add `echoandaura.com`. Not `localhost`: dev and
+   the e2e suite use Cloudflare's test keys, which need no widget.
+3. Widget mode **Managed**.
+4. Pre-clearance **No**: the forms check their own token; a clearance
+   cookie for the rest of the site would add nothing.
+5. **Create**, then copy the **Site Key** and **Secret Key** into a new
+   Bitwarden item `Cloudflare Turnstile`.
+6. Dokploy → the compose app → Environment → `TURNSTILE_SITE_KEY` and
+   `TURNSTILE_SECRET_KEY` → save. Both must be there **before** the
+   change that reads them is merged ([DEPLOY.md](../DEPLOY.md)), or the
+   deploy fails.
+
+Analytics (Turnstile → the widget) show solves and failures per hostname
+and action; the action names are in `TURNSTILE_ACTIONS`
+(`src/lib/turnstile-config.ts`).
+
 ## Runbooks
 
 ### Add or change a DNS record
@@ -214,6 +251,15 @@ scope (Object Read & Write, that one bucket) → update Bitwarden →
   Test → run a manual backup;
 
 → then delete the old token.
+
+### Rotate the Turnstile secret
+
+Turnstile → `echoandaura forms` → Settings → **Rotate secret key**
+(Cloudflare keeps the old one valid for a short while; it says how
+long) → update Bitwarden `Cloudflare Turnstile` → Dokploy → the compose
+app → Environment → `TURNSTILE_SECRET_KEY` → **Deploy** → send Find my
+order with a made-up reference (`EA-7K3M9Q`) and any valid mobile: it
+must say no order matches, not the bot message. The site key does not change.
 
 ### Lose access to the Cloudflare account
 
@@ -273,3 +319,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                     |
 | 2026-09-30 | WAF custom rule `deploy API - no challenges` (skip for `deploy` `/api/*`); `deploy` A record proxied; Bot Fight Mode confirmed off (ADR-045)                    |
 | 2026-09-30 | Rate limiting rule `requests per address`: path not under `/_next/`, 150 requests / 10 s per IP, block 10 s (the free plan's one rule, ADR-047)                 |
+| 2026-10-02 | Turnstile widget `echoandaura forms` (`echoandaura.com`, Managed, no pre-clearance), keys in Bitwarden + Dokploy (ADR-048)                                      |

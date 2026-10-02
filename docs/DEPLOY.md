@@ -1,6 +1,6 @@
 # Deploying
 
-Status: ACTIVE · Last updated: 2026-09-27 · Decision: [ADR-036](DECISIONS.md)
+Status: ACTIVE · Last updated: 2026-10-02 · Decision: [ADR-036](DECISIONS.md)
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
 server itself (Dokploy, backups, disk, monitoring) is recorded in
@@ -128,6 +128,25 @@ The runtime environment (database, Redis, R2, SES, auth secret) is set in
 Dokploy, never in GitHub or the repo: `docker-compose.prod.yml` lists every
 variable each service needs, and [ENVIRONMENT.md](ENVIRONMENT.md) says what
 each one is. The values live in Bitwarden.
+
+### Bot check keys (ADR-048)
+
+**Before merging the Turnstile change**, both `TURNSTILE_SITE_KEY` and
+`TURNSTILE_SECRET_KEY` must be in Dokploy → the compose app →
+Environment (the widget: [infra/CLOUDFLARE.md § Turnstile](infra/CLOUDFLARE.md#turnstile)).
+Without them `docker-compose.prod.yml` refuses to start, so the deploy
+fails and the old version keeps running. CI's smoke test does not catch
+it: it runs the images without the compose file and opens only `/` and
+`/api/health`. A test key in Dokploy gets past the compose file but makes
+registration, Find my order, sign-in, admin login and forgot password
+throw on every visit.
+
+**After that deploy**, and after any change to either key: open
+**Find my order**, enter a made-up reference in the right shape
+(`EA-7K3M9Q`) and any valid mobile number, and send it. It must say
+"No order matches that reference and phone number". The bot message ("We couldn't confirm
+you're not a bot") means the check failed: see
+[RUNBOOK.md](RUNBOOK.md#buyers-say-the-bot-check-fails).
 
 ## Checking an image locally
 

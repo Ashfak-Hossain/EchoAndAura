@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { AuthScreen } from '@/components/admin/auth-screen';
 import { FormAlert, FormSuccess } from '@/components/form-field';
 import { auth } from '@/lib/auth';
+import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
@@ -47,7 +48,7 @@ export default async function AdminLoginPage({ searchParams }: Props) {
           It has expired or was already used. Ask for a new one.
         </FormAlert>
       ) : null}
-      <LoginForm />
+      <LoginForm siteKey={readTurnstileConfig().siteKey} />
     </AuthScreen>
   );
 }

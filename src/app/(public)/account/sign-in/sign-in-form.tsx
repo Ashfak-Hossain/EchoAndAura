@@ -5,12 +5,16 @@ import { Button } from '@/components/button';
 import { FieldHint } from '@/components/form-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import type { SignInState } from './actions';
 
 export function SignInForm({
   action,
+  siteKey,
 }: {
   action: (prev: SignInState, formData: FormData) => Promise<SignInState>;
+  /** Turnstile site key, read by the page at request time (ADR-048). */
+  siteKey: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
 
@@ -56,12 +60,14 @@ export function SignInForm({
           type="email"
           inputMode="email"
           autoComplete="email"
+          defaultValue={state.values?.email ?? ''}
           className="h-11 bg-card"
         />
         <FieldHint>
           The address you used when registering. No password — we email you a link.
         </FieldHint>
       </div>
+      <TurnstileWidget siteKey={siteKey} action="buyer-sign-in" resetSignal={state} />
       <Button type="submit" variant="cta" size="lg" className="w-full" disabled={pending}>
         {pending ? 'Sending…' : 'Email me a sign-in link'}
       </Button>

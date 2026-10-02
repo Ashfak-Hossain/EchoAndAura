@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getPublicSession } from '@/lib/session';
+import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { requestSignInLinkAction } from './actions';
 import { SignInForm } from './sign-in-form';
 
@@ -23,7 +24,7 @@ export default async function SignInPage() {
           just the easy way back.
         </p>
       </header>
-      <SignInForm action={requestSignInLinkAction} />
+      <SignInForm action={requestSignInLinkAction} siteKey={readTurnstileConfig().siteKey} />
       <p className="text-sm text-muted-foreground">
         No email to hand?{' '}
         <Link href="/orders/find" className="underline">

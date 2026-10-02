@@ -28,6 +28,14 @@ describe('buildCsp', () => {
     expect(d.get('default-src')).toEqual(["'self'"]);
   });
 
+  it('frames only the Turnstile challenge, and loads its script by trust, not by host', () => {
+    // ADR-048: our nonce'd bundle injects Cloudflare's script, so
+    // 'strict-dynamic' covers it; only the widget's iframe needs a host.
+    const d = directives(buildCsp(base));
+    expect(d.get('frame-src')).toEqual(['https://challenges.cloudflare.com']);
+    expect(d.get('script-src')).toEqual(["'self'", "'nonce-abc123'", "'strict-dynamic'"]);
+  });
+
   it('adds WebAssembly compilation on the door only', () => {
     expect(directives(buildCsp(base)).get('script-src')).not.toContain("'wasm-unsafe-eval'");
     expect(directives(buildCsp({ ...base, door: true })).get('script-src')).toContain(

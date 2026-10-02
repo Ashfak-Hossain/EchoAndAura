@@ -45,6 +45,9 @@ export function buildCsp({ nonce, mediaOrigin, uploadOrigin, door, dev }: CspOpt
     ['img-src', img],
     ['font-src', ["'self'"]],
     ['connect-src', connect],
+    // ADR-048: the Turnstile widget's iframe. Its script needs no entry:
+    // our nonce'd bundle injects it, which 'strict-dynamic' trusts.
+    ['frame-src', ['https://challenges.cloudflare.com']],
     // The door's offline service worker (ADR-035).
     ['worker-src', ["'self'"]],
     ['manifest-src', ["'self'"]],
