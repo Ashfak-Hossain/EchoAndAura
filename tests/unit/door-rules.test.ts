@@ -117,7 +117,8 @@ describe('door scan request', () => {
 
 describe('door rate limits', () => {
   it('fail open: a Redis outage never stops a gate', async () => {
-    const limiter = createDoorLimiter({ hit: () => Promise.reject(new Error('redis down')) });
+    const down = () => Promise.reject(new Error('redis down'));
+    const limiter = createDoorLimiter({ hit: down, peek: down });
     for (const rule of Object.values(DOOR_LIMITS)) {
       expect(await limiter.allow([{ ...rule, subject: 'pass-1' }])).toBe(true);
     }

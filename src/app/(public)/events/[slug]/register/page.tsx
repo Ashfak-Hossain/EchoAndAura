@@ -10,6 +10,7 @@ import { publicVenueLine } from '@/server/lib/venue';
 import { ButtonLink } from '@/components/button-link';
 import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
+import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { PhaseNotice } from '../phase-notice';
 import { checkPromoCodeAction, registerAction } from './actions';
 import { RegistrationForm, type TicketOption } from './registration-form';
@@ -99,6 +100,7 @@ export default async function RegisterPage({ params }: Props) {
             event.registrationClosesAt ? formatDhakaLong(event.registrationClosesAt) : null
           }
           prefill={session?.role === 'buyer' ? { name: session.name, email: session.email } : null}
+          siteKey={readTurnstileConfig().siteKey}
         />
       ) : (
         <div className="flex flex-col gap-4">

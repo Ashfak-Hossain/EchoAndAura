@@ -8,9 +8,10 @@
 # Every value comes from the environment Dokploy writes next to this file
 # (set in its UI, copied from Bitwarden) — no secret is ever in the repo.
 # `${VAR:?…}` makes a deploy refuse to start when a required one is missing.
-# The SES keys go to the worker only (the web never sends email). The auth
-# settings go to both: the worker runs the create-admin script, and its
-# database role can write the admin rows anyway.
+# The SES keys go to the worker only (the web never sends email), the
+# Turnstile keys to the web only. The auth settings go to both: the worker
+# runs the create-admin script, and its database role can write the admin
+# rows anyway.
 #
 # IMAGE_TAG: `main` (the default, the latest green build) or `sha-<commit>`
 # to pin a version — that is how a rollback works (docs/DEPLOY.md).
@@ -67,7 +68,13 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    environment: *app-env
+    environment:
+      <<: *app-env
+      # ADR-048: the bot check on the public forms. Web only (the worker
+      # never verifies a form). The site key is read per request, not baked
+      # into the build, so it is set here like the secret.
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY in Dokploy}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY in Dokploy}
     # Resized covers survive a deploy (ADR-033).
     volumes:
       - image-cache:/app/.next-build/cache/images

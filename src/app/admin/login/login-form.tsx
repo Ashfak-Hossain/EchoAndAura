@@ -3,24 +3,29 @@
 import { useActionState, useState } from 'react';
 import { Field, FormAlert } from '@/components/form-field';
 import { Button } from '@/components/button';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import { Input } from '@/components/ui/input';
 import { signInAction, type SignInState } from './actions';
 
 const initialState: SignInState = {};
 
 // B1: two failure classes worded differently on purpose (the action decides
-// which); pending disables both fields and says what is happening.
-export function LoginForm() {
+// which); pending disables both fields and says what is happening. A
+// refusal before the password check (bot check, throttle; ADR-048) is a
+// third: its own words, no field marked.
+export function LoginForm({ siteKey }: { siteKey: string }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const outage = state.error?.startsWith('Sign-in is temporarily unavailable');
   // Credential errors mark both fields (B1). The email is kept; the password
   // is deliberately cleared — React resets uncontrolled inputs after an action.
-  const invalid = Boolean(state.error) && !outage;
+  const invalid = Boolean(state.error) && !outage && !state.refused;
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
-      {state.error ? (
+      {state.error && state.refused ? (
+        <FormAlert>{state.error}</FormAlert>
+      ) : state.error ? (
         <FormAlert
           title={outage ? 'Sign-in temporarily unavailable.' : 'Invalid email or password.'}
         >
@@ -68,6 +73,7 @@ export function LoginForm() {
         </div>
       </Field>
 
+      <TurnstileWidget siteKey={siteKey} action="admin-login" resetSignal={state} />
       <Button type="submit" disabled={pending} className="h-12 w-full text-base">
         {pending ? 'Signing in…' : 'Sign in'}
       </Button>

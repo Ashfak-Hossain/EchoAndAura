@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { ordersService } from '@/server/container';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
+import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { requestIp } from '@/lib/request-ip';
 import { findOrderSchema } from '@/lib/validation/orders';
 
@@ -16,7 +17,10 @@ export interface FindOrderState {
 const limiter = createRateLimiter(redisRateLimitStore(), { onError: 'allow' });
 const FIND_LIMIT = { limit: 20, windowSeconds: 60 };
 
-/** Thin: Zod → throttle → service → redirect to the order page, or one generic refusal. */
+/**
+ * Thin: Zod → human check → throttle → service → redirect to the order
+ * page, or one generic refusal.
+ */
 export async function findOrderAction(
   _prev: FindOrderState,
   formData: FormData,
@@ -32,6 +36,11 @@ export async function findOrderAction(
   const parsed = findOrderSchema.safeParse(raw);
   if (!parsed.success)
     return { error: parsed.error.issues[0]?.message ?? 'Check the details.', values };
+
+  // ADR-048: before the limiter, so a bot's guesses don't spend a real
+  // buyer's per-IP budget on a shared network.
+  if (!(await passesHumanCheck(formData, 'find-order')))
+    return { error: HUMAN_CHECK_FAILED, values };
 
   const allowed = await limiter.allow([
     { scope: 'find-order:ip', subject: await requestIp(), ...FIND_LIMIT },

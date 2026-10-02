@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
+import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { requestIp } from '@/lib/request-ip';
 import { forgotPasswordSchema } from '@/lib/validation/auth';
 import { takeExposedAccountLink } from '@/server/auth/account-emails';
@@ -30,9 +31,10 @@ const LIMITS = {
 };
 
 /**
- * Thin (ADR-038): Zod → throttle → better-auth requestPasswordReset → the
- * same answer whether or not the address is an admin's. Only an admin's
- * gets the email (sendPasswordReset); the link opens /admin/reset-password.
+ * Thin (ADR-038): Zod → human check (ADR-048) → throttle → better-auth
+ * requestPasswordReset → the same answer whether or not the address is an
+ * admin's. Only an admin's gets the email (sendPasswordReset); the link
+ * opens /admin/reset-password.
  */
 export async function requestPasswordResetAction(
   _prev: ForgotPasswordState,
@@ -45,6 +47,11 @@ export async function requestPasswordResetAction(
     return { error: parsed.error.issues[0]?.message ?? 'Enter your email.', email: typed };
   }
   const { email } = parsed.data;
+  // Before the limiter: a bot's refused request spends nobody's budget,
+  // so it can't lock a real admin's address out of resets.
+  if (!(await passesHumanCheck(formData, 'password-reset'))) {
+    return { error: HUMAN_CHECK_FAILED, email };
+  }
   const allowed = await limiter.allow([
     { scope: 'password-reset:ip', subject: await requestIp(), ...LIMITS.perIp },
     { scope: 'password-reset:email', subject: email, ...LIMITS.perEmail },

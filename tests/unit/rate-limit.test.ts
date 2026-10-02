@@ -14,6 +14,9 @@ function memoryStore(): RateLimitStore & { counts: Map<string, number> } {
       counts.set(key, n);
       return n;
     },
+    async peek(key) {
+      return counts.get(key) ?? 0;
+    },
   };
 }
 
@@ -41,19 +44,38 @@ describe('createRateLimiter', () => {
   });
 
   it('on a store failure, denies by default and allows only when told to', async () => {
-    const broken: RateLimitStore = {
-      hit: async () => {
-        throw new Error('ECONNREFUSED');
-      },
+    const refused = async (): Promise<never> => {
+      throw new Error('ECONNREFUSED');
     };
+    const broken: RateLimitStore = { hit: refused, peek: refused };
     const rule = { scope: 's', subject: 'x', limit: 5, windowSeconds: 60 };
     expect(await createRateLimiter(broken).allow([rule])).toBe(false);
+    expect(await createRateLimiter(broken).check([rule])).toBe(false);
     expect(await createRateLimiter(broken, { onError: 'allow' }).allow([rule])).toBe(true);
+    expect(await createRateLimiter(broken, { onError: 'allow' }).check([rule])).toBe(true);
+  });
+
+  it('check counts nothing and refuses once a rule is at its limit', async () => {
+    const store = memoryStore();
+    const limiter = createRateLimiter(store);
+    const rule = { scope: 'failed', subject: 'a@x.com', limit: 2, windowSeconds: 60 };
+    expect(await limiter.check([rule])).toBe(true);
+    expect(await limiter.check([rule])).toBe(true);
+    expect(store.counts.size).toBe(0);
+    await limiter.allow([rule]);
+    expect(await limiter.check([rule])).toBe(true);
+    await limiter.allow([rule]);
+    // Two failures spent a limit of two: the next attempt is refused.
+    expect(await limiter.check([rule])).toBe(false);
+    expect(store.counts.get('ratelimit:failed:a@x.com')).toBe(2);
   });
 });
 
 describe('withTimeout (ADR-038)', () => {
-  const never: RateLimitStore = { hit: () => new Promise<never>(() => {}) };
+  const never: RateLimitStore = {
+    hit: () => new Promise<never>(() => {}),
+    peek: () => new Promise<never>(() => {}),
+  };
 
   it('a store that never answers is cut off: a deny limiter refuses, an allow limiter lets through', async () => {
     const { withTimeout } = await import('@/server/lib/rate-limit');
@@ -65,6 +87,9 @@ describe('withTimeout (ADR-038)', () => {
     expect(
       await createRateLimiter(withTimeout(never, 20), { onError: 'allow' }).allow([rule]),
     ).toBe(true);
+    expect(await createRateLimiter(withTimeout(never, 20), { onError: 'deny' }).check([rule])).toBe(
+      false,
+    );
     expect(Date.now() - started).toBeLessThan(1_000);
   });
 
@@ -73,5 +98,6 @@ describe('withTimeout (ADR-038)', () => {
     const store = withTimeout(memoryStore(), 1_000);
     expect(await store.hit('k', 60)).toBe(1);
     expect(await store.hit('k', 60)).toBe(2);
+    expect(await store.peek('k')).toBe(2);
   });
 });

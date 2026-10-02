@@ -8,7 +8,10 @@
 // Each buyer submits the real form the way a browser without JavaScript
 // does: load the page, copy the form's hidden `$ACTION_*` fields (React's
 // reference to the bound server action), add the buyer's answers, POST it
-// as multipart with a same-origin Origin header (Next's CSRF check).
+// as multipart with a same-origin Origin header (Next's CSRF check). The
+// stack runs on Turnstile's test keys (APP_ENV=local, ADR-048), so the
+// widget's dummy token stands in for a solved challenge; the server still
+// asks Cloudflare's siteverify about it, so the rush needs internet.
 import http from 'k6/http';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
@@ -80,6 +83,7 @@ export default function buyer() {
     ['buyerEmail', `load.buyer.${vu}@example.com`],
     ['buyerPhone', `17${String(10_000_000 + vu).slice(-8)}`],
     ['terms', 'on'],
+    ['cf-turnstile-response', 'XXXX.DUMMY.TOKEN.XXXX'],
   );
   const { body, contentType } = multipart(fields);
   const res = http.post(FORM_URL, body, {

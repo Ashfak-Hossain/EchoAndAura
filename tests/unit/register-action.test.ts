@@ -9,6 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const allow = vi.fn<(rules: { scope: string }[]) => Promise<boolean>>(async () => false);
 const createOrder = vi.fn();
 const checkPromo = vi.fn();
+const passesHumanCheck = vi.fn<(formData: FormData, action: string) => Promise<boolean>>(
+  async () => true,
+);
 
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
@@ -21,10 +24,15 @@ vi.mock('@/server/lib/rate-limit', () => ({
   redisRateLimitStore: () => ({}),
 }));
 vi.mock('@/server/container', () => ({ ordersService: { createOrder, checkPromo } }));
+vi.mock('@/lib/human-check', async (importActual) => ({
+  ...(await importActual<typeof import('@/lib/human-check')>()),
+  passesHumanCheck,
+}));
 
 const { registerAction, checkPromoCodeAction } =
   await import('@/app/(public)/events/[slug]/register/actions');
 const { TooManyOpenOrdersError } = await import('@/server/lib/errors');
+const { HUMAN_CHECK_FAILED } = await import('@/lib/human-check');
 
 /** The order limiter says yes, the promo budget is spent: they are separate. */
 const onlyOrdersAllowed = async (rules: { scope: string }[]) =>
@@ -53,6 +61,7 @@ beforeEach(() => {
   allow.mockReset().mockResolvedValue(false);
   createOrder.mockReset();
   checkPromo.mockReset();
+  passesHumanCheck.mockReset().mockResolvedValue(true);
 });
 
 describe('code checks share one throttle', () => {
@@ -140,5 +149,46 @@ describe('placing orders is limited per network', () => {
     expect(state.banner?.title).toBe('You already have orders waiting for this event');
     expect(state.banner?.body).toMatch(/2 orders waiting/);
     expect(state.banner?.body).toMatch(/Find my order/);
+  });
+});
+
+// ADR-048: a refused Turnstile token is answered before anything that
+// costs a real buyer — the limiter budgets, or seats held for 24 hours.
+describe('the human check comes first', () => {
+  it('a refused check keeps the input and touches neither limiter nor the service', async () => {
+    passesHumanCheck.mockResolvedValue(false);
+    const f = form({ promoCode: 'dhaka15' });
+    const state = await registerAction('live-dhaka', {}, f);
+    expect(state.banner?.body).toBe(HUMAN_CHECK_FAILED);
+    expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan', promoCode: 'dhaka15' });
+    expect(passesHumanCheck).toHaveBeenCalledWith(f, 'register');
+    expect(allow).not.toHaveBeenCalled();
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+
+  it('a passed check places the order as before', async () => {
+    allow.mockResolvedValue(true);
+    createOrder.mockResolvedValue({ id: 'o-3' });
+    await expect(registerAction('live-dhaka', {}, form({ promoCode: 'dhaka15' }))).rejects.toThrow(
+      'redirect /orders/o-3',
+    );
+    expect(scopes()).toEqual(['promo-check:ip', 'order-create:ip']);
+    expect(passesHumanCheck.mock.invocationCallOrder[0]).toBeLessThan(
+      allow.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('an invalid form is answered without asking Cloudflare', async () => {
+    const state = await registerAction('live-dhaka', {}, form({ buyerPhone: '12' }));
+    expect(state.fieldErrors?.buyerPhone).toBeTruthy();
+    expect(passesHumanCheck).not.toHaveBeenCalled();
+  });
+
+  it('Apply is not behind the check', async () => {
+    allow.mockResolvedValue(true);
+    checkPromo.mockResolvedValue({ ok: false, reason: 'unknown' });
+    await checkPromoCodeAction('live-dhaka', { code: 'dhaka15', ticketTypeId: TT });
+    expect(checkPromo).toHaveBeenCalled();
+    expect(passesHumanCheck).not.toHaveBeenCalled();
   });
 });

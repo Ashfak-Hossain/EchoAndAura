@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { findOrderAction } from './actions';
 import { FindOrderForm } from './find-form';
 
 export const metadata: Metadata = { title: 'Find my order', robots: { index: false } };
+// The Turnstile site key is runtime env (ADR-048); a prerender would bake
+// in the build's placeholder.
+export const dynamic = 'force-dynamic';
 
 /**
  * The way back for a buyer who closed the tab before paying. No account
@@ -22,7 +26,7 @@ export default function FindOrderPage() {
           registered with, and we&apos;ll take you straight back to it.
         </p>
       </header>
-      <FindOrderForm action={findOrderAction} />
+      <FindOrderForm action={findOrderAction} siteKey={readTurnstileConfig().siteKey} />
       <p className="text-sm text-muted-foreground">
         Prefer email?{' '}
         <Link href="/account/sign-in" className="underline">

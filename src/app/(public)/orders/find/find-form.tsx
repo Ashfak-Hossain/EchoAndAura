@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { Button } from '@/components/button';
 import { FieldHint } from '@/components/form-field';
+import { TurnstileWidget } from '@/components/turnstile-widget';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BD_MOBILE_PREFIX } from '@/lib/validation/orders';
@@ -10,8 +11,10 @@ import type { FindOrderState } from './actions';
 
 export function FindOrderForm({
   action,
+  siteKey,
 }: {
   action: (prev: FindOrderState, formData: FormData) => Promise<FindOrderState>;
+  siteKey: string;
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   return (
@@ -56,6 +59,7 @@ export function FindOrderForm({
           />
         </div>
       </div>
+      <TurnstileWidget siteKey={siteKey} action="find-order" resetSignal={state} />
       <Button type="submit" variant="cta" size="lg" className="w-full" disabled={pending}>
         {pending ? 'Looking…' : 'Find my order'}
       </Button>

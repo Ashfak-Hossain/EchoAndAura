@@ -67,28 +67,39 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
   return {
     secret,
     baseURL,
-    // better-auth's own limiter (3 sign-ins / 10 s per IP) is brute-force
-    // protection for /admin/login and stays on in production. The e2e
-    // build is also NODE_ENV=production (next start) but signs in as the
-    // admin from six workers at once, so APP_ENV=test turns it off.
+    // better-auth's own limiter runs only in its HTTP router (auth.api
+    // skips it; the server actions throttle themselves). It guards what is
+    // still public there — token links, session, sign-out — and stays on
+    // in production. The e2e build is also NODE_ENV=production (next start)
+    // but drives one IP from six workers at once, so APP_ENV=test turns it off.
     rateLimit: {
       enabled: process.env.APP_ENV === 'test' ? false : process.env.NODE_ENV === 'production',
-      // ADR-038: every reset is an email to an admin's inbox; the account
-      // pages throttle their own calls (auth.api bypasses this limiter), this
-      // covers the public HTTP endpoint.
-      customRules: { '/request-password-reset': { window: 15 * 60, max: 3 } },
     },
-    // ADR-038: the account page is the only way to change an email, because
-    // it checks the current password first. Over HTTP the endpoint is off;
-    // `auth.api.changeEmail` on the server still works.
-    disabledPaths: ['/change-email'],
+    // A disabled path 404s in better-auth's HTTP router only; `auth.api.*`
+    // calls the endpoint directly, so the server actions keep working.
+    disabledPaths: [
+      // ADR-038: the account page is the only way to change an email,
+      // because it checks the current password first.
+      '/change-email',
+      // ADR-048: password sign-in, the magic link and the reset email are
+      // reached only through the Turnstile-checked, throttled server
+      // actions. Open over HTTP, a bot would post here and skip both.
+      // The token-gated halves (/magic-link/verify, /reset-password)
+      // stay open: they are the links in the emails.
+      '/sign-in/email',
+      '/sign-in/magic-link',
+      '/request-password-reset',
+      // Unused (the email change sends its own link) and would mail an
+      // unverified account — the seeded admin — on anyone's request.
+      '/send-verification-email',
+    ],
     // Table names are plural (users, sessions, accounts, verifications) — see the
     // Auth section of src/db/schema.ts.
     database: drizzleAdapter(db, { provider: 'pg', schema, usePlural: true }),
     // ADR-037: behind Cloudflare → Traefik, X-Forwarded-For always has two
     // or more entries. Without trusted proxies better-auth resolves no IP
-    // from such a header and rate-limits /admin/login in one bucket shared
-    // by the whole internet (anyone could keep it locked). With Cloudflare's
+    // from such a header and rate-limits its HTTP routes in one bucket shared
+    // by the whole internet (anyone could keep them locked). With Cloudflare's
     // ranges it reads from the right, like requestIp().
     advanced: {
       ipAddress: { trustedProxies: [...CLOUDFLARE_RANGES] },

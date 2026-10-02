@@ -13,6 +13,7 @@ import {
   TooManyOpenOrdersError,
 } from '@/server/lib/errors';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
+import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { requestIp } from '@/lib/request-ip';
 import { registrationFormSchema, registrationFormValues } from '@/lib/validation/orders';
 import { promoCheckSchema } from '@/lib/validation/promo-codes';
@@ -56,7 +57,7 @@ async function promoCheckAllowed(): Promise<boolean> {
   ]);
 }
 
-/** Thin: Zod parse → service → redirect to the order page. */
+/** Thin: Zod parse → human check → limiters → service → redirect to the order page. */
 export async function registerAction(
   eventSlug: string,
   _prev: RegistrationFormState,
@@ -71,6 +72,12 @@ export async function registerAction(
       fieldErrors[key] ??= issue.message;
     }
     return { fieldErrors, values };
+  }
+
+  // ADR-048: before the limiters, so a bot neither spends a real buyer's
+  // per-network budget nor holds seats. The buyer's input stays.
+  if (!(await passesHumanCheck(formData, 'register'))) {
+    return { banner: { title: 'Your order was not placed', body: HUMAN_CHECK_FAILED }, values };
   }
 
   if (parsed.data.promoCode && !(await promoCheckAllowed())) {

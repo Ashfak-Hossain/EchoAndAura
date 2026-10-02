@@ -1,6 +1,6 @@
 # Runbook
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-09-29
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
 
 What to do when something breaks, and the checklist for event night.
 Each section starts from what you see, gives the order to check things,
@@ -197,6 +197,37 @@ and note it in that file's history.
 - **If SES is out for days:** the fallback is Postmark or Resend behind
   the `Mailer` port ([infra/AWS.md](infra/AWS.md#production-access-denied-or-stalled)).
   Meanwhile, buyers can read everything on their order page and ticket page.
+
+## Buyers say the bot check fails
+
+They see "We couldn't confirm you're not a bot" on registration, Find my
+order, sign-in, admin login or forgot password (Turnstile, ADR-048).
+
+1. **One buyer:** ask them to refresh the page and try again, or another
+   browser. A strict content blocker or VPN can stop Cloudflare's
+   script; the form then says the check could not load.
+2. **Everyone:** read the web's log for the reason:
+
+   ```sh
+   docker logs --since 30m echoandaura-app-5nuhfn-web-1 2>&1 | grep turnstile
+   ```
+
+   | Log line                                                                                         | Meaning                                                                                                                                                                                 | Do                                                                                                                                   |
+   | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+   | `turnstile secret rejected by Cloudflare`                                                        | our `TURNSTILE_SECRET_KEY` is wrong or was rotated away. **Every submit fails**                                                                                                         | Compare Dokploy's value with Bitwarden `Cloudflare Turnstile`; if lost, [rotate it](infra/CLOUDFLARE.md#rotate-the-turnstile-secret) |
+   | `turnstile check refused`, `hostname-mismatch`                                                   | the token was solved on a host other than `SITE_URL`'s                                                                                                                                  | Turnstile → `echoandaura forms` → Hostname management must list `echoandaura.com`; `SITE_URL` must be `https://echoandaura.com`      |
+   | `turnstile check refused`, `missing`                                                             | no token reached the server: the widget did not load or run                                                                                                                             | [Cloudflare status](https://www.cloudflarestatus.com) (Turnstile, challenges); the site key in Dokploy matches the widget's          |
+   | `turnstile check refused`, `rejected`                                                            | Cloudflare refused the token (expired, used twice, or a bot)                                                                                                                            | Normal in small numbers. Many from real buyers: check the widget's analytics in Cloudflare                                           |
+   | `turnstile siteverify unavailable — allowing`                                                    | Cloudflare could not be asked; submits are **let through** (by design)                                                                                                                  | Nothing to fix here; the rate limits still hold. Watch Cloudflare status                                                             |
+   | `turnstile check refused`, `action-mismatch`                                                     | the token was solved for another form: a widget's `action` and its server action's `TurnstileAction` differ after a code change (that whole form fails), or someone is replaying tokens | One form failing for everyone: a code bug, roll back the deploy. Scattered: ignore                                                   |
+   | `turnstile siteverify answered in an unknown shape — allowing`, or `… internal error — allowing` | as `unavailable`: submits are **let through**                                                                                                                                           | As `unavailable`                                                                                                                     |
+
+3. After any change to a key: Dokploy → **Deploy**, then the check in
+   [DEPLOY.md → Bot check keys](DEPLOY.md#bot-check-keys-adr-048).
+
+There is no switch to turn the check off: test keys are refused in
+production. If Turnstile itself is down for days, the fix is a code
+change (ADR-048, Revisit when).
 
 ## A backup failed
 
