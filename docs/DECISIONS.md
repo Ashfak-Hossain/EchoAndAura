@@ -2440,8 +2440,8 @@ rules that match how the project actually ships.
   that is what keeps the "main is production" ruleset, secret-scanning
   push protection and CodeQL enforced, and lets the server pull images
   anonymously. The code is licensed **all rights reserved**: readable,
-  not reusable. The copyright holder is the client (Echo & Aura); the
-  exact legal name is still to be confirmed with Raj. `SECURITY.md` asks
+  not reusable. The copyright holder is the client: Raj Sr, trading as
+  Echo & Aura (confirmed 2026-10-02). `SECURITY.md` asks
   for private reports (GitHub advisories or email).
 - **One merge method: merge commits,** as the history already is.
   Branches are deleted after merge. The ruleset also requires review
