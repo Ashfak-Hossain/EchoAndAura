@@ -229,6 +229,75 @@ There is no switch to turn the check off: test keys are refused in
 production. If Turnstile itself is down for days, the fix is a code
 change (ADR-048, Revisit when).
 
+## An admin lost their phone
+
+Every admin signs in with a password and a code from an authenticator
+app (ADR-049). Without the phone:
+
+1. **To get in today: a backup code.** On the code page, **Use a backup
+   code instead**, and type one of the 10 codes saved at setup. Each
+   works once. A backup code only gets them in: the console has no "add
+   a new phone". Moving to a new phone always takes the reset below,
+   then setup; until then every sign-in uses up another code.
+2. **If the phone was stolen** (or might have been), change the password
+   **first**, before the reset: the phone may hold the saved password
+   too, and right after a reset the password alone reaches the setup
+   page, where a thief could enrol their own phone. Sign the stolen phone
+   out of the admin's email account (Google → Security → Your devices),
+   then either **Your account** → Password (signed in with a backup code)
+   or **Forgot password?** on `/admin/login`. Both sign out every other
+   device. Lost, not stolen: skip to step 3.
+3. **Reset their two-factor on the server.** It deletes their
+   authenticator secret and backup codes and signs them out everywhere;
+   the password stays. Confirm it is really them first (a call, not an
+   email: the email account may be what was taken):
+
+   ```sh
+   # on the server (ssh echoandaura), or Dokploy → worker → Terminal
+   # without the `docker exec …-worker-1` prefix:
+   docker exec echoandaura-app-5nuhfn-worker-1 \
+     node dist/ops/admin-reset-2fa.mjs raj@example.com
+   ```
+
+   It answers `Two-factor reset for raj@example.com. They must set it up
+again at their next sign-in.` It refuses an unknown address and a
+   buyer's (exit 1, nothing changed). Locally: `pnpm admin:reset-2fa
+<email>`.
+
+4. They sign in with their password **right away** and are sent
+   straight to setup: a new QR code and 10 new backup codes. Until they
+   enrol, the password alone reaches the setup page. Turning two-factor
+   on signs out every other session of theirs, so a session someone
+   opened in that window does not survive it.
+
+**The code page says the account is locked:** 10 wrong codes in a row
+lock it for 15 minutes (better-auth's lockout). Wait it out. If nobody
+at our end was typing those codes, someone else has the password:
+change it.
+
+## Two-factor codes are always wrong
+
+The code is what the phone shows, but the site refuses it every time.
+Codes are made from the time, and only one 30-second step either side
+is accepted, so one of the two clocks is off, or the code comes from
+the wrong entry.
+
+1. **The wrong entry:** the app may hold two `echoandaura` entries.
+   Running setup's first step again (a reload, a second tab) makes a new
+   secret, and an entry scanned before that never works. At sign-in, use
+   the entry added last and delete the other; during setup, delete the
+   old one and scan the code on the page now.
+2. **The phone:** Settings → Date & time → set automatically (and the
+   time zone automatically). Then try a fresh code.
+3. **The server:** `timedatectl` must show
+   `System clock synchronized: yes` and `NTP service: active`
+   ([infra/SERVER.md § 5](infra/SERVER.md)). If not,
+   `timedatectl set-ntp true` and check again a minute later.
+4. Still refused: the account may be locked (above), or that sign-in
+   has run out. Each one allows 10 minutes and 5 codes; after that,
+   start again from the password (the sign-in page says which: "timed
+   out" or "too many wrong codes").
+
 ## A backup failed
 
 1. Look in the R2 dashboard → `echoandaura-backups` → today's file. If

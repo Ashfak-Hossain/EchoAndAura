@@ -169,6 +169,13 @@
       "when": 1790397398911,
       "tag": "0023_wakeful_chronomancer",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790962827574,
+      "tag": "0024_admin_two_factor",
+      "breakpoints": true
     }
   ]
 }

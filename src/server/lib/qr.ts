@@ -19,3 +19,16 @@ export function ticketQrSvg(code: string): Promise<string> {
 export function gatePassQrSvg(link: string): Promise<string> {
   return QRCode.toString(link, { type: 'svg', errorCorrectionLevel: 'M', margin: 1, width: 220 });
 }
+
+/**
+ * ADR-049: the otpauth URI for an admin's authenticator app. It carries the
+ * TOTP secret, so it is shown once on the setup screen and never stored.
+ */
+export function authenticatorQrSvg(otpauthUri: string): Promise<string> {
+  return QRCode.toString(otpauthUri, {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 1,
+    width: 200,
+  });
+}

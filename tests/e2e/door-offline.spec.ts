@@ -1,11 +1,11 @@
 import { expect, test } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 import {
   dismiss,
   issuedOrder,
   newGatePass,
   openDoors,
   publishedEvent,
-  signIn,
   typeCode,
 } from './door-helpers';
 
@@ -15,7 +15,7 @@ test.describe('gate scanner offline (ADR-034)', () => {
     browser,
   }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     const { id, slug } = await publishedEvent(page, `Offline ${Date.now()}`);
     const { codes } = await issuedOrder(page, slug, 'Tahmina Akter', 3);
     await openDoors(page, id);

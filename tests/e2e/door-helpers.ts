@@ -6,19 +6,9 @@ import { expect, type Page } from './test';
  * Shared by the gate-scanner specs (ADR-030 online, ADR-034 offline).
  */
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose). Admin sign-in: fixtures/admin.ts.
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
 export const dhaka = (at: Date) => formatInTimeZone(at, 'Asia/Dhaka', "yyyy-MM-dd'T'HH:mm");
-
-export async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 export async function openTab(
   page: Page,

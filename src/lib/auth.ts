@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
-import { buildAuthOptions, magicLinkPlugin } from './auth-options';
+import { buildAuthOptions, magicLinkPlugin, twoFactorPlugin } from './auth-options';
 
 /**
  * The app's better-auth instance.
@@ -11,7 +11,8 @@ import { buildAuthOptions, magicLinkPlugin } from './auth-options';
  */
 export const auth = betterAuth({
   ...buildAuthOptions({ disableSignUp: true }),
-  // Buyer sign-in by email link, then nextCookies (lets server actions
-  // set/clear the session cookie). nextCookies must be the last plugin.
-  plugins: [magicLinkPlugin(), nextCookies()],
+  // Buyer sign-in by email link, the admin's second factor (ADR-049), then
+  // nextCookies (lets server actions set/clear the session cookie and the
+  // two-factor challenge cookie). nextCookies must be the last plugin.
+  plugins: [magicLinkPlugin(), twoFactorPlugin(), nextCookies()],
 });

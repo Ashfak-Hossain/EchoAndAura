@@ -8,7 +8,12 @@ export interface PublicSession {
   email: string;
   name: string;
   role: Role;
+  /** ADR-049: the authenticator app is set up (better-auth's twoFactor plugin). */
+  twoFactorEnabled: boolean;
 }
+
+/** Where an admin without a second factor is sent before anything else. */
+export const TWO_FACTOR_SETUP_PATH = '/admin/two-factor/setup';
 
 /**
  * The signed-in user, for server components and actions. Buyers and the
@@ -22,7 +27,12 @@ export const getPublicSession = cache(async (): Promise<PublicSession | null> =>
   if (!session) return null;
   const raw = (session.user as { role?: unknown }).role;
   const role: Role = raw === 'admin' ? 'admin' : 'buyer';
-  return { email: session.user.email.toLowerCase(), name: session.user.name, role };
+  return {
+    email: session.user.email.toLowerCase(),
+    name: session.user.name,
+    role,
+    twoFactorEnabled: (session.user as { twoFactorEnabled?: unknown }).twoFactorEnabled === true,
+  };
 });
 
 /**
@@ -32,6 +42,20 @@ export const getPublicSession = cache(async (): Promise<PublicSession | null> =>
  * must never get to approve an order because "a session exists".
  */
 export async function requireAdmin(): Promise<PublicSession> {
+  const session = await requireAdminPendingTwoFactor();
+  // ADR-049: a password alone is not enough. An admin who hasn't set up the
+  // authenticator app yet (a new account, or one reset with
+  // admin:reset-2fa) can do nothing but set it up.
+  if (!session.twoFactorEnabled) redirect(TWO_FACTOR_SETUP_PATH);
+  return session;
+}
+
+/**
+ * An admin session whether or not the second factor is set up yet. Only
+ * the setup page, its actions and sign-out use this; everything else goes
+ * through `requireAdmin()`.
+ */
+export async function requireAdminPendingTwoFactor(): Promise<PublicSession> {
   const session = await getPublicSession();
   if (!session) redirect('/admin/login');
   if (session.role !== 'admin') redirect('/');

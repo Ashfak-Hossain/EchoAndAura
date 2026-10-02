@@ -1,9 +1,8 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose).
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
 const HOME_TITLE = 'echoandaura · Live events and tickets in Dhaka';
 const SITE = (
@@ -11,16 +10,6 @@ const SITE = (
   process.env.BETTER_AUTH_URL ??
   'http://localhost:3000'
 ).replace(/\/+$/, '');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -48,7 +37,7 @@ test.describe('home page (A1)', () => {
   test('the soonest published event is the hero with a live "Get tickets" CTA', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const title = `Home Hero ${Date.now()}`;
     const now = Date.now();
     // Starts in two hours: sooner than anything else a shared dev/e2e DB is

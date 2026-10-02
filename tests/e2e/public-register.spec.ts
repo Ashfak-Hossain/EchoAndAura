@@ -1,20 +1,9 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose).
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -62,7 +51,7 @@ test.describe('registration (A3 → A4)', () => {
   test('a buyer registers two General tickets and lands on the awaiting-payment page', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Register ${Date.now()}`);
 
     await page.goto(`/events/${slug}/register`);
@@ -100,7 +89,7 @@ test.describe('registration (A3 → A4)', () => {
   });
 
   test('validation errors are listed and nothing the buyer typed is cleared', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Register Errors ${Date.now()}`);
 
     await page.goto(`/events/${slug}/register`);
@@ -125,7 +114,7 @@ test.describe('registration (A3 → A4)', () => {
     page,
     browser,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Register Race ${Date.now()}`);
 
     await page.goto(`/events/${slug}/register`);
@@ -163,7 +152,7 @@ test.describe('registration (A3 → A4)', () => {
   test('the buyer submits a trxID, can correct it, and the same trxID cannot pay twice', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Payment ${Date.now()}`);
     const trxId = `T${Date.now().toString(36).toUpperCase().slice(-9)}`.padEnd(10, 'X');
 
@@ -226,7 +215,7 @@ test.describe('registration (A3 → A4)', () => {
   test('one mobile number gets two open orders per event; the third is refused with a way forward', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Cap ${Date.now()}`);
 
     const order = async () => {

@@ -1,22 +1,9 @@
-import { expect, test, type Page } from './test';
-
-// Requires a seeded admin (pnpm admin:create) matching these credentials.
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
+import { expect, test } from './test';
+import { E2E_ADMIN, signInAsAdmin } from './fixtures/admin';
 
 test.describe('admin shell (B2)', () => {
   test('desktop: sidebar links, roadmap items disabled, active item marked', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const nav = page.getByRole('navigation', { name: 'Admin' });
 
     await expect(nav.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
@@ -52,7 +39,7 @@ test.describe('admin shell (B2)', () => {
     await expect(
       page.getByRole('banner').getByText(/^(local|test|staging|production)$/i),
     ).toBeVisible();
-    await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
+    await expect(page.getByText(`Signed in as ${E2E_ADMIN.email}`)).toBeVisible();
 
     await nav.getByRole('link', { name: 'Events' }).click();
     await expect(page).toHaveURL(/\/admin\/events$/);
@@ -61,7 +48,7 @@ test.describe('admin shell (B2)', () => {
 
   test('mobile: sidebar collapses into a sheet that navigates and closes', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await signIn(page);
+    await signInAsAdmin(page);
 
     // No sidebar; the ☰ trigger opens the sheet.
     await expect(page.getByRole('navigation', { name: 'Admin' })).toHaveCount(0);
@@ -76,7 +63,7 @@ test.describe('admin shell (B2)', () => {
   });
 
   test('events list: status filter tabs carry counts and filter the table', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     await page.goto('/admin/events');
     const tabs = page.getByRole('navigation', { name: /filter by status/i });
 

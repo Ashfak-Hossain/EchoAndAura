@@ -46,6 +46,10 @@ pnpm dev                        # http://localhost:3000
 pnpm worker                     # second terminal: emails and hold expiry
 ```
 
+The first admin sign-in asks you to set up an authenticator app (ADR-049).
+Lost it locally? `pnpm admin:reset-2fa <email>` clears it, and the next
+sign-in sets it up again.
+
 `pnpm verify` (typecheck, lint, unit tests, build) must pass before
 anything merges. CI runs it, with the integration tests against a real
 Postgres and Redis.

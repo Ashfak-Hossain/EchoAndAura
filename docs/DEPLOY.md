@@ -73,6 +73,7 @@ In Dokploy → the compose app → the **worker** container → **Terminal**:
 ```sh
 node dist/ops/create-admin.mjs raj@example.com 'a-password-of-12-or-more' 'Raj'
 node dist/ops/promote-admin.mjs someone@example.com
+node dist/ops/admin-reset-2fa.mjs raj@example.com   # lost phone + backup codes (ADR-049)
 node dist/ops/migrate.mjs      # runs on every deploy anyway
 ```
 
@@ -85,6 +86,13 @@ node dist/ops/migrate.mjs      # runs on every deploy anyway
 3. They sign in at `/admin/login` and change it at **Your account**
    (`/admin/account`) whenever they like. That also signs out every other
    device.
+4. At that first sign-in they are sent to set up two-factor (ADR-049):
+   an authenticator app on their phone (Google Authenticator, Microsoft
+   Authenticator, 1Password, …) scans a QR code, and they save the 10
+   backup codes it shows, in Bitwarden or on paper, not on the phone.
+   From then on every sign-in asks for a code. Lost phone, or a new
+   one (it can only be added after a reset):
+   [RUNBOOK.md](RUNBOOK.md#an-admin-lost-their-phone).
 
 A forgotten password is reset by the person themselves: **Forgot
 password?** on the sign-in page emails a link, valid for an hour. An
@@ -147,6 +155,29 @@ throw on every visit.
 "No order matches that reference and phone number". The bot message ("We couldn't confirm
 you're not a bot") means the check failed: see
 [RUNBOOK.md](RUNBOOK.md#buyers-say-the-bot-check-fails).
+
+### Admin two-factor (ADR-049)
+
+This release adds migration `0024`: a new table, `two_factors`, and a
+column `users.two_factor_enabled` that defaults to false. Backward
+compatible (an older image ignores both), so a rollback needs nothing
+extra. The app role gets its rights on the new table from the default
+privileges set by `ops/db/app-role.sql` (ADR-044); nothing to run. No
+new environment variable: the secrets are encrypted with
+`BETTER_AUTH_SECRET`.
+
+**After that deploy**, every admin is sent to `/admin/two-factor/setup`
+at their next page load, with no way round it. Have the authenticator
+app installed before you open the admin, and do setup at once (until an
+admin enrols, the password alone reaches setup). Save the backup codes
+in Bitwarden. Then check it once: sign out, sign in with the password,
+and a code must be asked for before the dashboard opens. Ask Raj to do
+the same at his next sign-in.
+
+Enrolling signs that admin out of every other session, including the
+password-only ones from before `0024` (another laptop, the phone's
+browser): each signs in again there, with a code. Expected, not a bug;
+it is what stops an old session counting as two-factor.
 
 ## Checking an image locally
 

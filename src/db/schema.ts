@@ -534,6 +534,9 @@ export const users = pgTable('users', {
   // 'admin' (password login, the back office) or 'buyer' (passwordless,
   // "My orders"). Never settable from a request: additionalFields input=false.
   role: text('role').notNull().default('buyer'),
+  // ADR-049: set by better-auth's twoFactor plugin once the authenticator
+  // app is verified. Admins can't use the console without it.
+  twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -580,6 +583,33 @@ export const accounts = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('accounts_user_id_idx').on(t.userId)],
+);
+
+/**
+ * ADR-049: an admin's authenticator secret and backup codes, both
+ * encrypted by better-auth with BETTER_AUTH_SECRET (rotating that secret
+ * makes every row unreadable: each admin then needs `admin:reset-2fa`).
+ * `verified` is false between "show the QR code" and the first correct
+ * code. The two lockout columns cap consecutive wrong codes per account.
+ */
+export const twoFactors = pgTable(
+  'two_factors',
+  {
+    id: text('id').primaryKey(),
+    secret: text('secret').notNull(),
+    backupCodes: text('backup_codes').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    verified: boolean('verified').notNull().default(true),
+    failedVerificationCount: integer('failed_verification_count').notNull().default(0),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  },
+  (t) => [
+    // One per user: better-auth reads it with findOne by userId.
+    uniqueIndex('two_factors_user_id_idx').on(t.userId),
+    index('two_factors_secret_idx').on(t.secret),
+  ],
 );
 
 // ---------------------------------------------------------------------------

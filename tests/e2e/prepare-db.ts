@@ -8,7 +8,7 @@ import postgres from 'postgres';
  * `E2E_DATABASE_URL`, else the `DATABASE_URL` name with an `_e2e` suffix).
  * Every run starts from a clean slate: the database is created if missing,
  * migrated, the event/order tables truncated (users stay), and the admin
- * seeded. The suite used to run against the dev database and grew it by
+ * seeded, two-factor included. The suite used to run against the dev database and grew it by
  * hundreds of events per week, which made every admin page — and so every
  * sign-in — slower run after run.
  *
@@ -70,14 +70,19 @@ export async function prepareDatabase(url: string): Promise<void> {
     // Settings too, so every run starts from the env fallbacks; sponsors,
     // so the home page and footer start with none.
     await sql`truncate table door_scans, door_passes, orders, order_events, tickets, promo_code_ticket_types, promo_codes, ticket_types, events, settings, sponsors cascade`;
-    const [admin] =
-      await sql`select 1 as ok from users where email = ${env.E2E_ADMIN_EMAIL ?? 'admin@example.com'}`;
+    const [admin] = await sql`select 1 as ok from users where email = ${adminEmail}`;
     if (!admin) {
       execFileSync('pnpm', ['exec', 'tsx', 'scripts/create-admin.ts', adminEmail, adminPassword], {
         env,
         stdio: 'inherit',
       });
     }
+    // ADR-049: the shared admin signs in with a code too. Re-seeded every
+    // run (fresh codes, lockout cleared); fixtures/admin.ts works the code
+    // out from the same test-only secret. Imported here, not at the top:
+    // playwright.config.ts imports this file and needs none of it.
+    const { enableTwoFactor } = await import('./fixtures/admin-credentials');
+    await enableTwoFactor(sql, adminEmail.toLowerCase());
     // Run as the owner, like production (SERVER.md § 19).
     await sql.unsafe(readFileSync('ops/db/app-role.sql', 'utf8'));
     await sql.unsafe(`alter role ${APP_ROLE} password '${LOCAL_APP_ROLE_PASSWORD}'`);

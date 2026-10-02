@@ -569,6 +569,10 @@ unset ADMIN_PW
 | ----- | ------------------------------------ | -------------------------------------- | ---------- |
 | Evan  | the developer's Gmail (SES-verified) | `Admin login (echoandaura app) — Evan` | 2026-09-28 |
 
+Every admin also signs in with an authenticator-app code (ADR-049). An
+admin who lost both their phone and their backup codes is reset from the
+worker container: [RUNBOOK.md § An admin lost their phone](../RUNBOOK.md#an-admin-lost-their-phone).
+
 **First production email: a password reset to Evan, 2026-09-28.** The
 first attempt failed: SES refused every send with
 `IncompleteSignatureException: Invalid key=value pair (missing

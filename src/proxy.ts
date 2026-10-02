@@ -3,8 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, newNonce, originFrom } from '@/lib/csp';
 
 const LOGIN_PATH = '/admin/login';
-/** Pages for a signed-out admin: sign in, and the password reset (ADR-038). */
-const PUBLIC_PATHS = new Set([LOGIN_PATH, '/admin/forgot-password', '/admin/reset-password']);
+/** Pages for a signed-out admin: sign in and its code step (ADR-049), and the password reset (ADR-038). */
+const PUBLIC_PATHS = new Set([
+  LOGIN_PATH,
+  // ADR-049: between password and code there is no session yet, only
+  // better-auth's short-lived two-factor challenge cookie.
+  '/admin/login/verify',
+  '/admin/forgot-password',
+  '/admin/reset-password',
+]);
 
 /**
  * Next 16's `proxy` (the successor to middleware). It runs before every

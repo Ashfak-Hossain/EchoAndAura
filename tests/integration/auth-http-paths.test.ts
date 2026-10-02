@@ -80,6 +80,20 @@ describe('better-auth HTTP surface (Postgres)', () => {
       ['/request-password-reset', { email: adminEmail, redirectTo: '/admin/reset-password' }],
       ['/send-verification-email', { email: adminEmail }],
       ['/change-email', { newEmail: `moved-${randomUUID()}@example.com` }],
+      // ADR-049: account changes only through requireAdmin()'d actions.
+      ['/reset-password', { token: 'not-a-token', newPassword: 'long-enough-password' }],
+      ['/change-password', { currentPassword: password, newPassword: 'another-long-password' }],
+      ['/verify-password', { password }],
+      ['/update-user', { name: 'Renamed' }],
+      ['/update-session', {}],
+      ['/delete-user', {}],
+      ['/revoke-session', { token: 'x' }],
+      ['/revoke-sessions', {}],
+      ['/revoke-other-sessions', {}],
+      ['/link-social', { provider: 'google' }],
+      ['/unlink-account', { providerId: 'credential' }],
+      ['/get-access-token', { providerId: 'credential' }],
+      ['/refresh-token', { providerId: 'credential' }],
       // Spellings the router might still match: none may slip past.
       ['/sign-in/email/', { email: adminEmail, password }],
       ['/SIGN-IN/EMAIL', { email: adminEmail, password }],
@@ -92,6 +106,15 @@ describe('better-auth HTTP surface (Postgres)', () => {
       expect(enqueue.signIn).not.toHaveBeenCalled();
       expect(enqueue.account).not.toHaveBeenCalled();
     });
+
+    // Unauthenticated, an enabled one would answer 401; 404 means disabled.
+    it.each(['/list-sessions', '/list-accounts', '/account-info', '/delete-user/callback'])(
+      'GET %s answers 404',
+      async (path) => {
+        const res = await auth.handler(new Request(url(path)));
+        expect(res.status).toBe(404);
+      },
+    );
 
     // Controls: the same router and base path still serve the token links
     // in the emails and the session, so the 404s above are disabledPaths.
@@ -108,6 +131,10 @@ describe('better-auth HTTP surface (Postgres)', () => {
       const verify = await auth.handler(new Request(url('/magic-link/verify?token=not-a-token')));
       expect(verify.status).toBe(302);
       expect(verify.headers.get('location')).toContain('error=');
+
+      // The email-change confirmation link (ADR-038).
+      const email = await auth.handler(new Request(url('/verify-email?token=not-a-token')));
+      expect(email.status).not.toBe(404);
     });
   });
 

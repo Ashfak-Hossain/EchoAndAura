@@ -73,3 +73,31 @@ export const changePasswordSchema = z
 
 /** Change email while signed in: the new address, proved by the current password. */
 export const changeEmailSchema = z.object({ email, password: currentPassword });
+
+/**
+ * ADR-049: the six digits from the authenticator app. Spaces are dropped
+ * (apps show "123 456"; phones paste it that way).
+ */
+export const totpCodeSchema = z
+  .string({ error: 'Enter the 6-digit code from your authenticator app' })
+  .transform((v) => v.replace(/\s+/g, ''))
+  .pipe(z.string().regex(/^\d{6}$/, { error: 'The code is 6 digits' }));
+
+/**
+ * A one-time backup code as better-auth issues it: "Ab3dE-9fGh2" (5, dash,
+ * 5, letters and digits, case-sensitive). Surrounding spaces are dropped.
+ */
+export const backupCodeSchema = z
+  .string({ error: 'Enter one of your backup codes' })
+  .transform((v) => v.trim())
+  .pipe(
+    z.string().regex(/^[A-Za-z0-9]{5}-[A-Za-z0-9]{5}$/, {
+      error: 'A backup code looks like Ab3dE-9fGh2',
+    }),
+  );
+
+/** First step of setting up 2FA: the current password, as better-auth requires. */
+export const enableTwoFactorSchema = z.object({ password: currentPassword });
+
+/** Second step: prove the app is set up by typing its current code. */
+export const confirmTwoFactorSchema = z.object({ code: totpCodeSchema });

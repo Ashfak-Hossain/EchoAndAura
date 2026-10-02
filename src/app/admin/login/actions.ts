@@ -66,8 +66,9 @@ async function countFailedSignIn(ip: string, email: string): Promise<void> {
 
 /**
  * Thin server action: Zod parse → human check (ADR-048) → throttle →
- * better-auth signInEmail → redirect. The nextCookies plugin on the auth
- * instance sets the session cookie.
+ * better-auth signInEmail → redirect (to the code step when 2FA is on,
+ * ADR-049). The nextCookies plugin on the auth instance sets the session
+ * cookie, or the two-factor challenge cookie in its place.
  */
 export async function signInAction(_prev: SignInState, formData: FormData): Promise<SignInState> {
   const rawEmail = formData.get('email');
@@ -86,8 +87,9 @@ export async function signInAction(_prev: SignInState, formData: FormData): Prom
     return { error: TOO_MANY_SIGN_INS, email, refused: true };
   }
 
+  let result: unknown;
   try {
-    await auth.api.signInEmail({ body: parsed.data, headers: await headers() });
+    result = await auth.api.signInEmail({ body: parsed.data, headers: await headers() });
   } catch (err: unknown) {
     // Only a better-auth APIError means the credentials were actually rejected.
     // Deliberately generic so we never reveal whether an email is registered.
@@ -102,5 +104,20 @@ export async function signInAction(_prev: SignInState, formData: FormData): Prom
   }
 
   // Outside the try: redirect() works by throwing and must not be swallowed.
-  redirect('/admin');
+  // ADR-049: for an admin with the authenticator app set up, better-auth's
+  // twoFactor after-hook has already deleted the new session and set the
+  // short-lived challenge cookie; the code step finishes the sign-in. An
+  // admin without it lands on /admin, where requireAdmin() sends them to set
+  // it up.
+  redirect(needsSecondFactor(result) ? '/admin/login/verify' : '/admin');
+}
+
+/** better-auth's sign-in type does not include the twoFactor plugin's answer. */
+function needsSecondFactor(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'twoFactorRedirect' in result &&
+    result.twoFactorRedirect === true
+  );
 }

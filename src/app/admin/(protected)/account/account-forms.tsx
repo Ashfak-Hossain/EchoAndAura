@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
+import { BackupCodesList } from '@/components/admin/backup-codes-list';
 import { Button } from '@/components/button';
 import { Field, FormAlert, FormSuccess } from '@/components/form-field';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,8 @@ import { NEW_PASSWORD_MIN } from '@/lib/validation/auth';
 import {
   changeEmailAction,
   changePasswordAction,
+  regenerateBackupCodesAction,
+  type BackupCodesState,
   type ChangeEmailState,
   type ChangePasswordState,
 } from './actions';
@@ -165,6 +168,74 @@ export function ChangeEmailForm({ current, ttlMinutes }: { current: string; ttlM
           <div>
             <Button type="submit" disabled={pending}>
               {pending ? 'Sending…' : 'Send a confirmation link'}
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * ADR-049: two-factor is mandatory, so there is no "turn off" here; only
+ * new backup codes. Turning it off for a lost phone is the server script
+ * (`admin:reset-2fa`), never this page.
+ */
+export function TwoFactorForm() {
+  const [state, formAction, pending] = useActionState<BackupCodesState, FormData>(
+    regenerateBackupCodesAction,
+    {},
+  );
+  // "Done" hides this result's codes; a new result shows its own.
+  const [dismissed, setDismissed] = useState<BackupCodesState | null>(null);
+  const codes = state.backupCodes && dismissed !== state ? state.backupCodes : null;
+
+  return (
+    <Card
+      title="Two-factor sign-in"
+      lead={
+        <>
+          Status: <strong className="text-foreground">On</strong>. Signing in asks for the code from
+          your authenticator app after the password.
+        </>
+      }
+    >
+      <p className="text-sm text-muted-foreground">
+        Lost or changed your phone? Sign in with a backup code, then ask the developer to reset
+        two-factor: a new phone can only be set up after that.
+      </p>
+      {codes ? (
+        <div className="flex flex-col gap-4">
+          <FormSuccess>New backup codes made. Your old codes no longer work.</FormSuccess>
+          <BackupCodesList codes={codes} />
+          <div>
+            <Button type="button" variant="secondary" onClick={() => setDismissed(state)}>
+              Done
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form action={formAction} className="flex flex-col gap-5">
+          {state.error ? <FormAlert>{state.error}</FormAlert> : null}
+          <Field
+            label="Current password"
+            htmlFor="codes-password"
+            hint="Making new backup codes stops the old ones working at once."
+          >
+            <Input
+              id="codes-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              disabled={pending}
+              aria-invalid={state.field === 'password' || undefined}
+              className={inputClass}
+            />
+          </Field>
+          <div>
+            <Button type="submit" disabled={pending}>
+              {pending ? 'Making…' : 'Make new backup codes'}
             </Button>
           </div>
         </form>

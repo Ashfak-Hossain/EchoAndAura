@@ -1,21 +1,10 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
 // Requires a seeded admin (pnpm admin:create), MinIO, and — for the sign-in
 // flow — E2E_EXPOSE_MAGIC_LINK=1 on the server under test.
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
-
-async function signInAdmin(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -56,7 +45,7 @@ test.describe('buyer access without an account, and with one', () => {
   test('one name per order; Find my order by reference + phone; wrong phone refused', async ({
     page,
   }) => {
-    await signInAdmin(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Account ${Date.now()}`);
 
     await page.goto(`/events/${slug}/register`);
@@ -93,7 +82,7 @@ test.describe('buyer access without an account, and with one', () => {
   test('sign in by email link → My orders lists the order → sign out; buyers cannot reach /admin', async ({
     page,
   }) => {
-    await signInAdmin(page);
+    await signInAsAdmin(page);
     const slug = await publishedEvent(page, `Account Login ${Date.now()}`);
     const buyer = `buyer-${Date.now()}@example.com`;
 

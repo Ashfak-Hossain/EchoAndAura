@@ -1,13 +1,6 @@
 import { expect, test } from './test';
-import {
-  dhaka,
-  dismiss,
-  issuedOrder,
-  newGatePass,
-  publishedEvent,
-  signIn,
-  typeCode,
-} from './door-helpers';
+import { signInAsAdmin } from './fixtures/admin';
+import { dhaka, dismiss, issuedOrder, newGatePass, publishedEvent, typeCode } from './door-helpers';
 
 test.describe('gate scanner (ADR-030)', () => {
   test('pass, practice, doors open, green / amber / red, search admit, undo, revoke', async ({
@@ -15,7 +8,7 @@ test.describe('gate scanner (ADR-030)', () => {
     browser,
   }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     const { id, slug } = await publishedEvent(page, `Door ${Date.now()}`);
     const { orderUrl, codes } = await issuedOrder(page, slug, 'Nusrat Jahan', 3);
     expect(codes).toHaveLength(3);

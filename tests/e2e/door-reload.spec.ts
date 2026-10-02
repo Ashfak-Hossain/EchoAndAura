@@ -1,12 +1,6 @@
 import { expect, test, type Page } from './test';
-import {
-  issuedOrder,
-  newGatePass,
-  openDoors,
-  publishedEvent,
-  signIn,
-  typeCode,
-} from './door-helpers';
+import { signInAsAdmin } from './fixtures/admin';
+import { issuedOrder, newGatePass, openDoors, publishedEvent, typeCode } from './door-helpers';
 
 /** The worker controls the page and has a saved copy of it. */
 function savedCopy(phone: Page) {
@@ -21,7 +15,7 @@ test.describe('gate scanner reloads without signal (ADR-035)', () => {
     browser,
   }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     const { id, slug } = await publishedEvent(page, `Reload ${Date.now()}`);
     const { codes } = await issuedOrder(page, slug, 'Nusrat Jahan', 2);
     await openDoors(page, id);

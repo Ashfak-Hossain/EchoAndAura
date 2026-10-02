@@ -1,18 +1,9 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { E2E_ADMIN, signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose).
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -53,7 +44,7 @@ async function publishedEvent(page: Page, title: string) {
 test.describe('complimentary tickets (B13)', () => {
   test('issue from the Ticket types tab → B8 → B9 → report → cancel one', async ({ page }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     const title = `Comps ${Date.now()}`;
     const { id } = await publishedEvent(page, title);
 
@@ -91,7 +82,7 @@ test.describe('complimentary tickets (B13)', () => {
     await expect(page.getByTestId('order-status')).toHaveText('Tickets issued');
     await expect(page.getByTestId('order-comp')).toHaveText('Complimentary');
     await expect(page.getByTestId('comp-card')).toContainText('Press — Dhaka Press review');
-    await expect(page.getByTestId('comp-card')).toContainText(`Issued by ${email}`);
+    await expect(page.getByTestId('comp-card')).toContainText(`Issued by ${E2E_ADMIN.email}`);
     await expect(page.getByTestId('ticket-row')).toHaveCount(2);
     await expect(page.getByTestId('ticket-row').first()).toContainText('Tahmina Akter');
     await expect(page.getByText('order.comp_issued')).toBeVisible();

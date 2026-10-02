@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { magicLink } from 'better-auth/plugins';
+import { magicLink, twoFactor } from 'better-auth/plugins';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db/client';
 import * as schema from '@/db/schema';
@@ -84,14 +84,48 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
       // ADR-048: password sign-in, the magic link and the reset email are
       // reached only through the Turnstile-checked, throttled server
       // actions. Open over HTTP, a bot would post here and skip both.
-      // The token-gated halves (/magic-link/verify, /reset-password)
-      // stay open: they are the links in the emails.
+      // The links in the emails stay open: /magic-link/verify,
+      // /reset-password/:token (which hands the token to our reset page)
+      // and /verify-email (the email-change confirmation).
       '/sign-in/email',
       '/sign-in/magic-link',
       '/request-password-reset',
       // Unused (the email change sends its own link) and would mail an
       // unverified account — the seeded admin — on anyone's request.
       '/send-verification-email',
+      // ADR-049: every two-factor step runs through a server action with
+      // our own throttle; `/send-otp` and `/verify-otp` (email codes) are
+      // not configured at all.
+      '/two-factor/enable',
+      '/two-factor/disable',
+      '/two-factor/get-totp-uri',
+      '/two-factor/verify-totp',
+      '/two-factor/verify-backup-code',
+      '/two-factor/generate-backup-codes',
+      '/two-factor/send-otp',
+      '/two-factor/verify-otp',
+      // ADR-049: every other account change is a server action that checks
+      // requireAdmin() (and so the second factor) first. Over HTTP these
+      // would only need a session cookie, which an admin who hasn't
+      // finished two-factor setup also has. Reads (/get-session) and
+      // /sign-out stay.
+      '/reset-password',
+      '/change-password',
+      '/verify-password',
+      '/update-user',
+      '/update-session',
+      '/delete-user',
+      '/delete-user/callback',
+      '/list-sessions',
+      '/list-accounts',
+      '/account-info',
+      '/revoke-session',
+      '/revoke-sessions',
+      '/revoke-other-sessions',
+      '/link-social',
+      '/unlink-account',
+      '/get-access-token',
+      '/refresh-token',
     ],
     // Table names are plural (users, sessions, accounts, verifications) — see the
     // Auth section of src/db/schema.ts.
@@ -160,5 +194,28 @@ export function magicLinkPlugin() {
         { email: data.email, url: data.url },
         { roleOf: lookupRole, enqueue: enqueueSignInEmail },
       ),
+  });
+}
+
+/** What authenticator apps list the account under. */
+export const TWO_FACTOR_ISSUER = 'echoandaura';
+export const BACKUP_CODE_COUNT = 10;
+
+/**
+ * ADR-049: authenticator-app codes (TOTP) for admins, with one-time backup
+ * codes. Built separately for the same reason as magicLinkPlugin: so
+ * `auth.api.verifyTOTP` and friends keep their concrete types.
+ *
+ * No email codes (`otpOptions`): email is the account-recovery channel,
+ * so it must not also be the second factor. No trusted devices: a session
+ * already lasts about a week, and a long-lived cookie that skips the code
+ * is one more thing to steal. better-auth itself gives each sign-in
+ * challenge 5 tries and locks the account for 15 minutes after 10 wrong
+ * codes in a row.
+ */
+export function twoFactorPlugin() {
+  return twoFactor({
+    issuer: TWO_FACTOR_ISSUER,
+    backupCodeOptions: { amount: BACKUP_CODE_COUNT, storeBackupCodes: 'encrypted' },
   });
 }
