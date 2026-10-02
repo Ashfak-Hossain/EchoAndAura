@@ -12,8 +12,10 @@ const initialState: SignInState = {};
 // B1: two failure classes worded differently on purpose (the action decides
 // which); pending disables both fields and says what is happening. A
 // refusal before the password check (bot check, throttle; ADR-048) is a
-// third: its own words, no field marked.
-export function LoginForm({ siteKey }: { siteKey: string }) {
+// third: its own words, no field marked. `notice`: why the two-factor step
+// sent the admin back (ADR-049, expired-notice.ts); shown until this form
+// has its own answer.
+export function LoginForm({ siteKey, notice }: { siteKey: string; notice?: string | null }) {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const outage = state.error?.startsWith('Sign-in is temporarily unavailable');
@@ -34,6 +36,8 @@ export function LoginForm({ siteKey }: { siteKey: string }) {
             : 'Check both fields and try again.'}
           <span className="sr-only"> {state.error}</span>
         </FormAlert>
+      ) : notice ? (
+        <FormAlert>{notice}</FormAlert>
       ) : null}
 
       <Field label="Email" htmlFor="email">

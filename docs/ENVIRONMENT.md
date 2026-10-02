@@ -31,7 +31,7 @@ variable, because the image build needs it (ADR-033). See
 | `TEST_DATABASE_URL`                                                                         | No                 | Phase 0      | Isolated DB for the integration suite (falls back to `DATABASE_URL`)                                                                                                                                                                                                                                                                                                     |
 | `REDIS_URL`                                                                                 | Yes                | Phase 3      | BullMQ: the worker consumes; the app enqueues email jobs after each commit (fails fast and logs if Redis is down — the order stands)                                                                                                                                                                                                                                     |
 | `LOG_LEVEL`                                                                                 | No                 | Phase 3      | pino level for services and the worker (default `debug` locally, `info` in production)                                                                                                                                                                                                                                                                                   |
-| `BETTER_AUTH_SECRET`                                                                        | Yes                | Phase 1      | Signs admin auth sessions                                                                                                                                                                                                                                                                                                                                                |
+| `BETTER_AUTH_SECRET`                                                                        | Yes                | Phase 1      | Signs auth sessions and encrypts admin two-factor secrets and backup codes (ADR-049): rotating it means resetting every admin's two-factor                                                                                                                                                                                                                               |
 | `BETTER_AUTH_URL`                                                                           | Yes                | Phase 1      | Base URL for auth callbacks                                                                                                                                                                                                                                                                                                                                              |
 | `MAILER`                                                                                    | No                 | Phase 4      | `ses` or `log` (default: `ses` in production, `log` elsewhere — writes emails to `tmp/emails/`). The worker refuses to start in production with anything but `ses`                                                                                                                                                                                                       |
 | `AWS_SES_REGION` / `AWS_SES_ACCESS_KEY_ID` / `AWS_SES_SECRET_ACCESS_KEY`                    | With `MAILER=ses`  | Phase 4      | Amazon SES credentials for the worker (IAM user with `ses:SendEmail` only; region `ap-south-1`)                                                                                                                                                                                                                                                                          |
@@ -74,14 +74,20 @@ variable, because the image build needs it (ADR-033). See
 ### better-auth
 
 Two kinds of user share better-auth: the **admin** (password login at
-`/admin/login`, role `admin`) and **buyers** (passwordless: `/account/sign-in`
-emails a 15-minute link through the worker; the first sign-in creates the
-account, role `buyer`). `users.role` decides who gets past the admin layout.
+`/admin/login` plus an authenticator-app code, ADR-049; role `admin`)
+and **buyers** (passwordless: `/account/sign-in` emails a 15-minute link
+through the worker; the first sign-in creates the account, role
+`buyer`). `users.role` decides who gets past the admin layout.
 `pnpm admin:create` sets the role; for an admin created before the role column
 existed, run `pnpm admin:promote <email>` once.
 
 - `BETTER_AUTH_SECRET`: generate a 32-byte random secret —
-  `openssl rand -base64 32`. Keep it stable; rotating it invalidates all sessions.
+  `openssl rand -base64 32`. Keep it stable. Rotating it signs everyone
+  out, and it also encrypts each admin's two-factor secret and backup
+  codes (ADR-049): after a rotation no stored code can be checked, so
+  every admin must be reset with `pnpm admin:reset-2fa <email>` (on the
+  server: [RUNBOOK.md](RUNBOOK.md#an-admin-lost-their-phone)) and set up
+  two-factor again. Rotate only if it leaked.
 - `BETTER_AUTH_URL`: the app's base URL (`http://localhost:3000` in dev; the real
   domain in production).
 - **Create the admin account** (once, after `pnpm db:migrate`):

@@ -1,26 +1,15 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
+// Requires MinIO (docker compose).
 // The event is created and published through the admin, like public-event.spec.
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
 const SITE = (
   process.env.SITE_URL ??
   process.env.BETTER_AUTH_URL ??
   'http://localhost:3000'
 ).replace(/\/+$/, '');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -33,7 +22,7 @@ test.describe('upcoming events (/events)', () => {
   test('a published upcoming event is listed as a card that links to its page', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const title = `Upcoming Show ${Date.now()}`;
 
     // Registration already open (the default window would close 5 days before).

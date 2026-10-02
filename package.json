@@ -8,7 +8,7 @@
     "start": "NEXT_DIST_DIR=.next-build next start",
     "sw:build": "esbuild src/app/door/offline/sw.ts --bundle --format=iife --target=es2020 --minify --outfile=public/door/sw.js --log-level=warning",
     "worker:build": "esbuild src/worker.ts --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=dist/worker.mjs --log-level=warning",
-    "ops:build": "esbuild scripts/migrate.ts scripts/create-admin.ts scripts/promote-admin.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/ops --out-extension:.js=.mjs --log-level=warning",
+    "ops:build": "esbuild scripts/migrate.ts scripts/create-admin.ts scripts/promote-admin.ts scripts/admin-reset-2fa.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/ops --out-extension:.js=.mjs --log-level=warning",
     "worker": "pnpm worker:build && dotenv -e .env -- node dist/worker.mjs",
     "jobs:expire-holds": "dotenv -e .env -- tsx scripts/expire-holds.ts",
     "email:render": "dotenv -e .env -- tsx scripts/render-emails.ts",
@@ -20,7 +20,7 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:integration": "dotenv -e .env -- vitest run --project integration",
-    "test:integration:db": "dotenv -e .env -- vitest run --project integration tests/integration/inventory tests/integration/door tests/integration/sponsors tests/integration/rate-limit tests/integration/worker-heartbeat tests/integration/db-role tests/integration/orders.buyer-cap tests/integration/auth-http-paths",
+    "test:integration:db": "dotenv -e .env -- vitest run --project integration tests/integration/inventory tests/integration/door tests/integration/sponsors tests/integration/rate-limit tests/integration/worker-heartbeat tests/integration/db-role tests/integration/orders.buyer-cap tests/integration/auth-http-paths tests/integration/two-factor tests/integration/admin-reset-2fa",
     "test:e2e": "dotenv -e .env -- playwright test",
     "db:generate": "dotenv -e .env -- drizzle-kit generate",
     "db:migrate": "dotenv -e .env -- drizzle-kit migrate",
@@ -28,6 +28,7 @@
     "db:seed": "dotenv -e .env -v LOG_LEVEL=warn -- tsx scripts/seed/run.ts",
     "admin:create": "dotenv -e .env -- tsx scripts/create-admin.ts",
     "admin:promote": "dotenv -e .env -- tsx scripts/promote-admin.ts",
+    "admin:reset-2fa": "dotenv -e .env -- tsx scripts/admin-reset-2fa.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "dependencies": {

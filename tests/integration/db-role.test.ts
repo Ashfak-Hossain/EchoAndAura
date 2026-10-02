@@ -71,7 +71,9 @@ describe('the app database role (ADR-044)', () => {
 
   it('reads and writes every table, except rewriting the append-only ones', async () => {
     const tables = await publicTables();
-    expect(tables).toEqual(expect.arrayContaining(['orders', 'order_events', 'door_scans']));
+    expect(tables).toEqual(
+      expect.arrayContaining(['orders', 'order_events', 'door_scans', 'two_factors']),
+    );
     for (const table of tables) {
       for (const privilege of ['SELECT', 'INSERT']) {
         expect(await can(table, privilege), `${privilege} on ${table}`).toBe(true);
@@ -109,6 +111,33 @@ describe('the app database role (ADR-044)', () => {
     expect(row?.value).toBe('w');
     await app`delete from verifications where id = ${id}`;
     expect(await app`select 1 from verifications where id = ${id}`).toHaveLength(0);
+  });
+
+  // ADR-049: better-auth reads the secret, rewrites the backup codes and
+  // the lockout counters, and the reset script deletes the row — all as
+  // this role. Covered by the ALL TABLES grant and the default privileges,
+  // so app-role.sql needed no change for it.
+  it('runs the two-factor lifecycle on two_factors', async () => {
+    const userId = `app-role-${randomBytes(6).toString('hex')}`;
+    const rowId = `app-role-2fa-${randomBytes(6).toString('hex')}`;
+    await app`insert into users (id, name, email, role)
+              values (${userId}, 'App role', ${`${userId}@example.com`}, 'admin')`;
+    try {
+      await app`insert into two_factors (id, secret, backup_codes, user_id, verified)
+                values (${rowId}, 'enc-secret', 'enc-codes', ${userId}, false)`;
+      await app`update two_factors set verified = true, backup_codes = 'enc-codes-2',
+                failed_verification_count = failed_verification_count + 1,
+                locked_until = now() + interval '15 minutes'
+                where id = ${rowId}`;
+      const [row] = await app<{ count: number; verified: boolean }[]>`
+        select failed_verification_count as count, verified from two_factors where id = ${rowId}`;
+      expect(row).toEqual({ count: 1, verified: true });
+      await app`update users set two_factor_enabled = false where id = ${userId}`;
+      await app`delete from two_factors where user_id = ${userId}`;
+      expect(await app`select 1 from two_factors where id = ${rowId}`).toHaveLength(0);
+    } finally {
+      await app`delete from users where id = ${userId}`;
+    }
   });
 
   it('gets the same rights on a table a later migration creates', async () => {

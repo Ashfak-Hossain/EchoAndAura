@@ -1,8 +1,7 @@
 import { expect, test } from './test';
+import { E2E_ADMIN, signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) matching these credentials.
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+const { email } = E2E_ADMIN;
 
 test.describe('admin login', () => {
   test('unauthenticated /admin redirects to the login page', async ({ page }) => {
@@ -29,15 +28,12 @@ test.describe('admin login', () => {
     await expect(page.getByLabel('Password')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  test('correct credentials reach the dashboard; sign-out guards again', async ({ page }) => {
-    await page.goto('/admin/login');
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill(password);
-    await page.getByRole('button', { name: /^sign in$/i }).click();
-
-    // Six workers share one Node process; a PDF render elsewhere can hold the
-    // event loop for seconds, so the sign-in action gets a realistic budget.
-    await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
+  test('correct credentials and code reach the dashboard; sign-out guards again', async ({
+    page,
+  }) => {
+    // Password → code page → dashboard (ADR-049; admin-two-factor.spec.ts
+    // covers the code step itself).
+    await signInAsAdmin(page);
     await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
     // B2 has a Sign out in the sidebar footer and one in the header; either works.

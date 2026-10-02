@@ -5,7 +5,11 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/session';
-import { changeEmailSchema, changePasswordSchema } from '@/lib/validation/auth';
+import {
+  changeEmailSchema,
+  changePasswordSchema,
+  enableTwoFactorSchema,
+} from '@/lib/validation/auth';
 import { takeExposedAccountLink } from '@/server/auth/account-emails';
 import { logger } from '@/server/lib/logger';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
@@ -25,6 +29,13 @@ export interface ChangeEmailState {
   sentTo?: string;
   /** Dev/e2e only (E2E_EXPOSE_MAGIC_LINK=1): the confirmation link itself. */
   exposedLink?: string;
+}
+
+export interface BackupCodesState {
+  error?: string;
+  field?: 'password';
+  /** The new codes, shown once; the old ones stopped working when these were made. */
+  backupCodes?: string[];
 }
 
 /**
@@ -146,4 +157,44 @@ export async function changeEmailAction(
     sentTo: newEmail,
     exposedLink: takeExposedAccountLink('confirm-new-email', newEmail) ?? undefined,
   };
+}
+
+/**
+ * Thin (ADR-049): admin → Zod → throttle → better-auth
+ * generateBackupCodes, which checks the password and replaces every
+ * stored code with ten new ones. The codes go back to the page once and
+ * are never logged.
+ */
+export async function regenerateBackupCodesAction(
+  _prev: BackupCodesState,
+  formData: FormData,
+): Promise<BackupCodesState> {
+  const admin = await requireAdmin();
+  const parsed = enableTwoFactorSchema.safeParse({ password: formData.get('password') });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Enter your password', field: 'password' };
+  }
+  if (
+    !(await limiter.allow([{ scope: 'account:backup-codes', subject: admin.email, ...PER_ADMIN }]))
+  ) {
+    return { error: 'Too many attempts. Please wait a few minutes and try again.' };
+  }
+  let backupCodes: string[];
+  try {
+    ({ backupCodes } = await auth.api.generateBackupCodes({
+      headers: await headers(),
+      body: { password: parsed.data.password },
+    }));
+  } catch (err: unknown) {
+    if (err instanceof APIError && err.body?.code === 'INVALID_PASSWORD') {
+      return { error: 'The password is not right.', field: 'password' };
+    }
+    logger.error(
+      { err: err instanceof Error ? err.message : err },
+      'backup code regeneration failed',
+    );
+    return { error: 'New codes could not be made just now. Please try again in a minute.' };
+  }
+  logger.info({ admin: admin.email }, 'admin backup codes regenerated');
+  return { backupCodes };
 }

@@ -87,6 +87,18 @@ describe('admin sign-in — human check (ADR-048)', () => {
     });
   });
 
+  // ADR-049: better-auth's twoFactor after-hook swaps the session for a
+  // challenge; the code step finishes the sign-in.
+  it('an admin with two-factor on goes to the code step, not the console', async () => {
+    signInEmail.mockResolvedValue({ twoFactorRedirect: true, twoFactorMethods: ['totp'] });
+    await expect(signInAction({}, form())).rejects.toThrow('redirect /admin/login/verify');
+  });
+
+  it('only a literal twoFactorRedirect: true sends to the code step', async () => {
+    signInEmail.mockResolvedValue({ twoFactorRedirect: 'yes', token: 't' });
+    await expect(signInAction({}, form())).rejects.toThrow(/^redirect \/admin$/);
+  });
+
   it('wrong credentials keep the generic answer', async () => {
     signInEmail.mockRejectedValue(new APIError('UNAUTHORIZED'));
     const state = await signInAction({}, form());

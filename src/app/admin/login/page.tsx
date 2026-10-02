@@ -6,13 +6,18 @@ import { AuthScreen } from '@/components/admin/auth-screen';
 import { FormAlert, FormSuccess } from '@/components/form-field';
 import { auth } from '@/lib/auth';
 import { readTurnstileConfig } from '@/lib/turnstile-config';
+import { expiredNotice } from './expired-notice';
 import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
 interface Props {
-  /** Where the account flows land (ADR-038): a finished reset or email change, or a dead link. */
-  searchParams: Promise<{ reset?: string; email?: string; error?: string }>;
+  /**
+   * Where the account flows land (ADR-038): a finished reset or email
+   * change, or a dead link. `expired`: the two-factor step ran out of time
+   * (`1`) or tries (`attempts`) (ADR-049).
+   */
+  searchParams: Promise<{ reset?: string; email?: string; error?: string; expired?: string }>;
 }
 
 // B1: split screen — the brand panel and the form (AuthScreen).
@@ -20,7 +25,7 @@ export default async function AdminLoginPage({ searchParams }: Props) {
   // Already signed in? Skip the form.
   const session = await auth.api.getSession({ headers: await headers() });
   if (session) redirect('/admin');
-  const { reset, email, error } = await searchParams;
+  const { reset, email, error, expired } = await searchParams;
 
   return (
     <AuthScreen
@@ -48,7 +53,10 @@ export default async function AdminLoginPage({ searchParams }: Props) {
           It has expired or was already used. Ask for a new one.
         </FormAlert>
       ) : null}
-      <LoginForm siteKey={readTurnstileConfig().siteKey} />
+      <LoginForm
+        siteKey={readTurnstileConfig().siteKey}
+        notice={error ? null : expiredNotice(expired)}
+      />
     </AuthScreen>
   );
 }

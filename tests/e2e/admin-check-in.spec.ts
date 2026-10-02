@@ -1,18 +1,9 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose).
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -88,7 +79,7 @@ async function issuedOrder(page: Page, slug: string, name: string, quantity: num
 test.describe('check-in list (B11)', () => {
   test('lists issued tickets, searches, sorts, prints and exports', async ({ page }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     const { id, slug } = await publishedEvent(page, `Check-in ${Date.now()}`);
     const checkInUrl = `/admin/events/${id}/check-in`;
 

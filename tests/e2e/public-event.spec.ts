@@ -1,9 +1,8 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose).
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
+// Requires MinIO (docker compose).
 const COVER = path.join(__dirname, 'fixtures', 'cover.png');
 // Canonical/OG URLs use the configured public origin, not the port under test.
 const SITE = (
@@ -11,16 +10,6 @@ const SITE = (
   process.env.BETTER_AUTH_URL ??
   'http://localhost:3000'
 ).replace(/\/+$/, '');
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 async function openTab(page: Page, name: 'Details' | 'Cover image' | 'Ticket types' | 'Publish') {
   await page
@@ -99,7 +88,7 @@ test.describe('public event page (A2)', () => {
     page,
     request,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const title = `Public Event ${Date.now()}`;
     // Registration must already be open: the default window (20 days before a
     // 2030 event) would put the page in its not_open state.
@@ -155,7 +144,7 @@ test.describe('public event page (A2)', () => {
   test('before registration opens: prices shown, quantities hidden, CTA states the wait', async ({
     page,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await createPublishableEvent(page, `Not Open ${Date.now()}`, {
       startsAt: '2030-10-01T19:00',
       registrationOpensAt: '2030-09-11T10:00',
@@ -176,7 +165,7 @@ test.describe('public event page (A2)', () => {
     page,
     browser,
   }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const open = await createPublishableEvent(page, `Phone Open ${Date.now()}`, {
       registrationOpensAt: '2026-01-01T10:00',
     });
@@ -218,7 +207,7 @@ test.describe('public event page (A2)', () => {
   });
 
   test('a past (archived) event keeps its page without a CTA', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     const slug = await createPublishableEvent(page, `Past Event ${Date.now()}`, {
       startsAt: '2020-01-01T19:00',
     });

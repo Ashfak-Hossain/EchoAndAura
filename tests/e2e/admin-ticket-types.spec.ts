@@ -1,18 +1,5 @@
 import { expect, test, type Page } from './test';
-
-// Requires a seeded admin (pnpm admin:create) matching these credentials.
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  // Six workers share one Node process; a PDF render elsewhere can hold the
-  // event loop for seconds, so the sign-in action gets a realistic budget.
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
+import { signInAsAdmin } from './fixtures/admin';
 
 /** Creates a fresh event, opens its Ticket types tab, and returns that URL. */
 async function createEvent(page: Page, title: string): Promise<string> {
@@ -53,7 +40,7 @@ async function addTicketType(
 
 test.describe('admin ticket types', () => {
   test.beforeEach(async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
   });
 
   test('phase-exit rehearsal: three ticket types on one event', async ({ page }) => {

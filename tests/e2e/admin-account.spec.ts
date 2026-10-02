@@ -1,7 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { expect, type Page, test } from './test';
-import { e2eAppDatabaseUrl } from './prepare-db';
+import { createAdmin, signInAsAdmin, submitPassword } from './fixtures/admin';
 
 /**
  * ADR-038: an admin's own password and email — change password, forgot →
@@ -9,23 +8,10 @@ import { e2eAppDatabaseUrl } from './prepare-db';
  * create-admin script (as the app role, like the worker in production),
  * so the shared e2e admin is never touched. Links are
  * read through the test seam (APP_ENV=test, E2E_EXPOSE_MAGIC_LINK=1).
+ * Two-factor (ADR-049) is seeded on each, and stays across every change.
  */
 
-function newAdmin(password: string) {
-  const email = `e2e-acct-${randomBytes(4).toString('hex')}@example.com`;
-  execFileSync('pnpm', ['exec', 'tsx', 'scripts/create-admin.ts', email, password, 'E2E Admin'], {
-    env: { ...process.env, DATABASE_URL: e2eAppDatabaseUrl() },
-    stdio: 'pipe',
-  });
-  return email;
-}
-
-async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-}
+const newAdmin = (password: string) => createAdmin({ prefix: 'e2e-acct', password });
 
 const alert = (page: Page, text: RegExp) => page.getByRole('alert').filter({ hasText: text });
 
@@ -33,9 +19,9 @@ test.describe('admin account (ADR-038)', () => {
   test('change password: wrong current and mismatch refused, then the new one is the only one', async ({
     page,
   }) => {
-    const email = newAdmin('first-password-123');
-    await signIn(page, email, 'first-password-123');
-    await expect(page).toHaveURL(/\/admin$/);
+    const admin = await newAdmin('first-password-123');
+    const { email } = admin;
+    await signInAsAdmin(page, admin);
 
     await page.getByRole('link', { name: 'Your account' }).first().click();
     await expect(
@@ -66,16 +52,16 @@ test.describe('admin account (ADR-038)', () => {
     await expect(page.getByText(/password changed/i)).toBeVisible();
 
     await page.context().clearCookies();
-    await signIn(page, email, 'first-password-123');
+    await submitPassword(page, email, 'first-password-123');
     await expect(alert(page, /invalid email or password/i)).toBeVisible();
-    await signIn(page, email, 'second-password-456');
-    await expect(page).toHaveURL(/\/admin$/);
+    await signInAsAdmin(page, { ...admin, password: 'second-password-456' });
   });
 
   test('forgot password: the link resets it once; an unknown address gets the same answer and no link', async ({
     page,
   }) => {
-    const email = newAdmin('forgotten-password-1');
+    const admin = await newAdmin('forgotten-password-1');
+    const { email } = admin;
     await page.goto('/admin/login');
     await page.getByRole('link', { name: 'Forgot password?' }).click();
     await expect(page).toHaveURL(/\/admin\/forgot-password$/);
@@ -95,10 +81,9 @@ test.describe('admin account (ADR-038)', () => {
     await expect(page).toHaveURL(/\/admin\/login\?reset=done$/);
     await expect(page.getByText(/password changed\. sign in with the new one/i)).toBeVisible();
 
-    await signIn(page, email, 'forgotten-password-1');
+    await submitPassword(page, email, 'forgotten-password-1');
     await expect(alert(page, /invalid email or password/i)).toBeVisible();
-    await signIn(page, email, 'a-brand-new-password');
-    await expect(page).toHaveURL(/\/admin$/);
+    await signInAsAdmin(page, { ...admin, password: 'a-brand-new-password' });
 
     // The link worked once: opening it again is a dead end, not a form.
     await page.context().clearCookies();
@@ -126,10 +111,10 @@ test.describe('admin account (ADR-038)', () => {
     page,
     request,
   }) => {
-    const email = newAdmin('email-change-pass-1');
+    const admin = await newAdmin('email-change-pass-1');
+    const { email } = admin;
     const moved = `e2e-moved-${randomBytes(4).toString('hex')}@example.com`;
-    await signIn(page, email, 'email-change-pass-1');
-    await expect(page).toHaveURL(/\/admin$/);
+    await signInAsAdmin(page, admin);
     await page.goto('/admin/account');
 
     const newEmail = page.getByLabel('New email');
@@ -150,10 +135,9 @@ test.describe('admin account (ADR-038)', () => {
     await expect(page).toHaveURL(/\/admin\/login\?email=changed$/);
     await expect(page.getByText(/email changed\. sign in with the new address/i)).toBeVisible();
 
-    await signIn(page, email, 'email-change-pass-1');
+    await submitPassword(page, email, 'email-change-pass-1');
     await expect(alert(page, /invalid email or password/i)).toBeVisible();
-    await signIn(page, moved, 'email-change-pass-1');
-    await expect(page).toHaveURL(/\/admin$/);
+    await signInAsAdmin(page, { ...admin, email: moved });
 
     // Over HTTP the endpoint is off: only the account page (with its password check) can do it.
     const direct = await request.post('/api/auth/change-email', {

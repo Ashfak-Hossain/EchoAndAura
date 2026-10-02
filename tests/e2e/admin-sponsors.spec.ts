@@ -1,10 +1,9 @@
 import path from 'node:path';
 import { expect, test, type Page } from './test';
+import { signInAsAdmin } from './fixtures/admin';
 
-// Requires a seeded admin (pnpm admin:create) and MinIO (docker compose):
+// Requires MinIO (docker compose):
 // logos are stored for real and drawn from storage.
-const email = process.env.E2E_ADMIN_EMAIL ?? 'admin@example.com';
-const password = process.env.E2E_ADMIN_PASSWORD ?? 'correct-horse-battery';
 const FIXTURES = path.join(__dirname, 'fixtures');
 const LOGO_SVG = path.join(FIXTURES, 'logo.svg');
 const LOGO_PNG = path.join(FIXTURES, 'logo.png');
@@ -29,14 +28,6 @@ const LEVEL_LABEL = {
   partner: 'Partner',
   supporter: 'Supporter',
 };
-
-async function signIn(page: Page) {
-  await page.goto('/admin/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/admin$/, { timeout: 20_000 });
-}
 
 /** The list, once its client islands are hydrated. */
 async function openList(page: Page) {
@@ -102,7 +93,7 @@ test.describe('sponsors (B15)', () => {
 
   test('add sponsors with an SVG and a PNG logo; an unsafe SVG is refused', async ({ page }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     await page
       .getByRole('navigation', { name: 'Admin' })
       .getByRole('link', { name: 'Sponsors' })
@@ -145,7 +136,7 @@ test.describe('sponsors (B15)', () => {
   });
 
   test('reorder with ▼ and the order field; focus stays on the control', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     await openList(page);
 
     await page.getByRole('button', { name: `Move ${A} down` }).click();
@@ -200,7 +191,7 @@ test.describe('sponsors (B15)', () => {
   });
 
   test('the Active switch hides a sponsor without deleting it', async ({ page }) => {
-    await signIn(page);
+    await signInAsAdmin(page);
     await openList(page);
 
     const toggle = page.getByRole('switch', { name: `Show ${A} on the site` });
@@ -229,7 +220,7 @@ test.describe('sponsors (B15)', () => {
 
   test('a second presenting partner moves the first to Partner #1', async ({ page }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     await addSponsor(page, { name: P1, level: 'presenting', logo: LOGO_SVG });
     await expect.poll(() => order(page, 'presenting')).toEqual([P1]);
 
@@ -251,7 +242,7 @@ test.describe('sponsors (B15)', () => {
 
   test('edit a sponsor, then delete from the list and from the form', async ({ page }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     await openList(page);
 
     // Edit: the page is titled with the name and previews the stored logo.
@@ -303,7 +294,7 @@ test.describe('sponsors (B15)', () => {
     page,
   }) => {
     test.slow();
-    await signIn(page);
+    await signInAsAdmin(page);
     await addSponsor(page, {
       name: D,
       level: 'supporter',
