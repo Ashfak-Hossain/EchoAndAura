@@ -14,3 +14,10 @@ overrides:
   # server, but a clean `pnpm audit` keeps real advisories visible. 0.25.12
   # is already in the lockfile (Phase 7.6 review).
   '@esbuild-kit/core-utils>esbuild': 0.25.12
+  # Patched transitive versions, inside the ranges their parents already
+  # accept: ip-address GHSA-j6r3-76f7-8jcv + GHSA-h3mg-xc3c-68pw (via shadcn,
+  # now dev-only), brace-expansion 1.x (via eslint's minimatch 3). braces
+  # GHSA-vfj7-8cjw-p6xm has no published fix yet (3.0.3 is the latest) and
+  # only reaches dev tools; re-check `pnpm audit` when 3.0.4 ships.
+  'ip-address@10': 10.7.3
+  'brace-expansion@1': 1.1.21
