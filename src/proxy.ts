@@ -1,5 +1,12 @@
 import { getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
+import {
+  ACCESS_JWT_COOKIE,
+  ACCESS_JWT_HEADER,
+  createAccessVerifier,
+  readAccessConfig,
+  type AccessVerifier,
+} from '@/lib/cf-access';
 import { buildCsp, newNonce, originFrom } from '@/lib/csp';
 
 const LOGIN_PATH = '/admin/login';
@@ -15,8 +22,11 @@ const PUBLIC_PATHS = new Set([
 
 /**
  * Next 16's `proxy` (the successor to middleware). It runs before every
- * page render and must stay lightweight — no database access. Two jobs:
+ * page render and must stay lightweight — no database access. Three jobs:
  *
+ * 0. ADR-050: every /admin request — sign-in, reset and code step
+ *    included — must carry a valid Cloudflare Access token once Access
+ *    is configured. Refused with a bare 403 before anything renders.
  * 1. ADR-043: a fresh CSP nonce per request. Next reads the policy from
  *    the request headers and stamps the nonce on its own scripts, which
  *    only works for pages rendered per request; the few Next would
@@ -26,8 +36,12 @@ const PUBLIC_PATHS = new Set([
  *    in src/app/admin/(protected)/layout.tsx; this just saves a render
  *    round-trip for clearly-anonymous requests.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isAdminPath(pathname) && !(await passesAccess(request))) {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
 
   // The signed-in admin pages (a signed-out one only sees sign-in and reset).
   const admin = isAdminPath(pathname) && !PUBLIC_PATHS.has(pathname);
@@ -49,6 +63,20 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
+let accessVerifier: AccessVerifier | null | undefined;
+
+async function passesAccess(request: NextRequest): Promise<boolean> {
+  if (accessVerifier === undefined) {
+    const config = readAccessConfig();
+    accessVerifier = config ? createAccessVerifier(config) : null;
+  }
+  // Not configured (dev, e2e, before the Admin app exists): nothing to check.
+  if (!accessVerifier) return true;
+  const token =
+    request.headers.get(ACCESS_JWT_HEADER) ?? request.cookies.get(ACCESS_JWT_COOKIE)?.value;
+  return accessVerifier.verify(token);
+}
+
 function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
@@ -66,5 +94,9 @@ export const config = {
         { type: 'header', key: 'purpose', value: 'prefetch' },
       ],
     },
+    // ADR-050: admin prefetches too. A prefetch carries the admin page's
+    // render, so the Access check can't skip it.
+    '/admin',
+    '/admin/:path*',
   ],
 };

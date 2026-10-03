@@ -302,6 +302,23 @@ anything (ADR-048).
 - A wrong secret in production refuses every submit with the bot message
   and logs `turnstile secret rejected by Cloudflare` ([RUNBOOK.md](RUNBOOK.md#buyers-say-the-bot-check-fails)).
 
+### Cloudflare Access
+
+ADR-050. Cloudflare asks for an approved email before `/admin` is
+reached; the web also checks the token Cloudflare attaches, because
+Cloudflare's addresses (all that origin lockdown lets in) are shared with
+every Cloudflare customer.
+
+- `CF_ACCESS_TEAM_DOMAIN`: `<team>.cloudflareaccess.com` (Zero Trust →
+  Settings). Web only.
+- `CF_ACCESS_AUD`: the `Admin` Access application's Audience (AUD) tag.
+- **Both set:** every `/admin` request without a valid token gets a bare
+  `403`. **Both empty:** the check is off (dev, CI, e2e, and production
+  before the `Admin` app exists). **One set:** `/admin` throws, so a
+  half-pasted value can't silently switch it off.
+- Emptying `CF_ACCESS_AUD` and redeploying is the emergency off switch
+  ([infra/CLOUDFLARE.md § Switch it off](infra/CLOUDFLARE.md#switch-it-off-in-an-emergency)).
+
 ### App
 
 - `APP_ENV`: optional. Drives the environment chip in the admin header

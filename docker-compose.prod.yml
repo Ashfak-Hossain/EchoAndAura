@@ -75,6 +75,10 @@ services:
       # into the build, so it is set here like the secret.
       TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:?Set TURNSTILE_SITE_KEY in Dokploy}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:?Set TURNSTILE_SECRET_KEY in Dokploy}
+      # ADR-050: the origin checks Cloudflare Access tokens on /admin once
+      # both are set (empty = check off, the state before the Admin app exists).
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
     # Resized covers survive a deploy (ADR-033).
     volumes:
       - image-cache:/app/.next-build/cache/images

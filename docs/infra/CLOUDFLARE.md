@@ -153,6 +153,13 @@ Security → WAF → Custom rules. Free plan: up to 5 rules.
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy API - no challenges` | `(http.host eq "deploy.echoandaura.com" and starts_with(http.request.uri.path, "/api/"))` | Skip: remaining custom rules, Browser Integrity Check, Security Level, User Agent Blocking | GitHub's deploy call is a script, not a browser; a challenge would fail every deploy. Dokploy's API key still guards it (ADR-045) |
 
+Two more rules (ADR-050), in this order below the skip rule:
+
+| Rule                             | Expression                                                                                                                                                                                                                    | Action            | State                                     | Why                                                                                                                                                                          |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `block scanners`                 | `(http.host eq "echoandaura.com" and (starts_with(http.request.uri.path, "/wp-") or ends_with(http.request.uri.path, ".php") or starts_with(http.request.uri.path, "/.env") or starts_with(http.request.uri.path, "/.git")))` | Block             | **on**                                    | Bots probing for WordPress, PHP and leaked files. The app has none of these; refusing them at the edge keeps them off the server and out of the logs                         |
+| `emergency - outside Bangladesh` | `(http.host eq "echoandaura.com" and ip.src.country ne "BD" and not starts_with(http.request.uri.path, "/_next/"))`                                                                                                           | Managed Challenge | **off** (switch on only during an attack) | One click during a flood from abroad: visitors outside Bangladesh get a Cloudflare check first. [RUNBOOK → The site is under attack](../RUNBOOK.md#the-site-is-under-attack) |
+
 Bot Fight Mode (Security → Bots) stays **off**: on the free plan it can't
 be skipped for a path, and it would challenge the deploy call.
 
@@ -179,6 +186,96 @@ seconds, blocking for 10 seconds.
   are let back in.
 - **Event night:** door phones and admins at the venue may share one
   address; scanning is about one request per scan, far under the limit.
+
+## Cloudflare Access (ADR-050)
+
+Zero Trust (free plan, up to 50 users) puts an email check **in front of**
+the admin area and the Dokploy dashboard: Cloudflare asks for an email
+address and sends a one-time code to it, and only listed addresses get
+through. Behind it, the admin still signs in with password + 2FA
+(ADR-049); Dokploy with its own login + 2FA.
+
+| Setting          | Value                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Team domain      | `<team>.cloudflareaccess.com` (Zero Trust → Settings → Custom pages / General) → `CF_ACCESS_TEAM_DOMAIN`                  |
+| Login method     | One-time PIN (email). Cloudflare sends it, not our SES                                                                    |
+| App **Admin**    | Self-hosted, `echoandaura.com/admin` (covers everything under it). Session **1 week**                                     |
+| Admin policy     | Allow — Emails: the developer and Raj (the addresses are in Bitwarden `Cloudflare Access`, not here: this repo is public) |
+| Admin AUD tag    | App → Overview → Application Audience (AUD) Tag → `CF_ACCESS_AUD` in Dokploy                                              |
+| App **Dokploy**  | Self-hosted, `deploy.echoandaura.com`. Session **1 week**                                                                 |
+| Dokploy policies | Allow — Emails: the developer only. **Service Auth** — service token `github-deploy`                                      |
+| Service token    | `github-deploy` → GitHub repo secrets `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` (+ Bitwarden)                     |
+
+**Why the server checks too.** Origin lockdown (ADR-045) lets only
+Cloudflare's addresses in, but they are shared with every Cloudflare
+customer. With `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` set, the web
+refuses any `/admin` request without a token signed for the Admin app
+(`src/lib/cf-access.ts`). Empty = check off.
+
+**Not behind Access:** `/door` (the gate scanner must work offline at the
+venue with a gate pass), the public site, `/api/*`. Dokploy can't check
+the token itself; its own login + 2FA stay.
+
+### Set up (once)
+
+In this order, so nothing locks out:
+
+1. **Zero Trust** (dashboard sidebar) → choose a team name, e.g.
+   `echoandaura` → **Free** plan (it may ask for the card already on file
+   for R2; nothing is charged up to 50 users).
+2. Settings → Authentication → Login methods → **One-time PIN** is there
+   by default; keep it.
+3. Access → Service auth → **Create service token** `github-deploy`,
+   duration **Non-expiring** (or 1 year + a calendar reminder). Copy the
+   Client ID and Secret once → Bitwarden `Cloudflare Access` → GitHub repo
+   → Settings → Secrets → Actions: `CF_ACCESS_CLIENT_ID`,
+   `CF_ACCESS_CLIENT_SECRET`.
+4. Access → Applications → **Add** → Self-hosted → name `Dokploy`, domain
+   `deploy.echoandaura.com`, session 1 week. Policies: `developer` (Allow,
+   Emails = the developer's) and `github deploy` (**Service Auth**, service
+   token `github-deploy`). Save. Then run Actions → Deploy → **Run
+   workflow** once: it must still deploy.
+5. Access → Applications → **Add** → Self-hosted → name `Admin`, domain
+   `echoandaura.com`, path `admin`, session 1 week. Policy `admins`
+   (Allow, Emails = the developer's and Raj's). Save. Open
+   `https://echoandaura.com/admin` in a private window: Cloudflare's
+   email page must come first.
+6. Copy the Admin app's **AUD tag** and the team domain into Dokploy →
+   Environment: `CF_ACCESS_AUD`, `CF_ACCESS_TEAM_DOMAIN` → **Deploy**.
+   From now on the server refuses `/admin` without the Access token.
+
+### Change it later
+
+- **Add or remove an admin's email:** Access → Applications → `Admin` →
+  Policies → `admins` → edit the Emails list → Save. Effective at once
+  for new logins; to cut someone off immediately, also Zero Trust → My
+  Team → Users → the user → **Revoke session**. Remember the admin
+  account itself (`admin:create`, or removing the role) is separate.
+- **Change who reaches Dokploy:** the same, on the `Dokploy` app's
+  `developer` policy.
+- **Session length:** Access → Applications → the app → Overview →
+  Session Duration. Shorter = more email codes.
+- **Rotate the service token:** Access → Service auth → `github-deploy` →
+  Refresh → update both GitHub secrets + Bitwarden → Run workflow once.
+- **Raj's or the developer's email changes:** add the new address
+  first, sign in once, then remove the old one.
+
+### Switch it off in an emergency
+
+Access is broken or misconfigured and nobody gets into `/admin`: Dokploy
+→ Environment → empty `CF_ACCESS_AUD` → **Deploy** (turns the server
+check off), then fix or delete the `Admin` app in Zero Trust. Locked out
+of Dokploy by its own Access app: Zero Trust → Access → Applications →
+`Dokploy` → delete (or add your new email) — that page is behind the
+Cloudflare account login, not Access.
+
+## DNSSEC
+
+DNS → Settings → DNSSEC → **Enable**. The registrar is Cloudflare too, so
+the DS record is published for us; the status turns **Active** within
+about an hour (`dig +short DS echoandaura.com` then answers). It signs
+our DNS answers, so nobody can forge them on the way to a visitor (point
+the site or the mail records elsewhere).
 
 ## Turnstile
 
@@ -311,12 +408,13 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 
 ## History
 
-| Date       | Change                                                                                                                                                          |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | DKIM CNAMEs, SPF (merged Cloudflare + SES), DMARC `p=none`, MAIL FROM MX/TXT, Email Routing `hello@`                                                            |
-| 2026-09-27 | `deploy` A record (DNS only) for the Dokploy dashboard                                                                                                          |
-| 2026-09-27 | R2 on (payment method added): buckets `echoandaura-media` (public at `media.`, CORS for presigned PUT) and `echoandaura-backups` (private), one scoped key each |
-| 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                     |
-| 2026-09-30 | WAF custom rule `deploy API - no challenges` (skip for `deploy` `/api/*`); `deploy` A record proxied; Bot Fight Mode confirmed off (ADR-045)                    |
-| 2026-09-30 | Rate limiting rule `requests per address`: path not under `/_next/`, 150 requests / 10 s per IP, block 10 s (the free plan's one rule, ADR-047)                 |
-| 2026-10-02 | Turnstile widget `echoandaura forms` (`echoandaura.com`, Managed, no pre-clearance), keys in Bitwarden + Dokploy (ADR-048)                                      |
+| Date       | Change                                                                                                                                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-20 | DKIM CNAMEs, SPF (merged Cloudflare + SES), DMARC `p=none`, MAIL FROM MX/TXT, Email Routing `hello@`                                                                                                     |
+| 2026-09-27 | `deploy` A record (DNS only) for the Dokploy dashboard                                                                                                                                                   |
+| 2026-09-27 | R2 on (payment method added): buckets `echoandaura-media` (public at `media.`, CORS for presigned PUT) and `echoandaura-backups` (private), one scoped key each                                          |
+| 2026-09-29 | Google Search Console verification TXT on `@`; sitemap submitted to Google, Bing imported from it (ADR-042)                                                                                              |
+| 2026-09-30 | WAF custom rule `deploy API - no challenges` (skip for `deploy` `/api/*`); `deploy` A record proxied; Bot Fight Mode confirmed off (ADR-045)                                                             |
+| 2026-09-30 | Rate limiting rule `requests per address`: path not under `/_next/`, 150 requests / 10 s per IP, block 10 s (the free plan's one rule, ADR-047)                                                          |
+| 2026-10-02 | Turnstile widget `echoandaura forms` (`echoandaura.com`, Managed, no pre-clearance), keys in Bitwarden + Dokploy (ADR-048)                                                                               |
+| _pending_  | Zero Trust + Access apps `Dokploy` (+ service token `github-deploy`) and `Admin` (`echoandaura.com/admin`, 1 week); WAF `block scanners` (on) + `emergency - outside Bangladesh` (off); DNSSEC (ADR-050) |
