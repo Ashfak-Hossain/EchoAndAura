@@ -14,7 +14,7 @@ import { isIos } from './platform';
  * Android-only (iOS Safari has no Vibration API).
  */
 
-export type FeedbackKind = 'admit' | 'warn' | 'deny' | 'practice';
+export type FeedbackKind = 'admit' | 'warn' | 'deny' | 'practice' | 'retry' | 'slow';
 
 interface Tone {
   freq: number;
@@ -22,20 +22,34 @@ interface Tone {
   square?: boolean;
 }
 
+// Every answer sounds and feels different (the scanner design's signal
+// spec), so staff can tell them apart with their eyes on the person.
 const TONES: Record<FeedbackKind, Tone[]> = {
-  admit: [{ freq: 1175, ms: 130 }],
-  practice: [{ freq: 784, ms: 130 }],
+  admit: [{ freq: 1800, ms: 80 }],
+  practice: [{ freq: 1200, ms: 40 }],
   warn: [
-    { freq: 740, ms: 110 },
-    { freq: 740, ms: 110 },
+    { freq: 900, ms: 90 },
+    { freq: 900, ms: 90 },
   ],
-  deny: [{ freq: 196, ms: 450, square: true }],
+  deny: [{ freq: 300, ms: 600, square: true }],
+  retry: [
+    { freq: 400, ms: 120 },
+    { freq: 400, ms: 120 },
+    { freq: 400, ms: 120 },
+  ],
+  slow: [
+    { freq: 400, ms: 200 },
+    { freq: 400, ms: 200 },
+  ],
 };
+
 const VIBRATE: Record<FeedbackKind, number[]> = {
-  admit: [60],
-  practice: [40],
-  warn: [80, 60, 80],
-  deny: [300, 100, 300],
+  admit: [40],
+  practice: [25],
+  warn: [80, 80, 80],
+  deny: [500],
+  retry: [120, 80, 120, 80, 120],
+  slow: [200, 100, 200],
 };
 const GAP_MS = 70;
 const VOLUME = 0.35;

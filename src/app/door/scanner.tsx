@@ -1,5 +1,37 @@
 'use client';
 
+import {
+  Ban,
+  BatteryCharging,
+  BatteryLow,
+  CalendarX,
+  Camera,
+  CameraOff,
+  Check,
+  ChevronUp,
+  CirclePause,
+  CircleX,
+  CloudOff,
+  Flashlight,
+  FlashlightOff,
+  GraduationCap,
+  Hash,
+  Keyboard,
+  Lock,
+  LockOpen,
+  type LucideIcon,
+  Play,
+  RefreshCw,
+  ScanLine,
+  SwitchCamera,
+  TriangleAlert,
+  Undo2,
+  UserSearch,
+  VideoOff,
+  Volume2,
+  Wifi,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { formatDhakaClock } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -164,9 +196,10 @@ export function Scanner({
   const offlineModeRef = useRef(false);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState<'none' | 'type' | 'search' | 'checklist'>('none');
+  const [panel, setPanel] = useState<'none' | 'type' | 'search' | 'checklist' | 'history'>('none');
   const [typed, setTyped] = useState('');
   const [undoFor, setUndoFor] = useState<RecentRow | null>(null);
+  const [undoReason, setUndoReason] = useState<DoorUndoReason>('wrong_person');
   const [notice, setNotice] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
   /** The second tap: sending what is left, then signing out. */
@@ -181,6 +214,8 @@ export function Scanner({
   // Mutable scan bookkeeping — read by camera callbacks between renders.
   const busyRef = useRef(false);
   const overlayOpen = useRef(false);
+  /** The answer on screen clears itself (green, practice): the next code may replace it. */
+  const overlayAuto = useRef(false);
   const activeKey = useRef<string | null>(null);
   const seen = useRef(new Map<string, number>());
   const failed = useRef(new Map<string, PendingScan>());
@@ -263,15 +298,18 @@ export function Scanner({
 
   const show = useCallback(
     (next: Overlay) => {
+      const view = viewOf(next);
       overlayOpen.current = true;
+      overlayAuto.current = view.autoDismiss;
       setOverlay(next);
-      play(viewOf(next).feedback);
+      play(view.feedback);
     },
     [play],
   );
 
   const dismiss = useCallback(() => {
     overlayOpen.current = false;
+    overlayAuto.current = false;
     // The code on screen stays "seen": if it is still in view, the sliding
     // window keeps ignoring it instead of flashing the same answer again.
     if (activeKey.current) seen.current.set(activeKey.current, Date.now());
@@ -369,10 +407,14 @@ export function Scanner({
       const now = Date.now();
       if (fromCamera) {
         if (modalOpen.current) return;
-        if (busyRef.current || overlayOpen.current) {
+        // A green on screen does not hold up the queue: another code
+        // replaces it at once. Anything else waits for staff to tap.
+        const replaceable = !busyRef.current && overlayAuto.current && key !== activeKey.current;
+        if (!replaceable && (busyRef.current || overlayOpen.current)) {
           if (key === activeKey.current) seen.current.set(key, now);
           return;
         }
+        if (replaceable) dismiss();
         const last = seen.current.get(key);
         seen.current.set(key, now);
         prune(seen.current, now - RETRY_REUSE_MS);
@@ -395,7 +437,7 @@ export function Scanner({
         firstAt: reuse?.firstAt ?? now,
       });
     },
-    [send, play],
+    [send, play, dismiss],
   );
 
   const {
@@ -447,7 +489,8 @@ export function Scanner({
   }
 
   useEffect(() => {
-    modalOpen.current = panel === 'search' || panel === 'checklist' || undoFor !== null;
+    // Every sheet covers the viewfinder (with a backdrop): nothing is admitted behind it.
+    modalOpen.current = panel !== 'none' || undoFor !== null;
   }, [panel, undoFor]);
 
   // Sound needs a gesture: take the first one of any kind, so a gate that
@@ -461,6 +504,13 @@ export function Scanner({
       document.removeEventListener('keydown', once);
     };
   }, [unlock]);
+
+  // A notice (undo done, still checking…) is read once, then gets out of the way.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 6_000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // Green (and practice) clear themselves; everything else waits for a tap.
   useEffect(() => {
@@ -595,258 +645,486 @@ export function Scanner({
     })),
     ...status.recent,
   ];
+  const latest = recent[0];
   const listTime = offline.listAt ? formatDhakaClock(new Date(offline.listAt)) : null;
   const countsTime = formatDhakaClock(new Date(status.serverTime));
+  /** A code is on its way to the server: say so at once, never look frozen. */
+  const reading = busy && !overlay;
+  const sending = pending.length > 0 && offline.syncing;
+  const pill = sending
+    ? { icon: RefreshCw, className: 'bg-[#eda43c]/16 text-[#eda43c]' }
+    : offlineMode || !online
+      ? { icon: CloudOff, className: 'bg-[#a65b00] text-white' }
+      : { icon: Wifi, className: 'bg-[#12803f]/22 text-[#6fd897]' };
+  const PillIcon = pill.icon;
+  const ProblemIcon = cam.kind === 'error' ? PROBLEM_ICON[cam.problem] : null;
+  const sheetHandle = <span aria-hidden className="h-1 w-9 self-center rounded-full bg-white/25" />;
 
   return (
     <main
-      className="mx-auto flex w-full max-w-lg flex-1 flex-col"
+      className="mx-auto flex h-dvh w-full max-w-lg flex-col overflow-hidden"
       // How many tickets the offline list holds (e2e waits on it).
       data-offline-list={offline.ready ? offline.size : undefined}
     >
-      <header className="flex items-start justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
-        <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold text-white">{status.event.title}</p>
-          <p className="flex items-center gap-2 text-sm text-white/65">
-            <span>{status.gate}</span>
-            <span aria-hidden>·</span>
-            <span className="tabular" data-testid="door-count">
+      <header className="flex shrink-0 items-center gap-2 border-b border-white/7 pt-[max(0.5rem,env(safe-area-inset-top))] pr-2.5 pb-2 pl-3.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-px">
+          <p className="truncate font-heading text-[15px] font-bold text-white">
+            {status.event.title}
+          </p>
+          <p className="flex min-w-0 items-center gap-1.5 text-[13px] whitespace-nowrap">
+            <span className="truncate text-white/75">{status.gate}</span>
+            <span aria-hidden className="text-white/55">
+              ·
+            </span>
+            <span className="shrink-0 font-bold text-white tabular" data-testid="door-count">
               {status.checkedIn} / {status.issued} in
             </span>
-            <span aria-hidden>·</span>
-            <span className="inline-flex items-center gap-1" data-testid="door-online">
-              <span
-                aria-hidden
-                className={cn('size-2 rounded-full', online ? 'bg-[#4ade80]' : 'bg-[#f87171]')}
-              />
-              {online ? 'Online' : 'Offline'}
-            </span>
-            {pending.length > 0 ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="tabular" data-testid="door-pending">
-                  {offline.syncing ? 'sending' : `${pending.length} to send`}
-                </span>
-              </>
-            ) : null}
           </p>
         </div>
+        <span
+          className={cn(
+            'flex h-7.5 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-bold whitespace-nowrap',
+            pill.className,
+          )}
+        >
+          <PillIcon aria-hidden className={cn('size-4', sending && 'animate-spin')} />
+          {pending.length > 0 ? (
+            <span className="tabular" data-testid="door-pending">
+              {sending ? `Sending ${pending.length}` : `${pending.length} to send`}
+            </span>
+          ) : (
+            <span data-testid="door-online">{online ? 'Online' : 'Offline'}</span>
+          )}
+        </span>
         <button
           type="button"
           onClick={endSession}
-          className="h-10 shrink-0 rounded-lg border border-white/25 px-3 text-sm text-white/85"
+          aria-label="End session"
+          className={cn(
+            'h-12 min-w-13 shrink-0 rounded-xl border px-3 text-sm font-bold text-white',
+            ending ? 'border-[#c4242b] bg-[#c4242b]' : 'border-white/20',
+          )}
         >
-          {closing
-            ? pending.length > 0
-              ? 'Sending, then ending…'
-              : 'Ending…'
-            : ending
-              ? pending.length > 0
-                ? `${pending.length} not sent — tap to end anyway`
-                : 'Tap again to end'
-              : 'End session'}
+          {ending ? 'Sure?' : 'End'}
         </button>
       </header>
+
+      {ending || closing ? (
+        <div className="flex shrink-0 gap-2 bg-[#2a1414] px-2.5 py-2">
+          <button
+            type="button"
+            onClick={endSession}
+            className="h-12 min-w-0 flex-1 truncate rounded-xl bg-[#c4242b] px-2.5 text-[15px] font-bold text-white"
+          >
+            {closing
+              ? pending.length > 0
+                ? 'Sending, then ending…'
+                : 'Ending…'
+              : pending.length > 0
+                ? `${pending.length} not sent — tap to end anyway`
+                : 'Tap again to end'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnding(false)}
+            disabled={closing}
+            aria-label="Keep scanning"
+            className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/20 text-white"
+          >
+            <X aria-hidden className="size-5.5" />
+          </button>
+        </div>
+      ) : null}
 
       {offlineMode ? (
         <p
           role="status"
           data-testid="door-offline"
-          className="bg-[#b86a00] px-4 py-2 text-center text-sm font-semibold text-white"
+          className="flex shrink-0 gap-2.5 bg-[#a65b00] px-3.5 py-2.5 text-sm leading-snug font-semibold text-white"
         >
-          {offline.ready
-            ? `OFFLINE — answering from the ticket list of ${listTime}. Scans are sent when the signal is back.`
-            : 'OFFLINE — no ticket list on this phone. Use the printed list.'}{' '}
-          <span className="font-normal">Counts as of {countsTime}.</span>
+          <CloudOff aria-hidden className="mt-px size-5 shrink-0" />
+          <span>
+            <b>OFFLINE</b> —{' '}
+            {offline.ready
+              ? `answering from the ticket list of ${listTime}. Scans are sent when the signal is back.`
+              : 'no ticket list on this phone. Use the printed list.'}{' '}
+            <span className="font-normal">Counts as of {countsTime}.</span>
+          </span>
         </p>
       ) : null}
       {offline.problem ? (
-        <p role="status" className="bg-[#b3261e] px-4 py-2 text-sm text-white">
+        <p role="status" className="shrink-0 bg-[#c4242b] px-3.5 py-2 text-sm text-white">
           {offline.problem}
         </p>
       ) : null}
-
       {status.practice ? (
         <p
           data-testid="door-practice"
-          className="bg-[#1d4e89] px-4 py-2 text-center text-sm font-semibold text-white"
+          className="flex shrink-0 gap-2.5 bg-[#2457c5] px-3.5 py-2.5 text-sm leading-snug font-semibold text-white"
         >
-          PRACTICE — nothing is checked in until doors open at {doorsOpen}
+          <GraduationCap aria-hidden className="mt-px size-5 shrink-0" />
+          <span>
+            <b>PRACTICE</b> — nothing is checked in until doors open at {doorsOpen}
+          </span>
         </p>
       ) : null}
 
-      <div className="relative aspect-3/4 max-h-[60dvh] w-full overflow-hidden bg-black">
-        <video ref={video} muted playsInline autoPlay className="size-full object-cover" />
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#090807]">
+        <video
+          ref={video}
+          muted
+          playsInline
+          autoPlay
+          className="absolute inset-0 size-full object-cover"
+        />
         {cam.kind === 'on' ? (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-[18%] rounded-2xl border-4 border-white/70"
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/80 px-8 text-center">
-            {cam.kind === 'off' ? (
-              <button
-                type="button"
-                onClick={onStart}
-                className="h-16 w-full max-w-xs rounded-xl bg-[#eda43c] text-xl font-bold text-[#1c1a17]"
+          <>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4.5 px-[70px] py-4">
+              <div
+                key={reading ? 'reading' : 'idle'}
+                data-door-motion
+                className={cn(
+                  'relative aspect-square w-full max-w-[230px] shrink-0 rounded-[18px]',
+                  reading && 'bg-[#eda43c]/12',
+                )}
+                style={
+                  reading
+                    ? {
+                        animation:
+                          'door-snap .22s ease-out, door-pulse .6s ease-in-out .22s infinite',
+                      }
+                    : undefined
+                }
               >
-                Start scanning
-              </button>
-            ) : cam.kind === 'starting' ? (
-              <p className="text-lg text-white">Starting the camera…</p>
-            ) : cam.kind === 'paused' ? (
-              <>
-                <p className="text-lg text-white">
-                  {cam.why === 'idle' ? 'Camera paused to save battery.' : 'Scanning paused.'}
+                {FRAME_CORNERS.map((corner) => (
+                  <span
+                    key={corner}
+                    className={cn(
+                      'absolute size-9.5',
+                      corner,
+                      reading ? 'border-[#eda43c]' : 'border-white/90',
+                    )}
+                  />
+                ))}
+              </div>
+              {reading ? (
+                <p className="flex h-10 max-w-full min-w-0 items-center gap-2 rounded-full bg-[#eda43c] px-3.5 text-[#161412]">
+                  <span
+                    aria-hidden
+                    className="size-4 shrink-0 animate-spin rounded-full border-[2.5px] border-[#161412]/30 border-t-[#161412]"
+                  />
+                  <span className="truncate text-[15px] font-bold">Checking…</span>
                 </p>
+              ) : (
+                <p className="flex h-10 items-center text-sm whitespace-nowrap text-white/75 [text-shadow:0_1px_3px_rgb(0_0_0/0.9)]">
+                  Hold the QR in the frame
+                </p>
+              )}
+            </div>
+            <div className="absolute top-3 right-3 flex flex-col gap-2.5">
+              {torch.available ? (
                 <button
                   type="button"
-                  onClick={begin}
-                  className="h-16 w-full max-w-xs rounded-xl bg-[#eda43c] text-xl font-bold text-[#1c1a17]"
+                  aria-label={torch.on ? 'Light off' : 'Light'}
+                  aria-pressed={torch.on}
+                  onClick={() => void toggleTorch()}
+                  className={cn(
+                    'flex size-13 items-center justify-center rounded-full border border-white/18',
+                    torch.on ? 'bg-white text-[#161412]' : 'bg-black/55 text-white',
+                  )}
                 >
-                  Tap to resume
+                  {torch.on ? (
+                    <Flashlight aria-hidden className="size-6" />
+                  ) : (
+                    <FlashlightOff aria-hidden className="size-6" />
+                  )}
                 </button>
-              </>
+              ) : null}
+              {cameras > 1 ? (
+                <button
+                  type="button"
+                  aria-label="Switch camera"
+                  onClick={() => void switchCamera()}
+                  className="flex size-13 items-center justify-center rounded-full border border-white/18 bg-black/55 text-white"
+                >
+                  <SwitchCamera aria-hidden className="size-6" />
+                </button>
+              ) : null}
+            </div>
+            {awake === false ? (
+              <p className="absolute inset-x-3 bottom-5 rounded-lg bg-black/70 px-3 py-2 text-center text-sm text-white">
+                The screen may turn off — set Auto-Lock to Never.
+              </p>
+            ) : null}
+          </>
+        ) : cam.kind === 'off' ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#161412] px-6 pb-6 text-center">
+            <p className="text-[15px] text-white/75">
+              {status.practice ? `Doors open at ${doorsOpen}` : `Doors opened at ${doorsOpen}`}
+            </p>
+            <button
+              type="button"
+              onClick={onStart}
+              className="flex h-15 w-full max-w-xs items-center justify-center gap-2 rounded-[14px] bg-[#eda43c] font-heading text-xl font-extrabold text-[#161412]"
+            >
+              <ScanLine aria-hidden className="size-6" />
+              Start scanning
+            </button>
+            <p className="max-w-xs text-[13px] text-white/55">
+              A handheld scanner works without starting the camera.
+            </p>
+          </div>
+        ) : cam.kind === 'starting' ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#090807]/90">
+            <p className="text-lg text-white">Starting the camera…</p>
+          </div>
+        ) : cam.kind === 'paused' ? (
+          <button
+            type="button"
+            onClick={begin}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-[#090807]/92 p-6 text-center"
+          >
+            {cam.why === 'idle' ? (
+              <BatteryLow aria-hidden className="size-9 text-white/55" />
             ) : (
-              <>
-                <p className="text-lg font-semibold text-white">
-                  {PROBLEM_TEXT[cam.problem].title}
-                </p>
-                <p className="text-[15px] text-white/75">
-                  {ios ? PROBLEM_TEXT[cam.problem].ios : PROBLEM_TEXT[cam.problem].other}
-                </p>
-                <button
-                  type="button"
-                  onClick={begin}
-                  className="h-12 w-full max-w-xs rounded-xl border border-white/40 text-lg font-semibold text-white"
-                >
-                  Try again
-                </button>
-              </>
+              <CirclePause aria-hidden className="size-9 text-white/55" />
             )}
+            <span className="font-heading text-[22px] leading-tight font-bold text-balance text-white">
+              {cam.why === 'idle' ? 'Camera paused to save battery' : 'Scanning paused'}
+            </span>
+            <span className="flex size-42 flex-col items-center justify-center gap-1 rounded-full bg-[#eda43c] text-[#161412]">
+              <Play aria-hidden className="size-11 fill-current" />
+              <span className="font-heading text-lg font-extrabold">Tap to resume</span>
+            </span>
+          </button>
+        ) : (
+          <div className="absolute inset-0 flex flex-col justify-center gap-4 overflow-y-auto bg-[#161412] px-5.5 py-6">
+            {ProblemIcon ? (
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-[#231f1b]">
+                <ProblemIcon aria-hidden className="size-7.5 text-[#eda43c]" />
+              </span>
+            ) : null}
+            <p className="font-heading text-2xl leading-tight font-extrabold text-balance text-white">
+              {PROBLEM_TEXT[cam.problem].title}
+            </p>
+            <p className="text-base leading-normal text-pretty text-white/75">
+              {ios ? PROBLEM_TEXT[cam.problem].ios : PROBLEM_TEXT[cam.problem].other}
+            </p>
+            <button
+              type="button"
+              onClick={begin}
+              className="mt-1.5 h-14 rounded-[14px] bg-[#eda43c] font-heading text-lg font-extrabold text-[#161412]"
+            >
+              Try again
+            </button>
           </div>
         )}
-        {cam.kind === 'on' && awake === false ? (
-          <p className="absolute inset-x-3 bottom-3 rounded-lg bg-black/70 px-3 py-2 text-center text-sm text-white">
-            The screen may turn off — set Auto-Lock to Never.
-          </p>
+
+        {overlay ? (
+          <ResultOverlay
+            overlay={overlay}
+            gate={status.gate}
+            onDismiss={dismiss}
+            onRetry={() => {
+              const scan = retryScan.current;
+              dismiss();
+              if (scan) void send(scan, true);
+            }}
+          />
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-2 px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setPanel('history')}
+        aria-label="Last scans here"
+        className="relative z-10 -mt-3 flex shrink-0 flex-col gap-1 rounded-t-2xl bg-[#231f1b] px-3 py-1.5 text-left"
+      >
+        {sheetHandle}
+        <span className="flex min-h-11 min-w-0 items-center gap-2.5">
+          {latest ? (
+            <>
+              <RowIcon row={latest} />
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-white">
+                {latest.attendeeName ?? 'Unknown code'}
+              </span>
+              <span className="shrink-0 font-mono text-[13px] text-white/55">
+                {formatDhakaClock(new Date(latest.at))}
+              </span>
+              <span className="max-w-[38%] shrink-0 truncate text-[13px] font-bold text-white/75 max-[340px]:hidden">
+                {rowLabel(latest)}
+              </span>
+            </>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-sm text-white/55">
+              Nothing scanned at this gate yet.
+            </span>
+          )}
+          <ChevronUp aria-hidden className="size-5 shrink-0 text-white/55" />
+        </span>
+      </button>
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-white/6 bg-[#231f1b] px-2.5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          onClick={() => setPanel(panel === 'type' ? 'none' : 'type')}
-          className="h-12 flex-1 rounded-xl border border-white/25 px-3 text-[15px] font-semibold text-white"
+          onClick={() => setPanel('type')}
+          className="flex h-13 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-white/14 bg-[#2d2823] px-2 text-white"
         >
-          Type a code
+          <Keyboard aria-hidden className="size-5 shrink-0 max-[340px]:hidden" />
+          <span className="truncate text-[15px] font-bold">Type a code</span>
         </button>
         <button
           type="button"
           onClick={() => setPanel('search')}
-          className="h-12 flex-1 rounded-xl border border-white/25 px-3 text-[15px] font-semibold text-white"
+          className="flex h-13 min-w-0 items-center justify-center gap-1.5 rounded-xl border border-white/14 bg-[#2d2823] px-2 text-white"
         >
-          Find by name
+          <UserSearch aria-hidden className="size-5 shrink-0 max-[340px]:hidden" />
+          <span className="truncate text-[15px] font-bold">Find by name</span>
         </button>
-        {torch.available ? (
-          <button
-            type="button"
-            aria-pressed={torch.on}
-            onClick={() => void toggleTorch()}
-            className="h-12 rounded-xl border border-white/25 px-3 text-[15px] text-white"
-          >
-            {torch.on ? 'Light off' : 'Light'}
-          </button>
-        ) : null}
-        {cam.kind === 'on' && cameras > 1 ? (
-          <button
-            type="button"
-            onClick={() => void switchCamera()}
-            className="h-12 rounded-xl border border-white/25 px-3 text-[15px] text-white"
-          >
-            Switch camera
-          </button>
-        ) : null}
       </div>
 
-      {panel === 'type' ? (
-        <form
-          className="flex gap-2 px-4 pb-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!typed.trim() || busy) return;
-            touchCamera();
-            submit(typed, 'typed', false);
-            setTyped('');
-          }}
-        >
-          <input
-            value={typed}
-            onChange={(e) => setTyped(e.target.value.toUpperCase())}
-            autoFocus
-            inputMode="text"
-            autoCapitalize="characters"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            maxLength={40}
-            placeholder="TKT-XXXXXXXX"
-            aria-label="Ticket code"
-            className="h-12 min-w-0 flex-1 rounded-xl border border-white/25 bg-white/5 px-3 font-mono text-lg tracking-wider text-white placeholder:text-white/30 focus:border-white focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="h-12 rounded-xl bg-white px-5 text-[15px] font-bold text-[#1c1a17] disabled:opacity-60"
-          >
-            Check
-          </button>
-        </form>
-      ) : null}
-
       {notice ? (
-        <p role="status" className="mx-4 mb-3 rounded-lg bg-white/10 px-3 py-2 text-sm text-white">
+        <p
+          role="status"
+          onClick={() => setNotice(null)}
+          className="fixed inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-70 mx-auto max-w-md rounded-xl border border-white/10 bg-[#2d2823] px-3.5 py-3 text-sm text-white shadow-lg"
+        >
           {notice}
         </p>
       ) : null}
 
-      <section
-        aria-label="Last scans at this gate"
-        className="flex flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-      >
-        <h2 className="pb-2 text-xs font-semibold tracking-widest text-white/50 uppercase">
-          Last scans here
-        </h2>
-        {recent.length === 0 ? (
-          <p className="py-3 text-sm text-white/50">Nothing scanned at this gate yet.</p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-white/10">
-            {recent.map((r) => (
-              <li key={r.scanId} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] text-white">
-                    {r.attendeeName ?? 'Unknown code'}
-                  </p>
-                  <p className="text-xs text-white/55">
-                    {formatDhakaClock(new Date(r.at))}
-                    {r.ticketTypeName ? ` · ${r.ticketTypeName}` : ''} ·{' '}
-                    {(r.offline ? VERDICT_LABEL[r.result] : RESULT_LABEL[r.result]) ?? r.result}
-                  </p>
-                </div>
-                {r.undoable ? (
-                  <button
-                    type="button"
-                    onClick={() => setUndoFor(r)}
-                    className="h-9 shrink-0 rounded-lg border border-white/30 px-3 text-sm text-white"
+      {panel === 'type' ? (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/60"
+            onClick={() => setPanel('none')}
+          />
+          <form
+            aria-label="Type a code"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-lg flex-col gap-3 rounded-t-[20px] bg-[#231f1b] px-4 pt-2.5 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!typed.trim() || busy) return;
+              touchCamera();
+              const code = typed;
+              setTyped('');
+              // The answer shows over the camera view: the sheet must not hide it.
+              setPanel('none');
+              submit(code, 'typed', false);
+            }}
+          >
+            {sheetHandle}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-heading text-xl font-extrabold text-white">Type a code</h2>
+              <button
+                type="button"
+                onClick={() => setPanel('none')}
+                aria-label="Close"
+                className="-mr-2.5 flex size-12 items-center justify-center text-white"
+              >
+                <X aria-hidden className="size-6" />
+              </button>
+            </div>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value.toUpperCase())}
+              autoFocus
+              inputMode="text"
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={40}
+              placeholder="TKT-XXXXXXXX"
+              aria-label="Ticket code"
+              className="h-15 min-w-0 rounded-xl border-2 border-[#eda43c] bg-[#161412] px-3.5 font-mono text-[22px] tracking-[0.06em] text-white placeholder:text-white/30 focus:outline-none"
+            />
+            <p className="text-[13px] text-white/55">Printed under the QR, e.g. TKT-XXXXXXXX</p>
+            <button
+              type="submit"
+              disabled={busy}
+              className="h-14 rounded-[14px] bg-[#eda43c] font-heading text-lg font-extrabold text-[#161412] disabled:opacity-60"
+            >
+              Check
+            </button>
+          </form>
+        </>
+      ) : null}
+
+      {panel === 'history' ? (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/60"
+            onClick={() => setPanel('none')}
+          />
+          <section
+            aria-label="Last scans at this gate"
+            className="fixed inset-x-0 top-16 bottom-0 z-50 mx-auto flex max-w-lg flex-col rounded-t-[20px] bg-[#231f1b]"
+          >
+            <div className="flex shrink-0 flex-col gap-2 px-4 pt-2.5 pb-1">
+              {sheetHandle}
+              <div className="flex items-center gap-2">
+                <h2 className="min-w-0 flex-1 truncate font-heading text-xl font-extrabold text-white">
+                  Last scans here
+                </h2>
+                <span className="shrink-0 text-[13px] text-white/55">
+                  Undo within {DOOR_UNDO_WINDOW_MS / 60_000} min
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPanel('none')}
+                  aria-label="Close"
+                  className="-mr-2.5 flex size-12 shrink-0 items-center justify-center text-white"
+                >
+                  <X aria-hidden className="size-6" />
+                </button>
+              </div>
+            </div>
+            <ul className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              {recent.length === 0 ? (
+                <li className="py-6 text-center text-sm text-white/55">
+                  Nothing scanned at this gate yet.
+                </li>
+              ) : (
+                recent.map((r) => (
+                  <li
+                    key={r.scanId}
+                    className="flex min-h-15 items-center gap-2.5 border-b border-white/6 px-1 py-1.5"
                   >
-                    Undo
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                    <RowIcon row={r} />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[15px] font-semibold text-white">
+                        {r.attendeeName ?? 'Unknown code'}
+                      </span>
+                      <span className="flex min-w-0 gap-1.5 text-[13px] whitespace-nowrap">
+                        <span className="shrink-0 font-mono text-white/55">
+                          {formatDhakaClock(new Date(r.at))}
+                        </span>
+                        <span className="truncate text-white/75">
+                          {[r.ticketTypeName, rowLabel(r)].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                    </div>
+                    {r.undoable ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUndoReason('wrong_person');
+                          setUndoFor(r);
+                        }}
+                        className="h-12 shrink-0 rounded-xl border border-white/20 px-3.5 text-sm font-bold text-white"
+                      >
+                        Undo
+                      </button>
+                    ) : null}
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+        </>
+      ) : null}
 
       {panel === 'search' ? (
         <DoorSearch
@@ -862,22 +1140,31 @@ export function Scanner({
       {panel === 'checklist' ? (
         <section
           aria-label="Before you start"
-          className="fixed inset-0 z-40 flex flex-col justify-between gap-6 bg-[#161412] px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+          className="fixed inset-0 z-50 flex flex-col gap-4.5 overflow-y-auto bg-[#161412] px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          <div className="flex flex-col gap-4 text-white">
-            <h2 className="font-heading text-2xl">Before you start (iPhone)</h2>
-            <ol className="flex list-decimal flex-col gap-3 pl-5 text-lg leading-snug">
-              <li>
-                Safari: tap <b>aA</b> in the address bar → <b>Website Settings</b> → Camera:{' '}
-                <b>Allow</b>.
-              </li>
-              <li>
-                Settings → Display &amp; Brightness → <b>Auto-Lock: Never</b> (for tonight).
-              </li>
-              <li>Turn the volume up — the beep tells you the answer without looking.</li>
-              <li>Plug in a power bank if you have one.</li>
-            </ol>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="font-heading text-[28px] leading-tight font-extrabold text-white">
+              Before you start on iPhone
+            </h2>
+            <p className="text-[15px] text-white/75">Shown once on this phone.</p>
           </div>
+          <ul className="flex flex-col gap-2">
+            {IOS_CHECKLIST.map(({ icon: Icon, title, body }) => (
+              <li
+                key={title}
+                className="flex items-start gap-3.5 rounded-[14px] bg-[#231f1b] p-3.5"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-[#eda43c]/14">
+                  <Icon aria-hidden className="size-5.5 text-[#eda43c]" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-base font-bold text-white">{title}</span>
+                  <span className="text-sm leading-snug text-white/75">{body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex-1" />
           <button
             type="button"
             onClick={() => {
@@ -885,7 +1172,7 @@ export function Scanner({
               setPanel('none');
               begin();
             }}
-            className="h-16 rounded-xl bg-[#eda43c] text-xl font-bold text-[#1c1a17]"
+            className="h-15 shrink-0 rounded-[14px] bg-[#eda43c] font-heading text-xl font-extrabold text-[#161412]"
           >
             Done — start scanning
           </button>
@@ -893,47 +1180,147 @@ export function Scanner({
       ) : null}
 
       {undoFor ? (
-        <section
-          aria-label="Undo check-in"
-          className="fixed inset-0 z-40 flex flex-col justify-end gap-3 bg-black/70 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-        >
-          <div className="flex flex-col gap-3 rounded-2xl bg-[#231f1b] p-5">
-            <p className="text-lg font-semibold text-white">
-              Undo the check-in for {undoFor.attendeeName ?? 'this ticket'}?
-            </p>
-            <p className="text-sm text-white/65">Why? It goes in the record.</p>
-            {(Object.keys(DOOR_UNDO_REASONS) as DoorUndoReason[]).map((reason) => (
-              <button
-                key={reason}
-                type="button"
-                onClick={() => void undo(undoFor, reason)}
-                className="h-12 rounded-xl border border-white/30 text-[15px] font-semibold text-white"
-              >
-                {DOOR_UNDO_REASONS[reason]}
-              </button>
-            ))}
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-55 bg-black/60"
+            onClick={() => setUndoFor(null)}
+          />
+          <section
+            aria-label="Undo check-in"
+            className="fixed inset-x-0 bottom-0 z-60 mx-auto flex max-w-lg flex-col gap-3 rounded-t-[20px] bg-[#231f1b] px-4 pt-2.5 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          >
+            {sheetHandle}
+            <div className="flex min-w-0 flex-col gap-1">
+              <h2 className="font-heading text-xl font-extrabold text-white">Undo check-in?</h2>
+              <p className="truncate text-sm text-white/75">
+                {[
+                  undoFor.attendeeName ?? 'This ticket',
+                  undoFor.ticketTypeName,
+                  formatDhakaClock(new Date(undoFor.at)),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            <p className="text-[13px] text-white/55">Why? It goes in the record.</p>
+            <div role="radiogroup" aria-label="Reason" className="flex flex-col gap-1.5">
+              {(Object.keys(DOOR_UNDO_REASONS) as DoorUndoReason[]).map((reason) => {
+                const on = undoReason === reason;
+                return (
+                  <button
+                    key={reason}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setUndoReason(reason)}
+                    className={cn(
+                      'flex min-h-13 items-center gap-2.5 rounded-xl border-2 bg-[#2d2823] px-3 text-left text-white',
+                      on ? 'border-[#eda43c]' : 'border-white/10',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'flex size-5 shrink-0 items-center justify-center rounded-full border-2',
+                        on ? 'border-[#eda43c]' : 'border-white/40',
+                      )}
+                    >
+                      {on ? <span className="size-2.5 rounded-full bg-[#eda43c]" /> : null}
+                    </span>
+                    <span className="truncate text-[15px]">{DOOR_UNDO_REASONS[reason]}</span>
+                  </button>
+                );
+              })}
+            </div>
             <button
               type="button"
               onClick={() => setUndoFor(null)}
-              className="h-12 text-[15px] text-white/70 underline"
+              className="h-14 rounded-[14px] bg-[#eda43c] font-heading text-lg font-extrabold text-[#161412]"
             >
               Keep them checked in
             </button>
-          </div>
-        </section>
-      ) : null}
-
-      {overlay ? (
-        <ResultOverlay
-          overlay={overlay}
-          onDismiss={dismiss}
-          onRetry={() => {
-            const scan = retryScan.current;
-            dismiss();
-            if (scan) void send(scan, true);
-          }}
-        />
+            <button
+              type="button"
+              onClick={() => void undo(undoFor, undoReason)}
+              className="h-13 rounded-[14px] border border-[#ff8a80]/60 text-base font-bold text-[#ff8a80]"
+            >
+              Undo check-in
+            </button>
+          </section>
+        </>
       ) : null}
     </main>
   );
+}
+
+/** Corner brackets of the scan frame (top-left, top-right, bottom-left, bottom-right). */
+const FRAME_CORNERS = [
+  'top-0 left-0 rounded-tl-[18px] border-t-[5px] border-l-[5px]',
+  'top-0 right-0 rounded-tr-[18px] border-t-[5px] border-r-[5px]',
+  'bottom-0 left-0 rounded-bl-[18px] border-b-[5px] border-l-[5px]',
+  'bottom-0 right-0 rounded-br-[18px] border-b-[5px] border-r-[5px]',
+];
+
+const PROBLEM_ICON: Record<CameraProblem, LucideIcon> = {
+  denied: CameraOff,
+  busy: VideoOff,
+  none: CameraOff,
+  insecure: LockOpen,
+  decoder: TriangleAlert,
+};
+
+const IOS_CHECKLIST: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: Camera,
+    title: 'Allow camera',
+    body: 'Tap aA in the address bar → Website Settings → Camera: Allow.',
+  },
+  {
+    icon: Lock,
+    title: 'Auto-Lock: Never',
+    body: 'Settings → Display & Brightness → Auto-Lock (for tonight).',
+  },
+  {
+    icon: Volume2,
+    title: 'Volume up',
+    body: 'The beep tells you the answer without looking.',
+  },
+  {
+    icon: BatteryCharging,
+    title: 'Power bank in',
+    body: 'Scanning all night drains the battery.',
+  },
+];
+
+const RED = 'bg-[#c4242b]';
+/** The small coloured square in front of a scan row: same colour and icon as its answer. */
+const ROW_LOOK: Record<string, { icon: LucideIcon; bg: string }> = {
+  admitted: { icon: Check, bg: 'bg-[#12803f]' },
+  practice_ok: { icon: GraduationCap, bg: 'bg-[#2457c5]' },
+  practice: { icon: GraduationCap, bg: 'bg-[#2457c5]' },
+  already_in: { icon: Ban, bg: RED },
+  turned_away: { icon: Ban, bg: RED },
+  refused: { icon: Ban, bg: RED },
+  cancelled: { icon: CircleX, bg: RED },
+  wrong_event: { icon: CalendarX, bg: RED },
+  phone_mismatch: { icon: Hash, bg: RED },
+  undone: { icon: Undo2, bg: 'bg-white/15' },
+};
+
+function RowIcon({ row }: { row: RecentRow }) {
+  const look = ROW_LOOK[row.result] ?? { icon: X, bg: RED };
+  const Icon = look.icon;
+  return (
+    <span
+      aria-hidden
+      className={cn('flex size-7 shrink-0 items-center justify-center rounded-lg', look.bg)}
+    >
+      <Icon className="size-4.5 text-white" strokeWidth={2.5} />
+    </span>
+  );
+}
+
+function rowLabel(r: RecentRow): string {
+  return (r.offline ? VERDICT_LABEL[r.result] : RESULT_LABEL[r.result]) ?? r.result;
 }

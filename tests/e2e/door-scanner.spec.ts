@@ -52,7 +52,7 @@ test.describe('gate scanner (ADR-030)', () => {
     const green = await typeCode(phoneA, codes[0]!);
     await expect(green).toHaveAttribute('data-result', 'admitted');
     await expect(green).toContainText('Nusrat Jahan');
-    await expect(green).toContainText('Ticket 1 of 3');
+    await expect(green).toContainText('1 of 3');
     await expect(green).not.toContainText('TKT-');
     await expect(green).toBeHidden({ timeout: 5_000 });
     const amber = await typeCode(phoneA, codes[0]!);
@@ -87,11 +87,14 @@ test.describe('gate scanner (ADR-030)', () => {
       await phoneA.getByLabel('Name or ticket code').fill('nusrat');
       const results = phoneA.getByRole('region', { name: 'Find by name' }).getByRole('listitem');
       await expect(results).toHaveCount(3);
-      await expect(results.filter({ hasText: /In \d\d:\d\d · Gate A/ })).toHaveCount(1);
+      await expect(results.filter({ hasText: /In at \d\d:\d\d · Gate A/ })).toHaveCount(1);
       await expect(phoneA.getByRole('region', { name: 'Find by name' })).not.toContainText('678');
-      await results.filter({ hasText: 'tap to admit' }).first().getByRole('button').click();
+      await results
+        .getByRole('button', { name: /^Admit / })
+        .first()
+        .click();
       await phoneA.getByLabel('Last 3 digits of the buying phone').fill(digits);
-      await phoneA.getByRole('button', { name: 'Check digits and admit' }).click();
+      await phoneA.getByRole('button', { name: 'Check and admit' }).click();
       const answer = phoneA.getByTestId('door-result');
       await expect(answer).toBeVisible();
       return answer;
@@ -105,12 +108,15 @@ test.describe('gate scanner (ADR-030)', () => {
     await expect(searched).toBeHidden({ timeout: 5_000 });
     await expect(phoneA.getByTestId('door-count')).toHaveText('2 / 3 in');
 
-    // The door undoes its own latest admit.
+    // The door undoes its own latest admit: open the last scans, pick a reason, confirm.
+    await phoneA.getByRole('button', { name: 'Last scans here' }).click();
     const recent = phoneA.getByRole('region', { name: 'Last scans at this gate' });
     await recent.getByRole('button', { name: 'Undo' }).first().click();
-    await phoneA.getByRole('button', { name: 'Tapped by mistake' }).click();
+    await phoneA.getByRole('radio', { name: 'Tapped by mistake' }).click();
+    await phoneA.getByRole('button', { name: 'Undo check-in' }).click();
     await expect(phoneA.getByRole('status')).toContainText('Check-in undone');
     await expect(phoneA.getByTestId('door-count')).toHaveText('1 / 3 in');
+    await recent.getByRole('button', { name: 'Close' }).click();
 
     // Admin list: the count, the filter (never printed), the CSV.
     await page.goto(checkInUrl);
