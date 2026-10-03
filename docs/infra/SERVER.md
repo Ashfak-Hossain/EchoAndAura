@@ -1,6 +1,6 @@
 # Production server
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-04
 
 The one VPS that runs echoandaura.com: what it is, how to get in, every
 change made to it since the reinstall, and how to check or rebuild each
@@ -833,14 +833,20 @@ Until this step, the web app and the worker connected as `echoandaura`,
 a superuser: a SQL injection or a bug would have had every right in the
 cluster. Now:
 
-| Role              | Used by                                             | Can                                                                                                                                       |
-| ----------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `echoandaura`     | `migrate` (`MIGRATE_DATABASE_URL`), Dokploy backups | everything (owner, superuser)                                                                                                             |
-| `echoandaura_app` | web and worker (`DATABASE_URL`)                     | read, insert, update, delete rows in `public`; **not** update or delete `order_events` and `door_scans`; no schema changes, no `TRUNCATE` |
+| Role              | Used by                                             | Can                                                                                                                                                         |
+| ----------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `echoandaura`     | `migrate` (`MIGRATE_DATABASE_URL`), Dokploy backups | everything (owner, superuser)                                                                                                                               |
+| `echoandaura_app` | web and worker (`DATABASE_URL`)                     | read, insert, update, delete rows in `public`; **not** update or delete `order_events`, `door_scans` and `door_decisions`; no schema changes, no `TRUNCATE` |
 
 The grants are in the repo: [`ops/db/app-role.sql`](../../ops/db/app-role.sql).
 It holds no password and is safe to re-run. CI checks it on every push
 (`tests/integration/db-role.test.ts`).
+
+**Re-run it after any deploy that adds a table** (step 3 below, after the
+merge AND the deploy, since it reads `main`): migrations run as the owner,
+so a new append-only table can still be rewritten by the app until the
+script's REVOKE covers it. Check with
+`select has_table_privilege('echoandaura_app','<table>','UPDATE')` → `f`.
 
 **Steps, in this order** (so no deploy ever runs without the variable it
 needs):
@@ -1120,3 +1126,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-30 | Origin lockdown (§ 20): WAF skip rule for `deploy` `/api/*`, `deploy` proxied; `origin-lockdown` + `.service` installed and enabled (15 IPv4 / 7 IPv6 Cloudflare ranges in `DOCKER-USER`); ufw 80/443 deleted (only OpenSSH left). Checked: direct 80/443 time out, site/dashboard/API through Cloudflare fine, worker reaches SES; **rebooted**: rules back on their own, all containers up in <1 min, `infra:check` green |
 | 2026-09-30 | In-flight cap (§ 21): `dynamic/inflight.yml` (`inflight-cap`, `inFlightReq` 100); `traefik.yml` backed up (`.bak-2026-09-30`) and the middleware added to `websecure`; Traefik restarted; both HTTPS routers carry it, site and health ok (ADR-047). A `python:3-alpine` image pulled by mistake during a check was removed                                                                                                 |
 | 2026-10-03 | Backups (§ 16, ADR-051): Dokploy S3 destination `aws-offsite` (AWS S3 `echoandaura-offsite-backups`, delete-denied key); schedule `30 21 * * *` prefix `postgres/`, keep-latest empty, enabled; manual run verified (first try reported failure: the key lacked read for rclone's check, fixed in the stack). R2 schedule `15 * * * *` prefix `postgres-hourly/`, keep 48, **disabled**                                     |
+| 2026-10-04 | App role (§ 19): `app-role.sql` re-run after the deploy of migration 0025 (ADR-053) — `door_decisions` append-only; checked `has_table_privilege` UPDATE/DELETE → `f`/`f`. (A first run before the merge changed nothing: it read `main`'s older script.)                                                                                                                                                                   |
