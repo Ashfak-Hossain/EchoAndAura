@@ -110,7 +110,7 @@ export async function typeCode(door: Page, code: string) {
 export async function dismiss(door: Page) {
   const result = door.getByTestId('door-result');
   if ((await result.getAttribute('data-tone')) !== 'green') {
-    await result.getByRole('button', { name: 'Next' }).click();
+    await result.getByRole('button', { name: 'OK — next scan' }).click();
   }
   await expect(result).toBeHidden();
 }

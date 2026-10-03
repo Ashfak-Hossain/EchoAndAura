@@ -280,3 +280,38 @@
     text-decoration: none !important;
   }
 }
+
+/* Gate scanner (/door): the answer card's countdown and the read frame. */
+@keyframes door-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes door-snap {
+  0% {
+    transform: scale(1.14);
+  }
+  55% {
+    transform: scale(0.93);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes door-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(237 164 60 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgb(237 164 60 / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-door-motion] {
+    animation: none !important;
+  }
+}

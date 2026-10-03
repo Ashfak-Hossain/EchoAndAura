@@ -67,11 +67,14 @@ test.describe('gate scanner offline (ADR-034)', () => {
     // A mis-tap, undone before it was ever sent.
     await expect(await typeCode(phoneA, codes[1]!)).toHaveAttribute('data-result', 'admitted');
     await expect(phoneA.getByTestId('door-result')).toBeHidden({ timeout: 5_000 });
+    await phoneA.getByRole('button', { name: 'Last scans here' }).click();
     const recent = phoneA.getByRole('region', { name: 'Last scans at this gate' });
     await recent.getByRole('button', { name: 'Undo' }).first().click();
-    await phoneA.getByRole('button', { name: 'Tapped by mistake' }).click();
+    await phoneA.getByRole('radio', { name: 'Tapped by mistake' }).click();
+    await phoneA.getByRole('button', { name: 'Undo check-in' }).click();
     await expect(phoneA.getByRole('status').filter({ hasText: 'Check-in undone' })).toBeVisible();
     await expect(recent).toContainText('Undone · offline, not sent yet');
+    await recent.getByRole('button', { name: 'Close' }).click();
 
     // Name search works from the list, but cannot admit without signal.
     await phoneA.getByRole('button', { name: 'Find by name' }).click();
