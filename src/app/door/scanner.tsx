@@ -50,7 +50,7 @@ import {
   type WireStatus,
   doorApi,
 } from './door-api';
-import { loadQrDetector } from './decoder';
+import { loadFallbackDecoder, loadQrDetector } from './decoder';
 import { DoorSearch } from './door-search';
 import { forgetPageOffline, keepPageOffline } from './offline/keep-page';
 import { type OfflineApi, useOffline } from './offline/use-offline';
@@ -271,12 +271,13 @@ export function Scanner({
       goOffline(false);
       if (!pinged.current) {
         pinged.current = true;
-        // The decoder first, so the saved copy holds it: a reload without
-        // signal must still be able to start the camera. Failing to load
-        // it here costs nothing — Start tries again.
-        void loadQrDetector()
-          .catch(() => undefined)
-          .then(() => keepPageOffline());
+        // The decoders first, so the saved copy holds them: a reload without
+        // signal must still be able to start the camera — with the
+        // WebAssembly reader too, should the phone's own one fail then.
+        // Failing to load them here costs nothing — Start tries again.
+        void Promise.allSettled([loadQrDetector(), loadFallbackDecoder()]).then(() =>
+          keepPageOffline(),
+        );
       }
       // Signal is back: send what was scanned without it, then show the
       // counts and last scans with those scans in them.
@@ -429,6 +430,7 @@ export function Scanner({
       }
       const earlier = failed.current.get(key);
       const reuse = earlier && now - earlier.firstAt < RETRY_REUSE_MS ? earlier : null;
+      if (fromCamera) play('read');
       void send({
         key,
         scanId: reuse?.scanId ?? crypto.randomUUID(),
@@ -444,11 +446,15 @@ export function Scanner({
     video,
     state: cam,
     torch,
+    zoom,
+    readMs,
+    decoder,
     cameras,
     awake,
     start: startCamera,
     switchCamera,
     toggleTorch,
+    setZoomLevel,
     touch: touchCamera,
   } = useCamera((text) => submit(text, 'qr', true));
 
@@ -665,6 +671,9 @@ export function Scanner({
       className="mx-auto flex h-dvh w-full max-w-lg flex-col overflow-hidden"
       // How many tickets the offline list holds (e2e waits on it).
       data-offline-list={offline.ready ? offline.size : undefined}
+      // Which QR reader runs and its average read time (pre-doors test, e2e).
+      data-decoder={decoder ?? undefined}
+      data-read-ms={readMs ?? undefined}
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-white/7 pt-[max(0.5rem,env(safe-area-inset-top))] pr-2.5 pb-2 pl-3.5">
         <div className="flex min-w-0 flex-1 flex-col gap-px">
@@ -779,12 +788,12 @@ export function Scanner({
         />
         {cam.kind === 'on' ? (
           <>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4.5 px-[70px] py-4">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4.5 px-17.5 py-4">
               <div
                 key={reading ? 'reading' : 'idle'}
                 data-door-motion
                 className={cn(
-                  'relative aspect-square w-full max-w-[230px] shrink-0 rounded-[18px]',
+                  'relative aspect-square w-full max-w-57.5 shrink-0 rounded-[18px]',
                   reading && 'bg-[#eda43c]/12',
                 )}
                 style={
@@ -851,8 +860,27 @@ export function Scanner({
                 </button>
               ) : null}
             </div>
+            {zoom.available ? (
+              <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-full border border-white/14 bg-black/60 p-0.75">
+                {([1, 2] as const).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-pressed={zoom.level === level}
+                    aria-label={`Zoom ${level}x`}
+                    onClick={() => void setZoomLevel(level)}
+                    className={cn(
+                      'h-10.5 w-12 rounded-full text-sm font-bold',
+                      zoom.level === level ? 'bg-white text-[#161412]' : 'text-white',
+                    )}
+                  >
+                    {level}x
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {awake === false ? (
-              <p className="absolute inset-x-3 bottom-5 rounded-lg bg-black/70 px-3 py-2 text-center text-sm text-white">
+              <p className="absolute inset-x-3 bottom-20 rounded-lg bg-black/70 px-3 py-2 text-center text-sm text-white">
                 The screen may turn off — set Auto-Lock to Never.
               </p>
             ) : null}
