@@ -1,0 +1,106 @@
+import { writeFileSync } from 'node:fs';
+import QRCode from 'qrcode';
+import { expect, test } from './test';
+import { signInAsAdmin } from './fixtures/admin';
+import { issuedOrder, newGatePass, openDoors, publishedEvent } from './door-helpers';
+
+/**
+ * The real camera path, end to end: Chromium's fake camera plays a video of
+ * a real ticket QR, the scanner reads it from the frames (no typing), and
+ * the server admits it. Also records how fast one read is on this machine.
+ */
+
+const W = 640;
+const H = 480;
+
+/**
+ * A Y4M video (the format Chromium's fake camera plays): `blank` grey frames,
+ * then `shown` frames with `text` as a QR code in the centre. Grey only: the
+ * colour planes stay neutral.
+ */
+function qrVideo(path: string, text: string, blank = 15, shown = 45): void {
+  const qr = QRCode.create(text, { errorCorrectionLevel: 'M' });
+  const n = qr.modules.size;
+  const scale = Math.floor(260 / (n + 8)); // ~260 px with a 4-module quiet zone
+  const size = (n + 8) * scale;
+  const ox = Math.floor((W - size) / 2);
+  const oy = Math.floor((H - size) / 2);
+
+  const grey = Buffer.alloc(W * H, 110);
+  const code = Buffer.alloc(W * H, 110);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const mx = Math.floor(x / scale) - 4;
+      const my = Math.floor(y / scale) - 4;
+      const dark = mx >= 0 && my >= 0 && mx < n && my < n && qr.modules.get(my, mx) === 1;
+      code[(oy + y) * W + ox + x] = dark ? 16 : 235;
+    }
+  }
+  const chroma = Buffer.alloc((W / 2) * (H / 2) * 2, 128);
+  const header = Buffer.from(`YUV4MPEG2 W${W} H${H} F15:1 Ip A1:1 C420jpeg\n`);
+  const frame = Buffer.from('FRAME\n');
+  const parts: Buffer[] = [header];
+  for (let i = 0; i < blank + shown; i++) parts.push(frame, i < blank ? grey : code, chroma);
+  writeFileSync(path, Buffer.concat(parts));
+}
+
+test('the camera reads a real ticket QR and admits it, with either reader', async ({
+  page,
+  playwright,
+  baseURL,
+}) => {
+  test.slow();
+  await signInAsAdmin(page);
+  const { id, slug } = await publishedEvent(page, `Camera ${Date.now()}`);
+  const { codes } = await issuedOrder(page, slug, 'Sadia Rahman', 2);
+  const gate = await newGatePass(page, `/admin/events/${id}/check-in`, 'Gate A');
+  await openDoors(page, id);
+
+  /** One phone, its camera playing `code`; `zxing`: the browser's own reader hidden (iPhone). */
+  async function scan(code: string, zxing: boolean, countAfter: string) {
+    const video = test.info().outputPath(`ticket-${zxing ? 'zxing' : 'native'}.y4m`);
+    qrVideo(video, code);
+    const browser = await playwright.chromium.launch({
+      args: [
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        `--use-file-for-fake-video-capture=${video}`,
+      ],
+    });
+    try {
+      const context = await browser.newContext({
+        baseURL,
+        viewport: { width: 360, height: 780 },
+        permissions: ['camera'],
+      });
+      if (zxing) {
+        await context.addInitScript(() => {
+          delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
+        });
+      }
+      const phone = await context.newPage();
+      await phone.goto(`/door#code=${gate}`);
+      await phone.getByRole('button', { name: 'Start scanning' }).click();
+
+      const result = phone.getByTestId('door-result');
+      await expect(result).toHaveAttribute('data-result', 'admitted', { timeout: 15_000 });
+      await expect(result).toContainText('Sadia Rahman');
+      await expect(phone.getByTestId('door-count')).toHaveText(countAfter);
+
+      // The steady read time the pre-doors test shows, measured on real frames.
+      const main = phone.locator('main[data-read-ms]');
+      await expect(main).toHaveAttribute('data-decoder', zxing ? 'zxing' : /native|zxing/);
+      await phone.waitForTimeout(3_000);
+      const ms = Number(await main.getAttribute('data-read-ms'));
+      const decoder = await main.getAttribute('data-decoder');
+      test.info().annotations.push({ type: 'read speed', description: `${decoder}: ${ms} ms` });
+      console.log(`read speed · ${decoder}: ${ms} ms`);
+      expect(ms).toBeLessThan(150);
+    } finally {
+      await browser.close();
+    }
+  }
+
+  await scan(codes[0]!, false, '1 / 2 in');
+  await scan(codes[1]!, true, '2 / 2 in');
+});

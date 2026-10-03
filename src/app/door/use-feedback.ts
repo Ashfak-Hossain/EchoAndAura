@@ -14,7 +14,7 @@ import { isIos } from './platform';
  * Android-only (iOS Safari has no Vibration API).
  */
 
-export type FeedbackKind = 'admit' | 'warn' | 'deny' | 'practice' | 'retry' | 'slow';
+export type FeedbackKind = 'read' | 'admit' | 'warn' | 'deny' | 'practice' | 'retry' | 'slow';
 
 interface Tone {
   freq: number;
@@ -25,6 +25,8 @@ interface Tone {
 // Every answer sounds and feels different (the scanner design's signal
 // spec), so staff can tell them apart with their eyes on the person.
 const TONES: Record<FeedbackKind, Tone[]> = {
+  // The instant a code is seen, before the answer: the phone never feels frozen.
+  read: [{ freq: 2400, ms: 20 }],
   admit: [{ freq: 1800, ms: 80 }],
   practice: [{ freq: 1200, ms: 40 }],
   warn: [
@@ -44,6 +46,7 @@ const TONES: Record<FeedbackKind, Tone[]> = {
 };
 
 const VIBRATE: Record<FeedbackKind, number[]> = {
+  read: [],
   admit: [40],
   practice: [25],
   warn: [80, 80, 80],

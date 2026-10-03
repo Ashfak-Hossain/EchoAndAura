@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type QrDetector, loadQrDetector } from './decoder';
+import {
+  type QrDetector,
+  type QrSource,
+  centreCrop,
+  loadFallbackDecoder,
+  loadQrDetector,
+} from './decoder';
 
 /**
  * The door camera: rear camera, a QR decode loop, the wake lock, the torch.
@@ -10,8 +16,13 @@ import { type QrDetector, loadQrDetector } from './decoder';
  * prompt) need a user gesture. When the page is hidden (the phone locks,
  * another app opens) everything is released; the screen then shows "Tap to
  * resume", because only a tap may take them back. The loop decodes at most
- * ~10 frames a second, one at a time, and pauses itself after 2 minutes
+ * ~16 frames a second, one at a time, and pauses itself after 2 minutes
  * with nothing in view, to save the battery on a long night.
+ *
+ * The WebAssembly decoder reads only the centre of the frame, scaled down
+ * (`centreCrop`), with a full frame every few reads for a code held off to
+ * the side; the browser's own reader (Android) gets the full frame. Each
+ * read is timed: `readMs` is the running average, for the pre-doors test.
  */
 
 export type CameraProblem = 'denied' | 'busy' | 'none' | 'insecure' | 'decoder';
@@ -22,7 +33,28 @@ export type CameraState =
   | { kind: 'paused'; why: 'hidden' | 'idle' | 'ended' }
   | { kind: 'error'; problem: CameraProblem };
 
-const DETECT_EVERY_MS = 100;
+const DETECT_EVERY_MS = 60;
+/** Every Nth WebAssembly read is the full frame, so an off-centre code is still found. */
+const FULL_FRAME_EVERY = 5;
+/** Reads left out of the running average: the first ones carry one-off start-up costs. */
+const WARM_READS = 3;
+/** Failed reads in a row before the phone's own reader is swapped for WebAssembly. */
+const NATIVE_FAILURES_MAX = 5;
+/** The longest Start waits for the decoder's warm-up read before it opens anyway. */
+const WARM_UP_MAX_MS = 3_000;
+
+/**
+ * One throw-away read on a blank image, so the first person in the queue
+ * does not pay for the decoder loading its model (about 1.5 s for Chrome's
+ * own reader, measured) — never more than WARM_UP_MAX_MS.
+ */
+async function warmUp(detector: QrDetector): Promise<void> {
+  if (typeof ImageData === 'undefined') return;
+  await Promise.race([
+    detector.detect(new ImageData(16, 16)).catch(() => []),
+    new Promise((resolve) => setTimeout(resolve, WARM_UP_MAX_MS)),
+  ]);
+}
 /** No frame for this long while "on" (a call banner, Siri, a muted track): treat it as lost. */
 const STALL_MS = 3_000;
 export const CAMERA_IDLE_MS = 2 * 60_000;
@@ -30,6 +62,11 @@ const CAMERA_KEY = 'door:camera';
 
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
 type TorchConstraint = MediaTrackConstraintSet & { torch?: boolean };
+type CameraCapabilities = TorchCapabilities & {
+  zoom?: { min: number; max: number };
+  focusMode?: string[];
+};
+type CameraConstraint = TorchConstraint & { zoom?: number; focusMode?: string };
 
 function problemOf(err: unknown): CameraProblem {
   const name = err instanceof Error || err instanceof DOMException ? err.name : '';
@@ -89,6 +126,12 @@ export function useCamera(onCode: (text: string) => void) {
   const [state, setState] = useState<CameraState>({ kind: 'off' });
   const [torch, setTorch] = useState({ available: false, on: false });
   const [cameras, setCameras] = useState(0);
+  /** 2x is offered when the camera can zoom that far (Android Chrome; not iOS Safari). */
+  const [zoom, setZoom] = useState({ available: false, level: 1 });
+  /** Running average of one decode, in ms; null until the first reads. */
+  const [readMs, setReadMs] = useState<number | null>(null);
+  /** Which reader runs: the browser's own, or the WebAssembly fallback. */
+  const [decoder, setDecoder] = useState<QrDetector['kind'] | null>(null);
   /** Null until started; false = asked for, refused (the screen may sleep). */
   const [awake, setAwake] = useState<boolean | null>(null);
 
@@ -117,6 +160,7 @@ export function useCamera(onCode: (text: string) => void) {
       void lock.release().catch(() => {});
     }
     setTorch({ available: false, on: false });
+    setZoom({ available: false, level: 1 });
   }, []);
 
   const pause = useCallback(
@@ -128,10 +172,29 @@ export function useCamera(onCode: (text: string) => void) {
   );
 
   const loop = useCallback(
-    (gen: number, el: HTMLVideoElement, detector: QrDetector) => {
+    (gen: number, el: HTMLVideoElement, first: QrDetector) => {
+      let detector = first;
+      let failures = 0;
       let busy = false;
       let last = 0;
       let lastFrame = performance.now();
+      let reads = 0;
+      let average: number | null = null;
+      let shownAt = 0;
+      // One reusable canvas for the WebAssembly decoder's cropped frame.
+      let canvas: HTMLCanvasElement | null = null;
+      let ctx: CanvasRenderingContext2D | null = null;
+      const frameOf = (): QrSource => {
+        reads++;
+        if (detector.kind !== 'zxing' || reads % FULL_FRAME_EVERY === 0) return el;
+        canvas ??= document.createElement('canvas');
+        ctx ??= canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return el;
+        const box = centreCrop(el.videoWidth, el.videoHeight);
+        if (canvas.width !== box.out) canvas.width = canvas.height = box.out;
+        ctx.drawImage(el, box.sx, box.sy, box.side, box.side, 0, 0, box.out, box.out);
+        return ctx.getImageData(0, 0, box.out, box.out);
+      };
       // Frames drive the loop, so a camera that stops producing them would
       // stop every check with it — including this one, hence an interval.
       const health = setInterval(() => {
@@ -157,17 +220,47 @@ export function useCamera(onCode: (text: string) => void) {
         if (!busy && now - last >= DETECT_EVERY_MS && el.readyState >= 2) {
           busy = true;
           last = now;
+          let source: QrSource;
+          try {
+            source = frameOf();
+          } catch {
+            source = el; // A canvas the browser refused (memory): read the frame as is.
+          }
           detector
-            .detect(el)
+            .detect(source)
             .then((codes) => {
               if (generation.current !== gen) return;
+              failures = 0;
+              const took = performance.now() - now;
+              if (reads > WARM_READS) {
+                average = average === null ? took : average * 0.9 + took * 0.1;
+              }
+              // A re-render a second is plenty for a number on a test screen.
+              if (average !== null && now - shownAt > 1_000) {
+                shownAt = now;
+                setReadMs(Math.round(average));
+              }
               for (const code of codes) {
                 if (!code.rawValue) continue;
                 lastSeen.current = performance.now();
                 onCodeRef.current(code.rawValue);
               }
             })
-            .catch(() => {})
+            .catch(() => {
+              // The phone's own reader can start failing mid-night (an
+              // update, memory pressure): swap in WebAssembly rather than
+              // scan nothing in silence.
+              if (detector.kind !== 'native' || ++failures < NATIVE_FAILURES_MAX) return;
+              failures = 0;
+              void loadFallbackDecoder()
+                .then((fallback) => {
+                  if (generation.current !== gen) return;
+                  detector = fallback;
+                  average = null;
+                  setDecoder(fallback.kind);
+                })
+                .catch(() => {});
+            })
             .finally(() => {
               busy = false;
             });
@@ -212,8 +305,14 @@ export function useCamera(onCode: (text: string) => void) {
           if (generation.current === gen) pause('ended');
         };
         saveCamera(track.getSettings().deviceId);
-        const caps: TorchCapabilities = track.getCapabilities?.() ?? {};
+        const caps: CameraCapabilities = track.getCapabilities?.() ?? {};
         setTorch({ available: caps.torch === true, on: false });
+        setZoom({ available: (caps.zoom?.max ?? 1) >= 2, level: 1 });
+        // Keep refocusing as codes come and go at different distances.
+        if (caps.focusMode?.includes('continuous')) {
+          const advanced: CameraConstraint[] = [{ focusMode: 'continuous' }];
+          void track.applyConstraints({ advanced }).catch(() => {});
+        }
       }
       const el = video.current;
       if (el) {
@@ -252,7 +351,10 @@ export function useCamera(onCode: (text: string) => void) {
         return;
       }
       if (generation.current !== gen || !el) return;
+      await warmUp(detector);
+      if (generation.current !== gen) return;
       lastSeen.current = performance.now();
+      setDecoder(detector.kind);
       setState({ kind: 'on' });
       loop(gen, el, detector);
     },
@@ -283,6 +385,19 @@ export function useCamera(onCode: (text: string) => void) {
     }
   }, [torch.on]);
 
+  /** 1x or 2x, for a small printed code held further away. */
+  const setZoomLevel = useCallback(async (level: 1 | 2) => {
+    const track = stream.current?.getVideoTracks()[0];
+    if (!track) return;
+    const advanced: CameraConstraint[] = [{ zoom: level }];
+    try {
+      await track.applyConstraints({ advanced });
+      setZoom({ available: true, level });
+    } catch {
+      setZoom({ available: false, level: 1 });
+    }
+  }, []);
+
   /** A typed or searched admit counts as activity: don't idle-pause mid-rush. */
   const touch = useCallback(() => {
     lastSeen.current = performance.now();
@@ -299,5 +414,19 @@ export function useCamera(onCode: (text: string) => void) {
     };
   }, [pause, release]);
 
-  return { video, state, torch, cameras, awake, start, switchCamera, toggleTorch, touch };
+  return {
+    video,
+    state,
+    torch,
+    zoom,
+    readMs,
+    decoder,
+    cameras,
+    awake,
+    start,
+    switchCamera,
+    toggleTorch,
+    setZoomLevel,
+    touch,
+  };
 }
