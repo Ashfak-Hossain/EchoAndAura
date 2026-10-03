@@ -198,6 +198,45 @@ and note it in that file's history.
   the `Mailer` port ([infra/AWS.md](infra/AWS.md#production-access-denied-or-stalled)).
   Meanwhile, buyers can read everything on their order page and ticket page.
 
+## The site is under attack
+
+Signs: the uptime alert, many 429s, Cloudflare → Security → Events
+filling up, buyers saying the site won't load.
+
+1. **Look first:** Cloudflare → Security → Analytics / Events. Where does
+   the traffic come from (country, a few addresses, one path)?
+2. **Mostly from abroad:** Security → WAF → Custom rules → switch
+   `emergency - outside Bangladesh` **on** (ADR-050). Visitors outside
+   Bangladesh get a Cloudflare check first; buyers at home don't notice.
+3. **From everywhere / not easing:** Overview → **Under Attack Mode** on.
+   Every visitor gets a few-second check, including Bangladesh. Door
+   phones that already loaded `/door` keep scanning offline (ADR-034).
+4. **One path hammered** (e.g. a single page): a temporary custom rule
+   blocking or challenging that path. The free plan has 5 rules; we use 3.
+5. **When it is over:** switch the emergency rule and Under Attack Mode
+   **off** again (they cost diaspora buyers a check), and write what
+   happened in [infra/CLOUDFLARE.md](infra/CLOUDFLARE.md) History.
+
+What already holds without you: Cloudflare's DDoS protection, the
+per-address rate limit (ADR-047), the in-flight cap that refuses instead
+of crashing, Turnstile on the forms (ADR-048), origin lockdown (ADR-045).
+
+## Nobody can get into /admin (Cloudflare Access)
+
+Cloudflare's email page comes before the sign-in page (ADR-050).
+
+- **The code email doesn't arrive:** it comes from Cloudflare
+  (`noreply@notify.cloudflare.com`), not from us: check spam. The address
+  must be on the `Admin` app's `admins` policy, exactly as typed.
+- **A bare `Forbidden` page after the email code:** the web refused the
+  token. `CF_ACCESS_AUD` in Dokploy must be the `Admin` app's AUD tag and
+  `CF_ACCESS_TEAM_DOMAIN` the team domain.
+- **Raj changed email or lost access to it:** add the new address to the
+  policy ([infra/CLOUDFLARE.md § Change it later](infra/CLOUDFLARE.md#change-it-later)).
+- **Everything is broken and the event is tonight:** empty
+  `CF_ACCESS_AUD` in Dokploy → Deploy, and delete the `Admin` app.
+  Password + 2FA still protect the console; put Access back after.
+
 ## Buyers say the bot check fails
 
 They see "We couldn't confirm you're not a bot" on registration, Find my

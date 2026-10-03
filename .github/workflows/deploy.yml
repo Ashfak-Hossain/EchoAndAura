@@ -8,6 +8,9 @@ name: Deploy
 #   repo variable R2_PUBLIC_URL      — no images are built without it
 #   repo secrets  DOKPLOY_URL, DOKPLOY_API_KEY, DOKPLOY_COMPOSE_ID
 #                                    — images are pushed but not deployed without them
+#   repo secrets  CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET
+#                                    — the Access service token for the deploy
+#                                      host (ADR-050); sent when set
 #
 # Manual run (Actions → Deploy → Run workflow): rebuild and redeploy main.
 
@@ -171,12 +174,21 @@ jobs:
           DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
           DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
           DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
             echo "::notice::Images pushed; Dokploy is not configured yet, so nothing was deployed."
             exit 0
           fi
+          # ADR-050: Cloudflare Access guards the deploy host; a script
+          # passes it with the service token instead of an email code.
+          access=()
+          if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
+            access=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+          fi
           curl -fsS -X POST "$DOKPLOY_URL/api/compose.deploy" \
+            "${access[@]}" \
             -H "x-api-key: $DOKPLOY_API_KEY" \
             -H 'Content-Type: application/json' \
             -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"

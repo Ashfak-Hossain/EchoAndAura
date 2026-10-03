@@ -179,6 +179,15 @@ password-only ones from before `0024` (another laptop, the phone's
 browser): each signs in again there, with a code. Expected, not a bug;
 it is what stops an old session counting as two-factor.
 
+### Cloudflare Access (ADR-050)
+
+Once the Dokploy Access app exists, the deploy call needs the service
+token: repo secrets `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`
+(infra/CLOUDFLARE.md § Cloudflare Access). Add them **before** creating
+the app, then Run workflow once to prove a deploy still gets through. A
+`403` from `curl` in the Deploy step means the token is missing or was
+rotated.
+
 ## Checking an image locally
 
 ```sh
