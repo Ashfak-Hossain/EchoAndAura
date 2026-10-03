@@ -60,17 +60,17 @@ production-access support case id (Bitwarden `AWS ash-admin`, notes).
 Who can reset or take over what. Values and codes are in Bitwarden; this
 is only the state.
 
-| Account                                   | Second factor                                                                   | Recovery                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Developer's Gmail                         | on (not SMS-only)                                                               | backup codes in Bitwarden `Gmail (developer) backup codes`         |
-| Raj's Gmail (owns the Cloudflare account) | **to confirm with Raj**                                                         | `Gmail (Raj) backup codes`                                         |
-| Bitwarden (Evan, Raj)                     | on, app or passkey; org policy **Require two-step login** on                    | recovery codes on paper, at home (never in Bitwarden)              |
-| GitHub (`Ashfak-Hossain`)                 | on; sessions, tokens, SSH keys and OAuth apps reviewed                          | `GitHub recovery codes`                                            |
-| Cloudflare                                | on for Raj's login; the developer has **their own login** (Super Administrator) | backup codes: `Cloudflare`, `Cloudflare (developer) backup codes`  |
-| AWS root, `ash-admin`                     | MFA on both, 0 access keys (CLI-verified)                                       | `AWS root`; a second root MFA device recommended                   |
-| Dokploy, Better Stack                     | on                                                                              | `Dokploy admin`, `Better Stack`                                    |
-| BengalCloud client area, Securednoc panel | **not offered** by either                                                       | long unique passwords in Bitwarden; account email is a 2FA'd Gmail |
-| Domain `echoandaura.com`                  | registrar transfer lock on (`client transfer prohibited`), DNSSEC on            | auto-renew; expires 2027-09-18                                     |
+| Account                                   | Second factor                                                                   | Recovery                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Developer's Gmail                         | on (not SMS-only)                                                               | backup codes in Bitwarden `Gmail (developer) backup codes`               |
+| Raj's Gmail (owns the Cloudflare account) | on                                                                              | `Gmail (Raj) backup codes`                                               |
+| Bitwarden (Evan, Raj)                     | on, app or passkey; org policy **Require two-step login** on                    | recovery codes on paper, at home (never in Bitwarden)                    |
+| GitHub (`Ashfak-Hossain`)                 | on; sessions, tokens, SSH keys and OAuth apps reviewed                          | `GitHub recovery codes`                                                  |
+| Cloudflare                                | on for Raj's login; the developer has **their own login** (Super Administrator) | backup codes: `Cloudflare`, `Cloudflare (developer) backup codes`        |
+| AWS root, `ash-admin`                     | MFA on both, 0 access keys (CLI-verified)                                       | `AWS root`; one root MFA device (a second judged not needed, 2026-10-03) |
+| Dokploy, Better Stack                     | on                                                                              | `Dokploy admin`, `Better Stack`                                          |
+| BengalCloud client area, Securednoc panel | **not offered** by either                                                       | long unique passwords in Bitwarden; account email is a 2FA'd Gmail       |
+| Domain `echoandaura.com`                  | registrar transfer lock on (`client transfer prohibited`), DNSSEC on            | auto-renew; expires 2027-09-18                                           |
 
 Re-check once a year, and whenever someone joins or leaves.
 
