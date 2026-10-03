@@ -1,13 +1,16 @@
 # AWS
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-09-28
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
 
-The only AWS service this project uses is **Amazon SES**, for outbound
-transactional email. Everything else on the account exists to keep that
-safe and cheap: two IAM principals, three budgets, one send-only key, and
+This project uses two AWS services: **Amazon SES**, for outbound
+transactional email, and one **S3 bucket** for the off-site copy of the
+database backups ([S3 off-site backups](#s3-off-site-backups), ADR-051).
+Everything else on the account exists to keep those safe and cheap: IAM
+principals, three budgets, one send-only key, one upload-only key, and
 one SNS topic that tells the developer about bounces and complaints.
-Nothing here is infrastructure-as-code — it was set up once by hand and
-this page is the record. `pnpm infra:check` proves it is still true.
+The SES side was set up once by hand and this page is the record
+(`pnpm infra:check` proves it is still true); the S3 side is
+CloudFormation, `ops/aws/offsite-backups.yaml`.
 
 How email flows through SES, and what to do when a message does not
 arrive, is in [../systems/EMAIL.md](../systems/EMAIL.md). DNS records that
@@ -45,6 +48,8 @@ flowchart LR
     ses["SES ap-south-1\nidentity echoandaura.com"]
     budgets["Budgets\n$1 zero-spend · $2 monthly · $2 hard stop"]
     sns["SNS topic ses-feedback\nstandard · no KMS"]
+    offsite["IAM user echoandaura-offsite-backups-dokploy\ninline upload-only\n1 access key, no console"]
+    bucket["S3 echoandaura-offsite-backups\nversioned · 35-day expiry"]
   end
   evan((Evan)) -->|console| admin
   evan -.->|rare| root
@@ -53,15 +58,18 @@ flowchart LR
   budgets -->|at 100 % of hard stop| role
   role -->|attaches AWSDenyAll| worker
   ses -->|bounce · complaint| sns
+  dokploy[(Dokploy backups\non the server)] -->|aws-offsite key| offsite
+  offsite -->|list · put · get\ndelete denied| bucket
   sns -->|email| dev((developer's Gmail))
 ```
 
-| Principal            | Type     | Permissions                                                                    | Credentials                          | Purpose                            |
-| -------------------- | -------- | ------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------- |
-| root                 | root     | everything                                                                     | password + MFA; **0 access keys**    | account-level settings only        |
-| `ash-admin`          | IAM user | `AdministratorAccess`, `IAMUserChangePassword` (managed)                       | password + MFA; **0 access keys**    | console and `aws login` for humans |
-| `echoandaura-worker` | IAM user | inline `ses-send-only` (below)                                                 | 1 access key → `AWS_SES_*` in `.env` | the worker process sends email     |
-| `BudgetsActionsRole` | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com` | —                                    | lets the hard-stop budget act      |
+| Principal                             | Type     | Permissions                                                                    | Credentials                          | Purpose                             |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------ | ------------------------------------ | ----------------------------------- |
+| root                                  | root     | everything                                                                     | password + MFA; **0 access keys**    | account-level settings only         |
+| `ash-admin`                           | IAM user | `AdministratorAccess`, `IAMUserChangePassword` (managed)                       | password + MFA; **0 access keys**    | console and `aws login` for humans  |
+| `echoandaura-worker`                  | IAM user | inline `ses-send-only` (below)                                                 | 1 access key → `AWS_SES_*` in `.env` | the worker process sends email      |
+| `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (CloudFormation)                                          | 1 access key → Dokploy `aws-offsite` | Dokploy uploads the off-site backup |
+| `BudgetsActionsRole`                  | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com` | —                                    | lets the hard-stop budget act       |
 
 ### `ses-send-only` (inline policy on `echoandaura-worker`)
 
@@ -86,11 +94,35 @@ two actions are the safety boundary — a leaked key can send email from
 our identities and do nothing else. Do not add a `configuration-set/*`
 resource; we deliberately run without configuration sets (see SES below).
 
+## S3 off-site backups
+
+Stack `echoandaura-offsite-backups` (`ap-south-1`), from
+`ops/aws/offsite-backups.yaml`. Change it by editing the template and
+running the deploy command at its top; never in the console.
+
+| Item       | Value                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bucket     | `echoandaura-offsite-backups`: private (all four public-access blocks), SSE-S3, versioning on, HTTPS only, kept if the stack is deleted                  |
+| Lifecycle  | files and old versions expire after **35 days**; unfinished uploads after 1 day                                                                          |
+| Writer     | IAM user `echoandaura-offsite-backups-dokploy`: `ListBucket`, `PutObject`, `GetObject`, multipart; **delete and bucket config denied**                   |
+| Key        | made by hand (IAM → the user → Security credentials), never through CloudFormation. Bitwarden `AWS offsite backups key (Dokploy)`; Dokploy `aws-offsite` |
+| Written by | Dokploy, daily 03:30 Dhaka ([SERVER.md § 16](SERVER.md))                                                                                                 |
+| Cost       | $0.025 / GB-month; about 15 kB per dump today, so well under a cent                                                                                      |
+
+Why read is allowed: rclone (inside Dokploy) checks every upload with a
+HEAD request, and without `GetObject` the file lands but the backup
+reports failure. **Rotate the key:** create a second key on the user →
+Dokploy → Settings → S3 Destinations → `aws-offsite` → new key → **Test**
+→ run the backup by hand → deactivate, then delete the old key →
+Bitwarden.
+
 ## Budgets and cost
 
-AWS has **no hard spending cap**. Budgets only alert. What makes a surprise
-bill impossible here is that the only long-lived credential on any server
-is the send-only worker key, so nothing can create billable resources.
+AWS has **no hard spending cap**. Budgets only alert. What keeps a surprise
+bill unlikely here is that the long-lived credentials on the server are
+narrow: the send-only worker key, and the backup key, which can only add
+files to one bucket (anything it adds expires in 35 days). Neither can
+create billable resources.
 
 | Budget (Billing → Budgets)          | Limit / month | Alerts                              | Action                                                                  |
 | ----------------------------------- | ------------- | ----------------------------------- | ----------------------------------------------------------------------- |
@@ -339,14 +371,17 @@ aws ses get-identity-notification-attributes --identities echoandaura.com
 aws sns get-topic-attributes --topic-arn "arn:aws:sns:ap-south-1:${AWS_ACCOUNT_ID}:ses-feedback" \
   --query 'Attributes.SubscriptionsConfirmed'                 # "1"
 aws budgets describe-budgets --account-id "$AWS_ACCOUNT_ID" --query 'Budgets[].BudgetName'
+aws s3api get-bucket-versioning --bucket echoandaura-offsite-backups      # Enabled
+aws iam list-access-keys --user-name echoandaura-offsite-backups-dokploy  # exactly one Active
 pnpm email:test <verified address>                            # "SES accepted the message: …"
 ```
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested                                                                      |
-| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities                                                                         |
-| 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above                                                           |
-| 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site |
+| Date       | Change                                                                                                                                                                                                                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested                                                                                                                                                                          |
+| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities                                                                                                                                                                             |
+| 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above                                                                                                                                                               |
+| 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site                                                                                                     |
+| 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both |

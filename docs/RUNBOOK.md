@@ -1,6 +1,6 @@
 # Runbook
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
 
 What to do when something breaks, and the checklist for event night.
 Each section starts from what you see, gives the order to check things,
@@ -94,9 +94,28 @@ Migrations do not roll back: a migration that damaged data means
 
 ## Restore from backup
 
-Backups: nightly at 03:00 Dhaka, the latest 14 kept, in R2
-`echoandaura-backups` under `echoandaura-db-ljctqy/postgres/`
-([infra/SERVER.md § 16](infra/SERVER.md)).
+Backups ([infra/SERVER.md § 16](infra/SERVER.md), ADR-051):
+
+| Copy                | When                                                 | Kept    | Where                                                                |
+| ------------------- | ---------------------------------------------------- | ------- | -------------------------------------------------------------------- |
+| R2 nightly          | 03:00 Dhaka                                          | 14      | R2 `echoandaura-backups` → `echoandaura-db-ljctqy/postgres/`         |
+| S3 off-site         | 03:30 Dhaka                                          | 35 days | S3 `echoandaura-offsite-backups` → `echoandaura-db-ljctqy/postgres/` |
+| R2 hourly (on sale) | :15 every hour, only while switched on (Event night) | 48      | R2 `echoandaura-backups` → `echoandaura-db-ljctqy/postgres-hourly/`  |
+
+Take the newest file of any of them; they are the same format.
+
+**If Cloudflare is gone** (account lost or locked): the S3 copy is the
+one. Sign in as `ash-admin` (`aws login --profile echoandaura`), then
+
+```sh
+aws --profile echoandaura s3 ls s3://echoandaura-offsite-backups/echoandaura-db-ljctqy/postgres/
+aws --profile echoandaura s3 cp s3://echoandaura-offsite-backups/echoandaura-db-ljctqy/postgres/<newest>.sql.gz ~/
+```
+
+or download it from the S3 console. From there it is the same file as
+an R2 one: continue with the steps below at "Get the backup onto the
+server". Dokploy's S3 key cannot delete, so these copies survive a
+compromised server too.
 
 **Into an empty database** (a rebuilt server): SERVER.md § 16,
 "Restore into an empty database". Tested on 2026-09-28.
@@ -339,11 +358,20 @@ the wrong entry.
 
 ## A backup failed
 
-1. Look in the R2 dashboard → `echoandaura-backups` → today's file. If
-   it's there, the alert was about something else. Read the message.
+Three schedules write backups (Restore from backup, above). The
+message names the destination: `r2-backups` or `aws-offsite`.
+
+1. Look for today's file: R2 dashboard → `echoandaura-backups`, or S3 →
+   `echoandaura-offsite-backups`. If it's there, the alert was about
+   something else. Read the message.
 2. Dokploy → the Postgres service → Backups → the backup's logs.
-3. Look for R2 key problems (a rotated token that Dokploy doesn't have).
-   Settings → S3 Destinations → `r2-backups` → **Test**.
+3. Look for key problems (a rotated key that Dokploy doesn't have).
+   Settings → S3 Destinations → the destination → **Test**.
+   - `aws-offsite` must have **Keep the latest** empty: its key can't
+     delete, so a value there fails every run (S3 expires old files
+     itself, after 35 days).
+   - `AccessDenied` on `aws-offsite` after a template change: the key
+     needs list, upload and read (`ops/aws/offsite-backups.yaml`).
 4. When fixed, **Run** it by hand and confirm a new file appears.
 
 ## Disk above 80 %
@@ -370,6 +398,14 @@ is buyers waiting for their tickets, and messages to the organizer.
 
 ## Event night
 
+**When registration opens (20 days before)**
+
+- [ ] Dokploy → the Postgres service → Backups → the `postgres-hourly/`
+      row → **Enabled** on. A restore during the sale then loses at most
+      an hour, not a day (ADR-051).
+- [ ] After the first hour, R2 → `echoandaura-backups` →
+      `echoandaura-db-ljctqy/postgres-hourly/` has a file.
+
 **The day before**
 
 - [ ] `/api/health` is ok, and the Better Stack monitors are green.
@@ -387,6 +423,11 @@ is buyers waiting for their tickets, and messages to the organizer.
       scanner must still open and scan (offline mode, ADR-034/035).
 - [ ] Phones charged, power banks, a spare phone.
 
+**Before doors open**
+
+- [ ] Dokploy → the Postgres service → Backups → the R2 nightly row →
+      **Run** by hand, so a restore that night starts from now.
+
 **At the door**
 
 - A ticket that won't scan: search by name or code on the scanner; the
@@ -401,6 +442,8 @@ is buyers waiting for their tickets, and messages to the organizer.
 - [ ] Every door phone has synced (the gate pass shows its offline scan count).
 - [ ] Look at the check-in page: the conflicts list, if any (ADR-034).
 - [ ] Revoke the gate passes.
+- [ ] Run a manual backup again (as before doors open).
+- [ ] **The day after:** the `postgres-hourly/` row → **Enabled** off.
 
 ## Updating Dokploy
 
@@ -422,8 +465,8 @@ production even though the site keeps running while the panel restarts.
 
 ## Dates to watch
 
-| What                                | When                                     | Where                                |
-| ----------------------------------- | ---------------------------------------- | ------------------------------------ |
-| BengalCloud VPS renewal (1,599 BDT) | monthly, the 26th                        | BengalCloud client area              |
-| Domain `echoandaura.com`            | _to fill in: registrar and renewal date_ | the registrar                        |
-| Dokploy API key for GitHub deploys  | expires 2027-09-28; reminder 2027-08-28  | [infra/SECRETS.md](infra/SECRETS.md) |
+| What                                | When                                    | Where                                |
+| ----------------------------------- | --------------------------------------- | ------------------------------------ |
+| BengalCloud VPS renewal (1,599 BDT) | monthly, the 26th                       | BengalCloud client area              |
+| Domain `echoandaura.com`            | renews 2027-09-18 (auto-renew on)       | Cloudflare → Domain Registration     |
+| Dokploy API key for GitHub deploys  | expires 2027-09-28; reminder 2027-08-28 | [infra/SECRETS.md](infra/SECRETS.md) |

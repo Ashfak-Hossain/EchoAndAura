@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Off-site copy of the echoandaura Postgres backups (ADR-051). Dokploy's
+  second backup schedule uploads a nightly dump here, outside the Cloudflare
+  account that holds the site and the primary R2 backups. Its key can add
+  files but never delete them; old copies expire by lifecycle after 35 days.
+
+# Deploy (ap-south-1, from the repo root, signed in as ash-admin):
+#   aws cloudformation deploy --profile echoandaura --region ap-south-1 \
+#     --stack-name echoandaura-offsite-backups \
+#     --template-file ops/aws/offsite-backups.yaml \
+#     --capabilities CAPABILITY_NAMED_IAM
+# The access key is created by hand afterwards (docs/infra/AWS.md), so the
+# secret never passes through CloudFormation.
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
+Parameters:
+  RetentionDays:
+    Type: Number
+    Default: 35
+    MinValue: 7
+    Description: Days a backup (and any overwritten version) is kept before S3 deletes it.
+
+Resources:
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          Survives the loss of the Cloudflare account or a compromised server.
+          Versioning keeps the original if a stolen key overwrites a file.
+        must:
+          - Never public; holds buyer names, emails and phone numbers.
+          - Expiry stays on lifecycle, not on Dokploy's keep-latest, which needs delete rights.
+    Properties:
+      BucketName: !Ref AWS::StackName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-backups
+            Status: Enabled
+            ExpirationInDays: !Ref RetentionDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: !Ref RetentionDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: remove-expired-delete-markers
+            Status: Enabled
+            ExpiredObjectDeleteMarker: true
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt BackupBucket.Arn
+              - !Sub '${BackupBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  DokployUser:
+    Type: AWS::IAM::User
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: The only credential Dokploy holds for this bucket; key created by hand, kept in Bitwarden.
+        must:
+          - Never gains a delete or bucket-config action; that is what makes the copy off-site in practice.
+    Properties:
+      UserName: !Sub '${AWS::StackName}-dokploy'
+      Policies:
+        - PolicyName: upload-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Dokploy's "Test connection" lists the bucket.
+              - Sid: ListBucket
+                Effect: Allow
+                Action: 's3:ListBucket'
+                Resource: !GetAtt BackupBucket.Arn
+              # rclone rcat streams the dump; larger ones go up in parts.
+              # GetObject: rclone HEADs each upload to check it, and Dokploy
+              # offers no --s3-no-head (without it the upload lands but the
+              # backup reports failure). Reading adds little: the only other
+              # holder of this key is the server, which has the live database.
+              - Sid: Upload
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:AbortMultipartUpload'
+                  - 's3:ListMultipartUploadParts'
+                Resource: !Sub '${BackupBucket.Arn}/*'
+              # Explicit, so a broader policy attached later can't undo it.
+              - Sid: NeverDeleteOrReconfigure
+                Effect: Deny
+                Action:
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                  - 's3:DeleteBucket'
+                  - 's3:PutBucketVersioning'
+                  - 's3:PutLifecycleConfiguration'
+                  - 's3:PutBucketPolicy'
+                  - 's3:DeleteBucketPolicy'
+                  - 's3:PutObjectRetention'
+                  - 's3:BypassGovernanceRetention'
+                Resource:
+                  - !GetAtt BackupBucket.Arn
+                  - !Sub '${BackupBucket.Arn}/*'
+
+Outputs:
+  BucketName:
+    Value: !Ref BackupBucket
+  Region:
+    Value: !Ref AWS::Region
+  Endpoint:
+    Description: Dokploy S3 destination endpoint
+    Value: !Sub 'https://s3.${AWS::Region}.amazonaws.com'
+  UserName:
+    Value: !Ref DokployUser

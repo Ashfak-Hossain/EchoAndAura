@@ -1,6 +1,6 @@
 # Production server
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-09-27
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
 
 The one VPS that runs echoandaura.com: what it is, how to get in, every
 change made to it since the reinstall, and how to check or rebuild each
@@ -678,6 +678,17 @@ and an email lost with it can be re-sent from the admin.
 | Object name                              | `echoandaura-db-ljctqy/postgres/<UTC timestamp>.sql.gz`: Dokploy puts the service name in front of the prefix                                                                                        |
 | Failure alerts                           | **none yet**; they come in D3, with the uptime alerts. Until then, check that R2 has a file from last night                                                                                          |
 
+**Two more schedules on the same database (2026-10-03, ADR-051):**
+
+| Setting     | Off-site copy                                                                                                                                                                        | Sales-window hourly                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Destination | `aws-offsite`: AWS S3, bucket `echoandaura-offsite-backups`, region `ap-south-1`, endpoint `https://s3.ap-south-1.amazonaws.com`. Key: Bitwarden `AWS offsite backups key (Dokploy)` | `r2-backups` (above)                                                                         |
+| Prefix      | `postgres/`                                                                                                                                                                          | `postgres-hourly/`, so it never rotates the nightly files                                    |
+| Schedule    | `30 21 * * *` = **03:30 Dhaka**, after the R2 one                                                                                                                                    | `15 * * * *`, every hour at :15                                                              |
+| Keep latest | **empty**: the key can't delete; S3 lifecycle expires files after 35 days ([AWS.md](AWS.md))                                                                                         | 48 (two days)                                                                                |
+| Enabled     | on                                                                                                                                                                                   | **off**, except from registration opening to the day after the event (RUNBOOK → Event night) |
+| First run   | 2026-10-03 manual: 15.6 kB; downloaded and `pg_restore -l` listed 16 tables with data, then deleted                                                                                  | not run (a manual run would leave a stray file)                                              |
+
 The backups hold every order and the buyers' names, emails and phone
 numbers. The bucket has no public name, and its key can reach this
 bucket only.
@@ -1108,3 +1119,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-09-29 | Restore over live data rehearsed (RUNBOOK): live dumped (read-only), the 2026-09-28 21:00 UTC backup restored into scratch `echoandaura_rehearsal` with `--no-acl` + `app-role.sql`, app role read it and was refused on `order_events`, rename swap done between scratch databases. ~5 min, mostly the R2 download. Scratch databases dropped, dump and backup copy deleted; live `echoandaura` untouched                  |
 | 2026-09-30 | Origin lockdown (§ 20): WAF skip rule for `deploy` `/api/*`, `deploy` proxied; `origin-lockdown` + `.service` installed and enabled (15 IPv4 / 7 IPv6 Cloudflare ranges in `DOCKER-USER`); ufw 80/443 deleted (only OpenSSH left). Checked: direct 80/443 time out, site/dashboard/API through Cloudflare fine, worker reaches SES; **rebooted**: rules back on their own, all containers up in <1 min, `infra:check` green |
 | 2026-09-30 | In-flight cap (§ 21): `dynamic/inflight.yml` (`inflight-cap`, `inFlightReq` 100); `traefik.yml` backed up (`.bak-2026-09-30`) and the middleware added to `websecure`; Traefik restarted; both HTTPS routers carry it, site and health ok (ADR-047). A `python:3-alpine` image pulled by mistake during a check was removed                                                                                                 |
+| 2026-10-03 | Backups (§ 16, ADR-051): Dokploy S3 destination `aws-offsite` (AWS S3 `echoandaura-offsite-backups`, delete-denied key); schedule `30 21 * * *` prefix `postgres/`, keep-latest empty, enabled; manual run verified (first try reported failure: the key lacked read for rclone's check, fixed in the stack). R2 schedule `15 * * * *` prefix `postgres-hourly/`, keep 48, **disabled**                                     |

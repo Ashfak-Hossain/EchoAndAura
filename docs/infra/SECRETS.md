@@ -1,6 +1,6 @@
 # Secrets inventory
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
 
 Every credential the project depends on, **without a single value**. The
 values live in the Bitwarden organization `echoandaura`, collection
@@ -28,6 +28,7 @@ Rules:
 | `AWS root`                            | root email, password, MFA recovery                                                                                                                                   | humans, rarely                                                       | nowhere                                                                                                 | the whole AWS account (and its card)                                                                                                                                | root → Security credentials                                                                                                                                                                                                                                                                      | ☐            |
 | `AWS ash-admin`                       | console password, MFA                                                                                                                                                | Evan                                                                 | nowhere (console + `aws login` session)                                                                 | full admin of the AWS account                                                                                                                                       | IAM → user → Security credentials → console password                                                                                                                                                                                                                                             | ☐            |
 | `AWS worker key (SES)`                | `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`                                                                                                                 | worker process                                                       | Dokploy: the compose app's Environment (passed to the worker only); dev `.env` if needed                | can send email as `echoandaura.com` (spam/phishing risk, reputation) — nothing else                                                                                 | [AWS.md → Rotate the worker key](AWS.md#rotate-the-worker-key)                                                                                                                                                                                                                                   | ☑            |
+| `AWS offsite backups key (Dokploy)`   | access key id + secret of `echoandaura-offsite-backups-dokploy` (+ bucket, region, endpoint)                                                                         | Dokploy's `aws-offsite` backup destination                           | Dokploy → Settings → S3 Destinations → `aws-offsite`                                                    | read the backups in S3 (buyer data) and add files; cannot delete, so the copies survive                                                                             | AWS.md § S3 off-site backups                                                                                                                                                                                                                                                                     | yes          |
 | `Cloudflare`                          | account login, 2FA backup codes                                                                                                                                      | Evan                                                                 | nowhere                                                                                                 | DNS (could redirect the site and mail), Email Routing, R2, the domain itself                                                                                        | Cloudflare → My profile → Authentication                                                                                                                                                                                                                                                         | ☐            |
 | `Cloudflare R2 token`                 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (+ endpoint, bucket, public URL)                                                                                          | web (presigning, logo writes), worker                                | Dokploy: the compose app's Environment                                                                  | read/write/delete the media bucket (covers and logos, no PII); nothing else                                                                                         | [CLOUDFLARE.md → Rotate an R2 key](CLOUDFLARE.md#rotate-an-r2-key)                                                                                                                                                                                                                               | ☑            |
 | `Cloudflare R2 backups token`         | access key id + secret for `echoandaura-backups` (+ endpoint)                                                                                                        | Dokploy's backup job                                                 | Dokploy: Settings → S3 Destinations                                                                     | read/delete every database backup (all orders and buyer PII, as of each backup)                                                                                     | [CLOUDFLARE.md → Rotate an R2 key](CLOUDFLARE.md#rotate-an-r2-key)                                                                                                                                                                                                                               | ☑            |
@@ -54,6 +55,25 @@ Not secret but kept out of this public repo: the AWS account id
 (`AWS_ACCOUNT_ID` in `.env`, Bitwarden `AWS ash-admin`) and the SES
 production-access support case id (Bitwarden `AWS ash-admin`, notes).
 
+## Account security (S4, checked 2026-10-03)
+
+Who can reset or take over what. Values and codes are in Bitwarden; this
+is only the state.
+
+| Account                                   | Second factor                                                                   | Recovery                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Developer's Gmail                         | on (not SMS-only)                                                               | backup codes in Bitwarden `Gmail (developer) backup codes`               |
+| Raj's Gmail (owns the Cloudflare account) | on                                                                              | `Gmail (Raj) backup codes`                                               |
+| Bitwarden (Evan, Raj)                     | on, app or passkey; org policy **Require two-step login** on                    | recovery codes on paper, at home (never in Bitwarden)                    |
+| GitHub (`Ashfak-Hossain`)                 | on; sessions, tokens, SSH keys and OAuth apps reviewed                          | `GitHub recovery codes`                                                  |
+| Cloudflare                                | on for Raj's login; the developer has **their own login** (Super Administrator) | backup codes: `Cloudflare`, `Cloudflare (developer) backup codes`        |
+| AWS root, `ash-admin`                     | MFA on both, 0 access keys (CLI-verified)                                       | `AWS root`; one root MFA device (a second judged not needed, 2026-10-03) |
+| Dokploy, Better Stack                     | on                                                                              | `Dokploy admin`, `Better Stack`                                          |
+| BengalCloud client area, Securednoc panel | **not offered** by either                                                       | long unique passwords in Bitwarden; account email is a 2FA'd Gmail       |
+| Domain `echoandaura.com`                  | registrar transfer lock on (`client transfer prohibited`), DNSSEC on            | auto-renew; expires 2027-09-18                                           |
+
+Re-check once a year, and whenever someone joins or leaves.
+
 ## Local development
 
 `.env` on a developer machine holds real values for `AWS_SES_*` only if
@@ -73,11 +93,12 @@ is the docker-compose defaults from `.env.example`.
 
 ## History
 
-| Date       | Change                                                                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | Inventory written. Admin access key that had been created on `ash-admin` deleted the same day, never committed; worker key created |
-| 2026-09-27 | R2 keys created: one per bucket (media for the app, backups for Dokploy), both in Bitwarden                                        |
-| 2026-09-27 | Server rows added. The VPS root password shared in a screenshot on 2026-09-26 was replaced by the reinstall; SSH takes keys only   |
-| 2026-09-28 | Monitoring rows: Telegram alert bot, Gmail app password for Dokploy alerts, Better Stack                                           |
-| 2026-10-02 | `Cloudflare Turnstile` row (ADR-048); widget created, keys in Bitwarden + Dokploy the same day                                     |
-| 2026-10-03 | `Cloudflare Access` row (ADR-050): service token `github-deploy`, admin allow-list                                                 |
+| Date       | Change                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-20 | Inventory written. Admin access key that had been created on `ash-admin` deleted the same day, never committed; worker key created                                                   |
+| 2026-09-27 | R2 keys created: one per bucket (media for the app, backups for Dokploy), both in Bitwarden                                                                                          |
+| 2026-09-27 | Server rows added. The VPS root password shared in a screenshot on 2026-09-26 was replaced by the reinstall; SSH takes keys only                                                     |
+| 2026-09-28 | Monitoring rows: Telegram alert bot, Gmail app password for Dokploy alerts, Better Stack                                                                                             |
+| 2026-10-02 | `Cloudflare Turnstile` row (ADR-048); widget created, keys in Bitwarden + Dokploy the same day                                                                                       |
+| 2026-10-03 | `Cloudflare Access` row (ADR-050): service token `github-deploy`, admin allow-list                                                                                                   |
+| 2026-10-03 | `AWS offsite backups key (Dokploy)` added (ADR-051). Account security section (S4): 2FA state of every account; Cloudflare members split (developer's own Super Administrator login) |
