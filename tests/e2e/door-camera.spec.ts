@@ -82,9 +82,11 @@ test('the camera reads a real ticket QR and admits it, with either reader', asyn
       await phone.goto(`/door#code=${gate}`);
       await phone.getByRole('button', { name: 'Start scanning' }).click();
 
-      const result = phone.getByTestId('door-result');
-      await expect(result).toHaveAttribute('data-result', 'admitted', { timeout: 15_000 });
-      await expect(result).toContainText('Sadia Rahman');
+      // One condition, polled as a whole: a green clears itself in 0.8 s.
+      const admitted = phone.locator('[data-testid="door-result"][data-result="admitted"]', {
+        hasText: 'Sadia Rahman',
+      });
+      await expect(admitted).toBeVisible({ timeout: 15_000 });
       await expect(phone.getByTestId('door-count')).toHaveText(countAfter);
 
       // The steady read time the pre-doors test shows, measured on real frames.

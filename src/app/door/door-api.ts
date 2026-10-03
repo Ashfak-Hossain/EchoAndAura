@@ -1,6 +1,7 @@
 import type { DoorVerdict, OfflineList } from '@/server/lib/door-offline';
 import type { DoorUndoReason } from '@/server/lib/door-rules';
 import type {
+  DoorCheckIn,
   DoorRecentScan,
   DoorSearchResult,
   DoorStatus,
@@ -29,8 +30,10 @@ type Wire<T> = {
 export type WireScanResult = Wire<ScanResult>;
 export type WireSearchResult = Wire<DoorSearchResult>;
 export type WireRecentScan = Wire<DoorRecentScan>;
-export interface WireStatus extends Omit<Wire<DoorStatus>, 'recent'> {
+export type WireCheckIn = Wire<DoorCheckIn>;
+export interface WireStatus extends Omit<Wire<DoorStatus>, 'recent' | 'checkIns'> {
   recent: WireRecentScan[];
+  checkIns: WireCheckIn[];
   serverTime: string;
   event: { title: string; startsAt: string };
   gate: string;
@@ -122,7 +125,9 @@ async function doorRequest<T>(
 export const doorApi = {
   signIn: (code: string) => doorRequest<WireSession>('session', 'POST', { code }),
   signOut: () => doorRequest<{ ok: true }>('session', 'DELETE'),
-  status: () => doorRequest<WireStatus>('status', 'GET'),
+  /** `since` (ISO): also the check-ins made after it, at any gate (ADR-053). */
+  status: (since?: string) =>
+    doorRequest<WireStatus>(since ? `status?since=${encodeURIComponent(since)}` : 'status', 'GET'),
   scan: (scan: {
     scanId: string;
     method: ScanMethod;
@@ -132,6 +137,9 @@ export const doorApi = {
     scannedAt: string;
   }) => doorRequest<{ results: WireScanResult[] }>('scans', 'POST', { scans: [scan] }),
   search: (q: string) => doorRequest<{ results: WireSearchResult[] }>('search', 'POST', { q }),
+  /** ADR-053: what the gate did after "server disagrees". */
+  decide: (scanId: string, decision: 'turned_away' | 'let_in') =>
+    doorRequest<{ recorded: boolean }>('decisions', 'POST', { scanId, decision }),
   undo: (scanId: string, reason: DoorUndoReason) =>
     doorRequest<{ ok: true }>('undo', 'POST', { scanId, reason }),
   list: () => doorRequest<OfflineList>('list', 'GET', undefined, BACKGROUND_TIMEOUT_MS),

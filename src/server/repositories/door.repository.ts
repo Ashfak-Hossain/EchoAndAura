@@ -5,6 +5,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   ilike,
   isNotNull,
   isNull,
@@ -14,7 +15,15 @@ import {
 } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { DbExecutor } from '@/db/executor';
-import { doorPasses, doorScans, events, orders, ticketTypes, tickets } from '@/db/schema';
+import {
+  doorDecisions,
+  doorPasses,
+  doorScans,
+  events,
+  orders,
+  ticketTypes,
+  tickets,
+} from '@/db/schema';
 import { DoorPassCodeCollisionError, DoorScanIdTakenError } from '@/server/lib/errors';
 import { isUniqueViolation } from '@/server/lib/pg-errors';
 
@@ -28,6 +37,33 @@ import { isUniqueViolation } from '@/server/lib/pg-errors';
 export type DoorPassRecord = typeof doorPasses.$inferSelect;
 export type DoorScanRecord = typeof doorScans.$inferSelect;
 export type NewDoorScan = typeof doorScans.$inferInsert;
+export type DoorDecision = (typeof doorDecisions.$inferSelect)['decision'];
+
+/** A check-in another gate (or the admin) made: what door phones share (ADR-053). */
+export interface CheckInRow {
+  ticketId: string;
+  at: Date;
+  gate: string | null;
+}
+
+/**
+ * A "server disagrees" alert a gate answered (ADR-053): the phone showed
+ * ADMIT from its list, the server refused the ticket, staff chose.
+ */
+export interface RaceDecisionRow {
+  scanId: string;
+  gate: string;
+  decision: DoorDecision;
+  decidedAt: Date;
+  result: DoorScanRecord['result'];
+  receivedAt: Date;
+  ticketId: string | null;
+  orderId: string | null;
+  attendeeName: string | null;
+  ticketTypeName: string | null;
+  priorCheckedInAt: Date | null;
+  priorCheckedInBy: string | null;
+}
 
 /** One ticket as the door sees it, with everything a result screen shows. */
 export interface DoorTicket {
@@ -166,6 +202,21 @@ export interface DoorRepository {
    */
   offlineConflicts(eventId: string): Promise<OfflineConflictRow[]>;
   counts(eventId: string): Promise<{ issued: number; checkedIn: number }>;
+  /**
+   * Check-ins of the event made after `since` (by check-in time), oldest
+   * first, at most `limit`: what door phones add to their lists between
+   * downloads, so a ticket used at one gate is caught at the next.
+   */
+  checkInsSince(eventId: string, since: Date, limit: number): Promise<CheckInRow[]>;
+  /** Records a gate's answer. False when this scan already has one (a retry). */
+  insertDecision(values: {
+    scanId: string;
+    passId: string;
+    eventId: string;
+    decision: DoorDecision;
+  }): Promise<boolean>;
+  /** Admin: every answered "server disagrees" alert of the event, oldest first. */
+  raceDecisions(eventId: string): Promise<RaceDecisionRow[]>;
   /** Tickets still checked in by one of this pass's scans (revoke-and-undo). */
   ticketsCheckedInByPass(
     passId: string,
@@ -396,6 +447,54 @@ export const doorRepository: DoorRepository = {
         ),
       )
       .orderBy(asc(doorScans.receivedAt));
+  },
+
+  async checkInsSince(eventId, since, limit) {
+    const rows = await db
+      .select({ ticketId: tickets.id, at: tickets.checkedInAt, gate: tickets.checkedInBy })
+      .from(tickets)
+      .where(and(eq(tickets.eventId, eventId), gt(tickets.checkedInAt, since)))
+      .orderBy(asc(tickets.checkedInAt))
+      .limit(limit);
+    // `> since` already leaves out the tickets that are not checked in.
+    return rows.flatMap((r) => (r.at ? [{ ticketId: r.ticketId, at: r.at, gate: r.gate }] : []));
+  },
+
+  async insertDecision(values) {
+    const rows = await db
+      .insert(doorDecisions)
+      .values(values)
+      .onConflictDoNothing({ target: doorDecisions.scanId })
+      .returning({ id: doorDecisions.id });
+    return rows.length === 1;
+  },
+
+  raceDecisions(eventId) {
+    return db
+      .select({
+        scanId: doorDecisions.scanId,
+        gate: doorPasses.label,
+        decision: doorDecisions.decision,
+        decidedAt: doorDecisions.decidedAt,
+        result: doorScans.result,
+        receivedAt: doorScans.receivedAt,
+        ticketId: doorScans.ticketId,
+        orderId: tickets.orderId,
+        attendeeName: tickets.attendeeName,
+        ticketTypeName: ticketTypes.name,
+        priorCheckedInAt: doorScans.priorCheckedInAt,
+        priorCheckedInBy: doorScans.priorCheckedInBy,
+      })
+      .from(doorDecisions)
+      .innerJoin(doorScans, eq(doorScans.scanId, doorDecisions.scanId))
+      .innerJoin(doorPasses, eq(doorPasses.id, doorDecisions.passId))
+      .leftJoin(
+        tickets,
+        and(eq(tickets.id, doorScans.ticketId), eq(tickets.eventId, doorScans.eventId)),
+      )
+      .leftJoin(ticketTypes, eq(ticketTypes.id, tickets.ticketTypeId))
+      .where(eq(doorDecisions.eventId, eventId))
+      .orderBy(asc(doorDecisions.decidedAt));
   },
 
   async counts(eventId) {

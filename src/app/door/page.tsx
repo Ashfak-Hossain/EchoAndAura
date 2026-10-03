@@ -17,6 +17,7 @@ export default async function DoorPage() {
         ...status,
         serverTime: status.serverTime.toISOString(),
         recent: status.recent.map((r) => ({ ...r, at: r.at.toISOString() })),
+        checkIns: status.checkIns.map((c) => ({ ...c, at: c.at.toISOString() })),
         event: { title: ctx.event.title, startsAt: ctx.event.startsAt.toISOString() },
         gate: ctx.pass.label,
         validFrom: ctx.window.validFrom.toISOString(),

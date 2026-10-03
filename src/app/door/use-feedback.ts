@@ -14,7 +14,8 @@ import { isIos } from './platform';
  * Android-only (iOS Safari has no Vibration API).
  */
 
-export type FeedbackKind = 'read' | 'admit' | 'warn' | 'deny' | 'practice' | 'retry' | 'slow';
+export type FeedbackKind =
+  'read' | 'admit' | 'warn' | 'deny' | 'practice' | 'retry' | 'slow' | 'siren';
 
 interface Tone {
   freq: number;
@@ -43,6 +44,13 @@ const TONES: Record<FeedbackKind, Tone[]> = {
     { freq: 400, ms: 200 },
     { freq: 400, ms: 200 },
   ],
+  // ADR-053 "server disagrees": two tones, repeated until staff answer.
+  siren: [
+    { freq: 960, ms: 250 },
+    { freq: 770, ms: 250 },
+    { freq: 960, ms: 250 },
+    { freq: 770, ms: 250 },
+  ],
 };
 
 const VIBRATE: Record<FeedbackKind, number[]> = {
@@ -53,6 +61,7 @@ const VIBRATE: Record<FeedbackKind, number[]> = {
   deny: [500],
   retry: [120, 80, 120, 80, 120],
   slow: [200, 100, 200],
+  siren: [500, 200, 500],
 };
 const GAP_MS = 70;
 const VOLUME = 0.35;

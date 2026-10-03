@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   CheckInUndoRefusedError,
+  DoorDecisionRefusedError,
   DoorPassCodeCollisionError,
   DoorPassNotAllowedError,
   DoorPassNotFoundError,
@@ -834,5 +835,66 @@ describe('doorService.offlineList (ADR-034)', () => {
     const b = await svc.offlineList(await ctx(CODE_A));
     expect(a.salt).not.toBe(b.salt);
     expect(a.entries[0]!.d).not.toBe(b.entries[0]!.d);
+  });
+});
+
+describe('doorService race: decisions and shared check-ins (ADR-053)', () => {
+  it('records what a gate did after the server refused its early admit — once, no check-in', async () => {
+    const { svc, db, ctx, tickets } = await setup();
+    await svc.scan(await ctx(CODE_B), typed(tickets[0]!.code)); // Gate B admits first
+    const late = typed(tickets[0]!.code);
+    const answer = await svc.scan(await ctx(CODE_A), late); // Gate A's request: already in
+    expect(answer.result).toBe('already_in');
+
+    expect(await svc.decide(await ctx(CODE_A), late.scanId, 'let_in')).toEqual({ recorded: true });
+    // A retried request changes nothing.
+    expect(await svc.decide(await ctx(CODE_A), late.scanId, 'turned_away')).toEqual({
+      recorded: false,
+    });
+    const rows = await svc.raceDecisions('ev-1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      scanId: late.scanId,
+      gate: 'Gate A',
+      decision: 'let_in',
+      result: 'already_in',
+      attendeeName: 'Nusrat Jahan',
+      priorCheckedInBy: 'Gate B',
+    });
+    // Let in anyway is a record, never a second check-in.
+    expect(db.state.tickets[0]!.checkedInBy).toBe('Gate B');
+  });
+
+  it("refuses an answer for another gate's scan, an admitted scan, an unknown or old one", async () => {
+    const { svc, ctx, clock, tickets } = await setup();
+    const admitted = typed(tickets[0]!.code);
+    await svc.scan(await ctx(CODE_A), admitted);
+    await expect(svc.decide(await ctx(CODE_A), admitted.scanId, 'let_in')).rejects.toMatchObject({
+      reason: 'not_refused',
+    });
+    const refused = typed(tickets[0]!.code);
+    await svc.scan(await ctx(CODE_A), refused);
+    await expect(svc.decide(await ctx(CODE_B), refused.scanId, 'let_in')).rejects.toMatchObject({
+      reason: 'not_yours',
+    });
+    await expect(svc.decide(await ctx(CODE_A), sid(), 'let_in')).rejects.toBeInstanceOf(
+      DoorDecisionRefusedError,
+    );
+    clock.at = new Date(clock.at.getTime() + 10 * 60_000 + 1);
+    await expect(
+      svc.decide(await ctx(CODE_A), refused.scanId, 'turned_away'),
+    ).rejects.toMatchObject({ reason: 'too_late' });
+    expect(await svc.raceDecisions('ev-1')).toEqual([]);
+  });
+
+  it('sends the check-ins made since the phone last asked, at any gate', async () => {
+    const { svc, ctx, tickets } = await setup();
+    expect((await svc.status(await ctx(CODE_A))).checkIns).toEqual([]);
+    await svc.scan(await ctx(CODE_B), typed(tickets[1]!.code));
+    const before = new Date(NOW.getTime() - 1_000);
+    const { checkIns } = await svc.status(await ctx(CODE_A), before);
+    expect(checkIns).toEqual([{ ticketId: tickets[1]!.id, at: NOW, gate: 'Gate B' }]);
+    // Asked after it: nothing new.
+    expect((await svc.status(await ctx(CODE_A), NOW)).checkIns).toEqual([]);
   });
 });

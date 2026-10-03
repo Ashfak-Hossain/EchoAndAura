@@ -47,4 +47,4 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 -- the answer to "why was this order rejected" (invariant 6) and "who let
 -- this person in" can't be rewritten by the app, even by a bug or an
 -- injection. A new append-only table goes in this list.
-REVOKE UPDATE, DELETE, TRUNCATE ON order_events, door_scans FROM echoandaura_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON order_events, door_scans, door_decisions FROM echoandaura_app;
