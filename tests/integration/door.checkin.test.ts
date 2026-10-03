@@ -57,6 +57,8 @@ describe('doorService (Postgres)', () => {
     'Two Phones',
     'Offline Time',
     'Superseded',
+    // ADR-053 race.
+    'Race Decision',
   ];
   // Letters from the ticket alphabet only (no I, L, O, 0, 1) — anything
   // else is, correctly, NOT A VALID TICKET to the scanner.
@@ -72,6 +74,7 @@ describe('doorService (Postgres)', () => {
     'TWPH',
     'FTME',
     'SPRS',
+    'RCDC',
   ].map((c) => `TKT-${c}${tag}`);
   // Another event with one ticket, for the wrong-event scan.
   const otherEventId = randomUUID();
@@ -215,7 +218,9 @@ describe('doorService (Postgres)', () => {
   });
 
   afterAll(async () => {
-    // Every door foreign key is RESTRICT: the log goes first, then the passes.
+    // Every door foreign key is RESTRICT: the decisions and the log go
+    // first, then the passes.
+    await db.delete(schema.doorDecisions).where(eq(schema.doorDecisions.eventId, eventId));
     await db.delete(schema.doorScans).where(eq(schema.doorScans.eventId, eventId));
     await db.delete(schema.doorPasses).where(eq(schema.doorPasses.eventId, eventId));
     await db.delete(schema.orders).where(eq(schema.orders.id, orderId)); // tickets, audit cascade
@@ -413,6 +418,38 @@ describe('doorService (Postgres)', () => {
     const passes = await door.listPasses((await eventsRepository.findById(eventId))!);
     expect(passes.find((p) => p.pass.label === 'Gate L')?.state).toBe('revoked');
   });
+  describe('race decisions and shared check-ins (ADR-053)', () => {
+    it('hands a phone the check-ins since it last asked, and records one answer per refusal', async () => {
+      const since = new Date(Date.now() - 1_000);
+      const first = await scan(gateB, codes[11]!);
+      expect(first.result).toBe('admitted');
+      const shared = await doorRepository.checkInsSince(eventId, since, 500);
+      expect(shared).toContainEqual({
+        ticketId: ticketIds[11],
+        at: (await ticketRow(11)).checkedInAt,
+        gate: 'Gate B',
+      });
+
+      // Gate A's phone admitted from its list; its request then found the ticket in.
+      const late = await scan(gateA, codes[11]!);
+      expect(late.result).toBe('already_in');
+      expect(await door.decide(gateA, late.scanId, 'turned_away')).toEqual({ recorded: true });
+      // UNIQUE scan id: a retry is a no-op, never a second row.
+      expect(await door.decide(gateA, late.scanId, 'let_in')).toEqual({ recorded: false });
+      const rows = (await door.raceDecisions(eventId)).filter((r) => r.scanId === late.scanId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        gate: 'Gate A',
+        decision: 'turned_away',
+        result: 'already_in',
+        attendeeName: 'Race Decision',
+        priorCheckedInBy: 'Gate B',
+      });
+      // A decision is never a check-in.
+      expect((await ticketRow(11)).checkedInBy).toBe('Gate B');
+    });
+  });
+
   describe('offline sync (ADR-034)', () => {
     let gateC: DoorContext;
     let gateD: DoorContext;

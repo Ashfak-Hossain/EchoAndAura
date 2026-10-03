@@ -176,6 +176,13 @@
       "when": 1790962827574,
       "tag": "0024_admin_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791057234669,
+      "tag": "0025_door_decisions",
+      "breakpoints": true
     }
   ]
 }

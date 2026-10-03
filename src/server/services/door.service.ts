@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { DbExecutor } from '@/db/executor';
 import {
   CheckInUndoRefusedError,
+  DoorDecisionRefusedError,
   DoorPassCodeCollisionError,
   DoorPassNotAllowedError,
   DoorPassNotFoundError,
@@ -32,11 +33,13 @@ import { logger } from '@/server/lib/logger';
 import { formatDhakaClock } from '@/lib/time';
 import { parseScanToken, scanLogInput } from '@/server/lib/scan-token';
 import type {
+  DoorDecision,
   DoorPassRecord,
   DoorRepository,
   DoorScanRecord,
   DoorTicket,
   NewDoorScan,
+  RaceDecisionRow,
 } from '@/server/repositories/door.repository';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
 import type { OrdersRepository } from '@/server/repositories/orders.repository';
@@ -59,6 +62,10 @@ import type { TicketsRepository } from '@/server/repositories/tickets.repository
 export const PASS_CODE_ATTEMPTS = 3;
 export const DOOR_SEARCH_LIMIT = 10;
 export const DOOR_RECENT_SCANS = 10;
+/** Check-ins sent with one status ping (ADR-053): a busy gate's few seconds, with room. */
+export const DOOR_CHECKINS_LIMIT = 500;
+/** How long after a scan its gate may still record what it did about a refusal. */
+export const DOOR_DECISION_WINDOW_MS = 10 * 60_000;
 
 export type ScanMethod = 'qr' | 'typed' | 'search';
 
@@ -156,11 +163,23 @@ export interface DoorRecentScan {
   undoable: boolean;
 }
 
+/** A check-in made at any gate (or by the admin): what door phones share (ADR-053). */
+export interface DoorCheckIn {
+  ticketId: string;
+  at: Date;
+  gate: string | null;
+}
+
 export interface DoorStatus {
   issued: number;
   checkedIn: number;
   practice: boolean;
   recent: DoorRecentScan[];
+  /**
+   * Check-ins after the `since` the phone asked with, oldest first (empty
+   * when it did not ask): how a ticket used at one gate is caught at the next.
+   */
+  checkIns: DoorCheckIn[];
   /** The server's clock: the door phone keeps its offline clock offset fresh with it. */
   serverTime: Date;
 }
@@ -704,10 +723,11 @@ export function createDoorService({
       );
     },
 
-    async status(ctx: DoorContext): Promise<DoorStatus> {
-      const [counts, recent] = await Promise.all([
+    async status(ctx: DoorContext, since?: Date): Promise<DoorStatus> {
+      const [counts, recent, checkIns] = await Promise.all([
         door.counts(ctx.event.id),
         door.recentScans(ctx.pass.id, DOOR_RECENT_SCANS),
+        since ? door.checkInsSince(ctx.event.id, since, DOOR_CHECKINS_LIMIT) : [],
       ]);
       const serverTime = now();
       const at = serverTime.getTime();
@@ -715,6 +735,7 @@ export function createDoorService({
         ...counts,
         practice: ctx.practice,
         serverTime,
+        checkIns,
         recent: recent.map((r) => ({
           scanId: r.scan.scanId,
           result: r.scan.result,
@@ -766,6 +787,42 @@ export function createDoorService({
         validUntil: ctx.window.validUntil.toISOString(),
         entries,
       };
+    },
+
+    /**
+     * ADR-053: what this gate did after its phone showed ADMIT from the
+     * offline list and the server then refused the ticket. Only a refusal
+     * of this pass's own recent scan can be answered; neither answer checks
+     * anyone in. `recorded` is false when this scan was answered before (a
+     * retried request).
+     * @throws DoorDecisionRefusedError
+     */
+    async decide(
+      ctx: DoorContext,
+      scanId: string,
+      decision: DoorDecision,
+    ): Promise<{ recorded: boolean }> {
+      const scan = await door.findScanByScanId(scanId);
+      if (!scan) throw new DoorDecisionRefusedError('not_found');
+      if (scan.passId !== ctx.pass.id) throw new DoorDecisionRefusedError('not_yours');
+      if (scan.result === 'admitted' || scan.result === 'practice_ok') {
+        throw new DoorDecisionRefusedError('not_refused');
+      }
+      if (now().getTime() - scan.receivedAt.getTime() > DOOR_DECISION_WINDOW_MS) {
+        throw new DoorDecisionRefusedError('too_late');
+      }
+      const recorded = await door.insertDecision({
+        scanId,
+        passId: ctx.pass.id,
+        eventId: ctx.event.id,
+        decision,
+      });
+      return { recorded };
+    },
+
+    /** Admin: every answered "server disagrees" alert of the event (ADR-053). */
+    async raceDecisions(eventId: string): Promise<RaceDecisionRow[]> {
+      return door.raceDecisions(eventId);
     },
 
     /** Admin: the event's double entries — offline admits the server could not honour. */

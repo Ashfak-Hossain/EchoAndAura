@@ -10,7 +10,13 @@ import {
 } from '@/server/lib/door-offline';
 import { SCAN_INPUT_MAX } from '@/server/lib/door-rules';
 import { parseScanToken } from '@/server/lib/scan-token';
-import { type SyncScan, type WireScanResult, type WireSearchResult, doorApi } from '../door-api';
+import {
+  type SyncScan,
+  type WireCheckIn,
+  type WireScanResult,
+  type WireSearchResult,
+  doorApi,
+} from '../door-api';
 import { type OfflineUndo, listCovers, localUndo } from './rules';
 import { type OfflineStore, type OutboxItem, type StoredList, openOfflineStore } from './store';
 
@@ -67,6 +73,22 @@ export interface OfflineApi {
   ): Promise<WireScanResult | null>;
   /** An online answer: remember a check-in the list does not know of yet. */
   learn(read: { raw?: string; ticketId?: string }, result: WireScanResult): Promise<void>;
+  /**
+   * ADR-053: judge one read from the list WITHOUT queueing it — the answer
+   * the race shows if the server is slow. Null when there is no usable list.
+   */
+  peek(raw: string): Promise<{ result: WireScanResult; ticketId: string | null } | null>;
+  /** The phone showed ADMIT before the server answered: this ticket is in, here. */
+  admitEarly(ticketId: string): void;
+  /** The server's late answer to an early ADMIT: confirm the mark, or correct it. */
+  settleEarly(ticketId: string, result: WireScanResult): void;
+  /**
+   * An early ADMIT whose request got no answer: queue it as an offline
+   * admit that replaces that request (same rules as ADR-034's).
+   */
+  queueEarlyAdmit(raw: string, method: 'qr' | 'typed', supersedesScanId: string): Promise<void>;
+  /** Check-ins other gates made (from the status ping): the next read here knows. */
+  learnCheckIns(rows: WireCheckIn[]): void;
   /** The server's clock from a status ping, to keep the offset fresh. */
   learnServerTime(serverTime: string, sentAt: number, receivedAt: number): void;
   undo(scanId: string): Promise<OfflineUndo>;
@@ -293,7 +315,10 @@ export function useOffline({
   useEffect(() => {
     const listTimer = setInterval(() => void refreshList(), LIST_EVERY_MS);
     const syncTimer = setInterval(() => {
-      if (outbox.current.length > 0) void sync();
+      // The phone itself knows it has no network (airplane mode, no bars):
+      // a try now cannot reach the server, and would mark the outbox as
+      // possibly sent — which ends a local undo (ADR-034) for nothing.
+      if (outbox.current.length > 0 && navigator.onLine !== false) void sync();
     }, SYNC_EVERY_MS);
     return () => {
       clearInterval(listTimer);
@@ -385,6 +410,115 @@ export function useOffline({
     [findEntry, gate, now],
   );
 
+  const peek = useCallback(
+    async (raw: string) => {
+      const current = list.current;
+      if (!current) return null;
+      const at = now();
+      if (at > Date.parse(current.list.validUntil)) return null;
+      const entry = await findEntry(raw);
+      const mark = entry ? marks.current.get(entry.id) : undefined;
+      const j = judgeOffline({
+        entry,
+        localAdmit: mark
+          ? { at: new Date(mark.at).toISOString(), gate: mark.gate, byThisPhone: mark.byThisPhone }
+          : null,
+        now: at,
+        validFrom: Date.parse(current.list.validFrom),
+      });
+      const admitted = j.result === 'admitted';
+      const result: WireScanResult = {
+        scanId: '',
+        result: j.result,
+        practice: j.practice,
+        attendeeName: entry?.name,
+        ticketTypeName: entry?.type,
+        position: entry?.pos,
+        total: entry?.of,
+        at: j.at ?? (admitted ? new Date(at).toISOString() : undefined),
+        gate: j.gate ?? (admitted ? gate : undefined),
+        byThisPass: j.byThisPhone,
+      };
+      return { result, ticketId: entry?.id ?? null };
+    },
+    [findEntry, gate, now],
+  );
+
+  const admitEarly = useCallback(
+    (ticketId: string) => {
+      marks.current.set(ticketId, { at: now(), gate, byThisPhone: true, knownSince: null });
+    },
+    [gate, now],
+  );
+
+  const settleEarly = useCallback(
+    (ticketId: string, result: WireScanResult) => {
+      const known = now();
+      if (result.result === 'admitted') {
+        const mark = marks.current.get(ticketId);
+        if (mark) mark.knownSince = known;
+      } else if (result.result === 'already_in') {
+        // In first somewhere else: that is what the next read must say.
+        marks.current.set(ticketId, {
+          at: result.at ? Date.parse(result.at) : known,
+          gate: result.gate ?? gate,
+          byThisPhone: result.byThisPass === true,
+          knownSince: known,
+        });
+      } else {
+        // Cancelled, or not a ticket after all: nobody is in on it.
+        marks.current.delete(ticketId);
+      }
+    },
+    [gate, now],
+  );
+
+  const queueEarlyAdmit = useCallback(
+    async (raw: string, method: 'qr' | 'typed', supersedesScanId: string) => {
+      if (!store.current) return;
+      const entry = await findEntry(raw);
+      const at = now();
+      const item: OutboxItem = {
+        scanId: crypto.randomUUID(),
+        passId,
+        method,
+        input: loggableInput(raw),
+        scannedAt: new Date(at).toISOString(),
+        // What the door showed — the early ADMIT — never re-judged: the
+        // phone's own mark for it would now say "already in".
+        verdict: 'admitted',
+        supersedesScanId,
+        ...(entry
+          ? { ticketId: entry.id, attendeeName: entry.name, ticketTypeName: entry.type }
+          : {}),
+      };
+      outbox.current = [...outbox.current, item];
+      await store.current.putOutbox(item);
+      bump();
+    },
+    [bump, findEntry, now, passId],
+  );
+
+  const learnCheckIns = useCallback(
+    (rows: WireCheckIn[]) => {
+      const current = list.current;
+      if (!current || rows.length === 0) return;
+      const known = now();
+      const onList = new Set(current.list.entries.map((e) => e.id));
+      for (const row of rows) {
+        // This phone's own marks (its admits, still unsent ones too) stand.
+        if (!onList.has(row.ticketId) || marks.current.has(row.ticketId)) continue;
+        marks.current.set(row.ticketId, {
+          at: Date.parse(row.at),
+          gate: row.gate ?? '?',
+          byThisPhone: row.gate === gate,
+          knownSince: known,
+        });
+      }
+    },
+    [gate, now],
+  );
+
   const learnServerTime = useCallback((serverTime: string, sentAt: number, receivedAt: number) => {
     const current = list.current;
     const t = Date.parse(serverTime);
@@ -458,6 +592,11 @@ export function useOffline({
     now,
     answer,
     learn,
+    peek,
+    admitEarly,
+    settleEarly,
+    queueEarlyAdmit,
+    learnCheckIns,
     learnServerTime,
     undo,
     search,

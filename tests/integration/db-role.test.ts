@@ -14,7 +14,7 @@ import { APP_ROLE as ROLE, LOCAL_APP_ROLE_PASSWORD } from '../e2e/prepare-db';
  * silently miss its grants; a new append-only table must be added both to
  * app-role.sql and to APPEND_ONLY here.
  */
-const APPEND_ONLY = new Set(['order_events', 'door_scans']);
+const APPEND_ONLY = new Set(['order_events', 'door_scans', 'door_decisions']);
 const ROLE_SQL = readFileSync('ops/db/app-role.sql', 'utf8');
 
 const ownerUrl = process.env.DATABASE_URL;
@@ -72,7 +72,7 @@ describe('the app database role (ADR-044)', () => {
   it('reads and writes every table, except rewriting the append-only ones', async () => {
     const tables = await publicTables();
     expect(tables).toEqual(
-      expect.arrayContaining(['orders', 'order_events', 'door_scans', 'two_factors']),
+      expect.arrayContaining(['orders', 'order_events', 'door_scans', 'door_decisions', 'two_factors']),
     );
     for (const table of tables) {
       for (const privilege of ['SELECT', 'INSERT']) {
@@ -94,6 +94,9 @@ describe('the app database role (ADR-044)', () => {
     );
     await expect(app`delete from order_events where false`).rejects.toThrow(/permission denied/);
     await expect(app`delete from door_scans where false`).rejects.toThrow(/permission denied/);
+    await expect(app`update door_decisions set decision = 'let_in' where false`).rejects.toThrow(
+      /permission denied/,
+    );
     await expect(app`truncate orders`).rejects.toThrow(/permission denied/);
     await expect(app`create table app_role_probe (id int)`).rejects.toThrow(/permission denied/);
     await expect(app`drop table orders`).rejects.toThrow(/must be owner/);

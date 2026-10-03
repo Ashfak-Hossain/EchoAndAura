@@ -370,6 +370,17 @@ export class CheckInUndoRefusedError extends DomainError {
 }
 
 /**
+ * ADR-053: a gate's answer to a "server disagrees" alert that cannot be
+ * recorded — no such scan, another gate's, too long ago, or one the
+ * server did not refuse (nothing to disagree about).
+ */
+export class DoorDecisionRefusedError extends DomainError {
+  constructor(public readonly reason: 'not_found' | 'not_yours' | 'too_late' | 'not_refused') {
+    super(`Door decision refused (${reason})`);
+  }
+}
+
+/**
  * The pass was revoked while this request was in flight: the scan
  * transaction locks the pass row first and found it revoked (ADR-030).
  */

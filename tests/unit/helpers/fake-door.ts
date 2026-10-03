@@ -1,6 +1,7 @@
 import type { DbExecutor } from '@/db/executor';
 import { DoorPassCodeCollisionError, DoorScanIdTakenError } from '@/server/lib/errors';
 import type {
+  DoorDecision,
   DoorPassRecord,
   DoorRepository,
   DoorScanRecord,
@@ -22,6 +23,13 @@ type FakeDb = ReturnType<typeof fakeDb>;
 export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => Date) {
   let passes: DoorPassRecord[] = [];
   let scans: DoorScanRecord[] = [];
+  const decisions: {
+    scanId: string;
+    passId: string;
+    eventId: string;
+    decision: DoorDecision;
+    decidedAt: Date;
+  }[] = [];
   let inTx = false;
   let n = 0;
 
@@ -218,6 +226,44 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
     async counts(eventId) {
       const issued = db.state.tickets.filter((t) => t.eventId === eventId && t.status === 'issued');
       return { issued: issued.length, checkedIn: issued.filter((t) => t.checkedInAt).length };
+    },
+    async checkInsSince(eventId, since, limit) {
+      return db.state.tickets
+        .filter((t) => t.eventId === eventId && t.checkedInAt && t.checkedInAt > since)
+        .sort((a, b) => a.checkedInAt!.getTime() - b.checkedInAt!.getTime())
+        .slice(0, limit)
+        .map((t) => ({ ticketId: t.id, at: t.checkedInAt!, gate: t.checkedInBy }));
+    },
+    async insertDecision(values) {
+      // UNIQUE scan_id, ON CONFLICT DO NOTHING.
+      if (decisions.some((d) => d.scanId === values.scanId)) return false;
+      decisions.push({ ...values, decidedAt: clock() });
+      return true;
+    },
+    async raceDecisions(eventId) {
+      return decisions
+        .filter((d) => d.eventId === eventId)
+        .flatMap((d) => {
+          const s = scans.find((x) => x.scanId === d.scanId);
+          if (!s) return [];
+          const t = db.state.tickets.find((x) => x.id === s.ticketId && x.eventId === s.eventId);
+          return [
+            {
+              scanId: d.scanId,
+              gate: passes.find((p) => p.id === d.passId)?.label ?? '',
+              decision: d.decision,
+              decidedAt: d.decidedAt,
+              result: s.result,
+              receivedAt: s.receivedAt,
+              ticketId: s.ticketId,
+              orderId: t?.orderId ?? null,
+              attendeeName: t?.attendeeName ?? null,
+              ticketTypeName: t ? (db.state.types.get(t.ticketTypeId)?.name ?? null) : null,
+              priorCheckedInAt: s.priorCheckedInAt,
+              priorCheckedInBy: s.priorCheckedInBy,
+            },
+          ];
+        });
     },
     async ticketsCheckedInByPass(passId, tx) {
       poolRule(tx, 'ticketsCheckedInByPass');

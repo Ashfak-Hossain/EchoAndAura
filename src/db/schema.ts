@@ -397,6 +397,10 @@ export const doorScanMode = pgEnum('door_scan_mode', ['online', 'offline', 'prac
 // answer, and an offline `admitted` whose result is not `admitted` is a
 // double entry the organizer sees on the check-in page.
 export const doorVerdict = pgEnum('door_verdict', ['admitted', 'refused', 'practice', 'undone']);
+// ADR-053: what gate staff did after the phone showed ADMIT from its own
+// list and the server then refused the ticket (already in elsewhere,
+// cancelled…). Neither choice checks anyone in.
+export const doorDecision = pgEnum('door_decision', ['turned_away', 'let_in']);
 
 // One pass per gate per event. The code is the bearer secret a door phone
 // signs in with (~59 bits, so guessing is not a practical attack); it is
@@ -470,6 +474,33 @@ export const doorScans = pgTable(
       sql`(${t.mode} = 'offline') = (${t.doorVerdict} IS NOT NULL)`,
     ),
   ],
+);
+
+// Append-only (ADR-053): one row per "server disagrees" alert a gate
+// answered. The phone showed ADMIT before the server's answer (the race);
+// the server's own answer is the scan's `result`. "Let them in anyway" is a
+// record of what happened at the gate, never a second check-in.
+export const doorDecisions = pgTable(
+  'door_decisions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // One answer per alert: a retried request changes nothing.
+    scanId: uuid('scan_id')
+      .notNull()
+      .unique()
+      .references(() => doorScans.scanId, { onDelete: 'restrict' }),
+    passId: uuid('pass_id')
+      .notNull()
+      .references(() => doorPasses.id, { onDelete: 'restrict' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'restrict' }),
+    decision: doorDecision('decision').notNull(),
+    decidedAt: timestamp('decided_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [index('door_decisions_event_id_idx').on(t.eventId)],
 );
 
 // ---------------------------------------------------------------------------

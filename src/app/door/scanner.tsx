@@ -44,6 +44,7 @@ import {
 import { parseScanToken } from '@/server/lib/scan-token';
 import type { ScanMethod } from '@/server/services/door.service';
 import {
+  type DoorReply,
   type WireRecentScan,
   type WireScanResult,
   type WireSearchResult,
@@ -51,6 +52,7 @@ import {
   doorApi,
 } from './door-api';
 import { loadFallbackDecoder, loadQrDetector } from './decoder';
+import { DisagreeAlert } from './disagree-alert';
 import { DoorSearch } from './door-search';
 import { forgetPageOffline, keepPageOffline } from './offline/keep-page';
 import { type OfflineApi, useOffline } from './offline/use-offline';
@@ -89,7 +91,16 @@ import { useFeedback } from './use-feedback';
 
 const SEEN_WINDOW_MS = 1_500;
 const RETRY_REUSE_MS = 2 * 60_000;
-const STATUS_EVERY_MS = 15_000;
+/** The status ping, which also brings other gates' check-ins (ADR-053). */
+const STATUS_EVERY_MS = 5_000;
+/**
+ * ADR-053: how long a scan the phone's own list would admit waits for the
+ * server before the phone shows ADMIT itself. Refusals always wait for the
+ * server: a stale list must never turn away a valid ticket.
+ */
+const RACE_MS = 400;
+/** Re-asks a little before the last answer: a check-in committed meanwhile is never missed. */
+const CHECKINS_OVERLAP_MS = 10_000;
 const WEDGE_KEY_GAP_MS = 300;
 const IOS_CHECKLIST_KEY = 'door:ios-checklist';
 
@@ -126,6 +137,14 @@ const VERDICT_LABEL: Record<string, string> = {
   practice: 'Practice · offline, not sent yet',
   undone: 'Undone · offline, not sent yet',
 };
+
+/** ADR-053: an early ADMIT the server refused, waiting for staff to answer. */
+interface Disagreement {
+  scanId: string;
+  result: WireScanResult;
+  /** When this phone showed ADMIT (HH:MM, Dhaka). */
+  admittedAt: string;
+}
 
 /** A row of "Last scans here": the server's, or one still in the outbox. */
 type RecentRow = WireRecentScan & { offline?: boolean };
@@ -252,7 +271,20 @@ export function Scanner({
   // The hook's functions are stable; the object around them is not. The
   // scan path must only depend on stable ones, or the handheld-scanner
   // listener would re-subscribe on every render and drop a code mid-read.
-  const { answer: judgeOffline, learn: learnOnline, now: correctedNow } = offline;
+  const {
+    answer: judgeOffline,
+    learn: learnOnline,
+    now: correctedNow,
+    peek: peekOffline,
+    admitEarly,
+    settleEarly,
+    queueEarlyAdmit,
+    learnCheckIns,
+  } = offline;
+  /** ADR-053: early ADMITs the server then refused — each needs staff to answer. */
+  const [disagreements, setDisagreements] = useState<Disagreement[]>([]);
+  /** The check-ins already asked for: the next ping asks for those after this. */
+  const checkInsSince = useRef<string | null>(null);
 
   const goOffline = useCallback((on: boolean) => {
     offlineModeRef.current = on;
@@ -262,10 +294,18 @@ export function Scanner({
   const refresh = useCallback(async () => {
     const seq = ++statusSeq.current;
     const sentAt = Date.now();
-    const reply = await doorApi.status();
+    // Other gates' check-ins since the last ask, or since the list was made.
+    const since = checkInsSince.current ?? offlineRef.current?.listAt ?? undefined;
+    const reply = await doorApi.status(since);
     if (seq !== statusSeq.current) return;
     if (reply.ok) {
       offlineRef.current?.learnServerTime(reply.data.serverTime, sentAt, Date.now());
+      if (since) {
+        learnCheckIns(reply.data.checkIns);
+        checkInsSince.current = new Date(
+          Date.parse(reply.data.serverTime) - CHECKINS_OVERLAP_MS,
+        ).toISOString();
+      }
       setStatus(reply.data);
       setOnline(true);
       goOffline(false);
@@ -295,7 +335,7 @@ export function Scanner({
       // must not wait out a request that cannot answer.
       if (!pinged.current) goOffline(true);
     }
-  }, [onSignedOut, goOffline]);
+  }, [onSignedOut, goOffline, learnCheckIns]);
 
   const show = useCallback(
     (next: Overlay) => {
@@ -332,6 +372,52 @@ export function Scanner({
     [judgeOffline, show],
   );
 
+  /**
+   * ADR-053: the server's answer to a scan the phone already admitted. An
+   * ADMIT confirms it; a refusal (in first at another gate, cancelled…)
+   * raises the "server disagrees" alert; no answer turns it into an
+   * offline admit that replaces the request, as ADR-034 would have.
+   */
+  const confirmEarly = useCallback(
+    async (
+      scan: PendingScan,
+      request: Promise<DoorReply<{ results: WireScanResult[] }>>,
+      ticketId: string,
+      input: string,
+      method: 'qr' | 'typed',
+    ) => {
+      const admittedAt = formatDhakaClock(new Date(correctedNow()));
+      const reply = await request;
+      if (reply.ok) {
+        setOnline(true);
+        goOffline(false);
+        const result = reply.data.results[0];
+        if (!result) return;
+        settleEarly(ticketId, result);
+        if (result.result !== 'admitted') {
+          setDisagreements((list) => [...list, { scanId: scan.scanId, result, admittedAt }]);
+        }
+        void refresh();
+        return;
+      }
+      if (reply.kind === 'signed_out') {
+        onSignedOut(reply.message);
+        return;
+      }
+      if (reply.kind === 'refused') {
+        setNotice('That admit could not be recorded — note their name for the organizer.');
+        return;
+      }
+      // No answer, or told to slow down: the admit stands and is sent later.
+      await queueEarlyAdmit(input, method, scan.scanId);
+      if (reply.kind === 'network') {
+        setOnline(false);
+        goOffline(true);
+      }
+    },
+    [goOffline, settleEarly, refresh, onSignedOut, queueEarlyAdmit, correctedNow],
+  );
+
   const send = useCallback(
     async (scan: PendingScan, viaRetry = false) => {
       busyRef.current = true;
@@ -346,7 +432,15 @@ export function Scanner({
         done();
         return;
       }
-      const reply = await doorApi.scan({
+      // ADR-053: the phone's own list first — one hash, well under a
+      // millisecond. Only a read it would ADMIT races the server; a retry,
+      // a name search (digits are checked only there) and every refusal
+      // wait for the server's answer.
+      const local =
+        !viaRetry && scan.input !== undefined && scan.method !== 'search'
+          ? await peekOffline(scan.input)
+          : null;
+      const request = doorApi.scan({
         scanId: scan.scanId,
         method: scan.method,
         input: scan.input,
@@ -354,6 +448,24 @@ export function Scanner({
         phoneLast3: scan.phoneLast3,
         scannedAt: new Date(correctedNow()).toISOString(),
       });
+      if (local?.ticketId && local.result.result === 'admitted' && scan.input !== undefined) {
+        const first = await Promise.race([
+          request,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), RACE_MS)),
+        ]);
+        if (first === null) {
+          // The server is slow: let them in now, and check behind them.
+          const ticketId = local.ticketId;
+          const input = scan.input;
+          const method = scan.method === 'typed' ? 'typed' : 'qr';
+          admitEarly(ticketId);
+          done();
+          show({ kind: 'result', result: { ...local.result, scanId: scan.scanId } });
+          void confirmEarly(scan, request, ticketId, input, method);
+          return;
+        }
+      }
+      const reply = await request;
       // No answer: judge it offline, naming this request — if it did land,
       // the server knows the offline admit is the same person.
       if (!reply.ok && reply.kind === 'network' && (await answerOffline(scan, scan.scanId))) {
@@ -398,7 +510,18 @@ export function Scanner({
       setOnline(false);
       show({ kind: 'not_recorded', canRetry: true });
     },
-    [onSignedOut, refresh, show, answerOffline, correctedNow, learnOnline, goOffline],
+    [
+      onSignedOut,
+      refresh,
+      show,
+      answerOffline,
+      correctedNow,
+      learnOnline,
+      goOffline,
+      peekOffline,
+      admitEarly,
+      confirmEarly,
+    ],
   );
 
   const submit = useCallback(
@@ -496,8 +619,8 @@ export function Scanner({
 
   useEffect(() => {
     // Every sheet covers the viewfinder (with a backdrop): nothing is admitted behind it.
-    modalOpen.current = panel !== 'none' || undoFor !== null;
-  }, [panel, undoFor]);
+    modalOpen.current = panel !== 'none' || undoFor !== null || disagreements.length > 0;
+  }, [panel, undoFor, disagreements.length]);
 
   // Sound needs a gesture: take the first one of any kind, so a gate that
   // only types codes or uses a handheld (and never taps Start) still beeps.
@@ -1277,6 +1400,28 @@ export function Scanner({
             </button>
           </section>
         </>
+      ) : null}
+      {disagreements[0] ? (
+        <DisagreeAlert
+          key={disagreements[0].scanId}
+          result={disagreements[0].result}
+          admittedAt={disagreements[0].admittedAt}
+          play={play}
+          onAnswer={async (decision) => {
+            const d = disagreements[0]!;
+            const reply = await doorApi.decide(d.scanId, decision);
+            setDisagreements((list) => list.filter((x) => x.scanId !== d.scanId));
+            if (reply.ok) return;
+            if (reply.kind === 'signed_out') {
+              onSignedOut(reply.message);
+              return;
+            }
+            const who = d.result.attendeeName ?? 'this ticket';
+            setNotice(
+              `Not recorded (${reply.kind === 'network' ? 'no signal' : 'refused'}) — tell the organizer: ${who}, ${decision === 'let_in' ? 'let in anyway' : 'turned away'}.`,
+            );
+          }}
+        />
       ) : null}
     </main>
   );

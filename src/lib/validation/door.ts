@@ -74,6 +74,17 @@ export const doorUndoSchema = z.object({
   reason: z.enum(undoReasons),
 });
 
+/** ADR-053: what the gate did after "server disagrees". */
+export const doorDecisionSchema = z.object({
+  scanId: z.uuid(),
+  decision: z.enum(['turned_away', 'let_in']),
+});
+
+/** The status ping's `since`: check-ins after it come back (ADR-053). */
+export const doorStatusQuerySchema = z.object({
+  since: z.iso.datetime({ offset: true }).optional(),
+});
+
 export const gatePassFormSchema = z.object({
   label: z
     .string({ error: 'Name the gate, e.g. Gate A.' })
