@@ -9,8 +9,10 @@ mail for `hello@` (**Email Routing**), holds event cover images
 exists is in the table below — if a record is not here, it should not be
 in the zone. `pnpm infra:check` resolves each one.
 
-Sign-in: Bitwarden item `Cloudflare`. 2FA is on. There is one account
-and one zone; no API tokens exist yet (R2 will add one).
+Sign-in: one account and one zone, owned by Raj's login (Bitwarden item
+`Cloudflare`). Since 2026-10-03 the developer is a member with their own
+login (Super Administrator, own 2FA): no shared password, and the audit
+log shows who changed what. Both logins have 2FA.
 
 ---
 
@@ -419,3 +421,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-02 | Turnstile widget `echoandaura forms` (`echoandaura.com`, Managed, no pre-clearance), keys in Bitwarden + Dokploy (ADR-048)                                                                                                                                                                                                                                                                                                                                                         |
 | 2026-10-03 | Zero Trust team `echoandaura.cloudflareaccess.com`; identity provider One-time PIN (apps use it only, instant auth); service token `github-deploy` → GitHub secrets; Access app `Dokploy` (`deploy.echoandaura.com`, policies `developer` + `github deploy`, 1 week; a Run workflow deploy got through); Access app `Admin` (`echoandaura.com/admin`, policy `admins`, 1 week); `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` in Dokploy → origin check on, sign-in verified (ADR-050) |
 | 2026-10-03 | WAF `block scanners` (on, probes answer 403) and `emergency - outside Bangladesh` (off); DNSSEC enabled; DS record published the same day (`dig +short DS echoandaura.com` answers, key tag 2371)                                                                                                                                                                                                                                                                                  |
+| 2026-10-03 | Members: developer added with their own login (Super Administrator) instead of sharing Raj's; both logins 2FA; API tokens reviewed (S4)                                                                                                                                                                                                                                                                                                                                            |

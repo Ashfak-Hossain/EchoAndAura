@@ -20,6 +20,9 @@ const REGION = 'ap-south-1';
 const DOMAIN = 'echoandaura.com';
 /** Bounce + complaint notifications for the domain identity (AWS.md § SES). */
 const SES_FEEDBACK_TOPIC = `arn:aws:sns:${REGION}:${ACCOUNT}:ses-feedback`;
+/** Off-site backup copy (AWS.md § S3 off-site backups, ADR-051). */
+const OFFSITE_BUCKET = 'echoandaura-offsite-backups';
+const OFFSITE_USER = 'echoandaura-offsite-backups-dokploy';
 /** The production VPS (docs/infra/SERVER.md). */
 const SERVER_IPV4 = '160.25.226.166';
 const DKIM_TOKENS = [
@@ -181,6 +184,54 @@ const checks: Check[] = [
     };
     const names = r.AttachedPolicies.map((p) => p.PolicyName);
     return names.length === 0 ? pass('none attached') : fail(`attached: ${names.join(', ')}`);
+  }),
+  // ---- AWS: off-site backups (AWS.md § S3 off-site backups, ADR-051) ----
+  awsCheck('off-site backup bucket is private, versioned, 35-day expiry', async () => {
+    const bucket = ['--bucket', OFFSITE_BUCKET];
+    const versioning = (await aws(['s3api', 'get-bucket-versioning', ...bucket])) as {
+      Status?: string;
+    } | null;
+    const block = (await aws(['s3api', 'get-public-access-block', ...bucket])) as {
+      PublicAccessBlockConfiguration: Record<string, boolean>;
+    };
+    const lifecycle = (await aws(['s3api', 'get-bucket-lifecycle-configuration', ...bucket])) as {
+      Rules: { Status: string; Expiration?: { Days?: number } }[];
+    };
+    if (versioning?.Status !== 'Enabled') return fail('versioning is not enabled');
+    if (!Object.values(block.PublicAccessBlockConfiguration).every(Boolean))
+      return fail('a public-access block is off');
+    const days = lifecycle.Rules.find((r) => r.Status === 'Enabled' && r.Expiration?.Days)
+      ?.Expiration?.Days;
+    return days === 35 ? pass('versioned · blocked · 35 days') : fail(`expiry: ${days ?? 'none'}`);
+  }),
+  awsCheck('off-site backup key: exactly one active, can upload, cannot delete', async () => {
+    const keys = (await aws(['iam', 'list-access-keys', '--user-name', OFFSITE_USER])) as {
+      AccessKeyMetadata: { Status: string }[];
+    };
+    const active = keys.AccessKeyMetadata.filter((k) => k.Status === 'Active').length;
+    if (active !== 1) return fail(`${active} active (rotation in progress?)`);
+    const sim = (await aws([
+      'iam',
+      'simulate-principal-policy',
+      '--policy-source-arn',
+      `arn:aws:iam::${ACCOUNT}:user/${OFFSITE_USER}`,
+      '--action-names',
+      's3:PutObject',
+      's3:DeleteObject',
+      's3:DeleteObjectVersion',
+      '--resource-arns',
+      `arn:aws:s3:::${OFFSITE_BUCKET}/check`,
+    ])) as { EvaluationResults: { EvalActionName: string; EvalDecision: string }[] };
+    const decision = Object.fromEntries(
+      sim.EvaluationResults.map((r) => [r.EvalActionName, r.EvalDecision]),
+    );
+    if (decision['s3:PutObject'] !== 'allowed') return fail('cannot upload');
+    if (
+      decision['s3:DeleteObject'] === 'allowed' ||
+      decision['s3:DeleteObjectVersion'] === 'allowed'
+    )
+      return fail('CAN DELETE — the off-site copy is not protected');
+    return pass('1 key · put allowed · delete denied');
   }),
   // ---- AWS: budgets ----
   awsCheck('three budgets exist', async () => {
