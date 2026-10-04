@@ -279,6 +279,46 @@ about an hour (`dig +short DS echoandaura.com` then answers). It signs
 our DNS answers, so nobody can forge them on the way to a visitor (point
 the site or the mail records elsewhere).
 
+## Cache rules (ADR-056)
+
+Public pages are served from the Cloudflare edge for 30 seconds to
+visitors who are not signed in. Caching → Cache Rules →
+`public pages for anonymous visitors`:
+
+```
+(http.host eq "echoandaura.com"
+ and not http.cookie contains "better-auth"
+ and (http.request.uri.path in {"/" "/events" "/archive" "/about" "/faq" "/terms" "/privacy" "/refund" "/contact"}
+      or (starts_with(http.request.uri.path, "/events/")
+          and not ends_with(http.request.uri.path, "/register"))))
+```
+
+- **Cache eligibility:** Eligible for cache
+- **Edge TTL:** Ignore cache-control header and use this TTL, **30 seconds**;
+  status code TTL **500-526 → No cache** (526 is the highest the free plan offers, and the highest Cloudflare uses) (an error page is never kept)
+- **Browser TTL:** Respect origin TTL (browsers still get `no-store`)
+- **Cache key:** default (the query string is part of it)
+
+A page goes on this list only if it renders the same for every anonymous
+visitor and sets no cookie (ADR-056; `tests/e2e/public-edge-cache.spec.ts`
+checks the cookie half). Never add `/register`, `/orders`, `/tickets`,
+`/account`, `/admin`, `/door` or `/api`.
+
+**Check it:** `curl -sI https://echoandaura.com/faq | grep -i cf-cache-status`
+twice: `MISS` (or `EXPIRED`) then `HIT`. With
+`-H 'Cookie: better-auth.x=1'`: `DYNAMIC`.
+
+**Switch it off:** toggle the rule off. Nothing in the app depends on it;
+pages go back to ~170 ms first byte.
+
+## Email Address Obfuscation: keep it off
+
+Security → Settings → Email Address Obfuscation is **off** (2026-10-04).
+When on, Cloudflare rewrites addresses in the HTML and injects a decoder
+script: our CSP blocks the script, and the rewritten HTML no longer
+matches what React renders, so every page fails hydration (React #418).
+It hid nothing either: the address is plain in the page's RSC data.
+
 ## Turnstile
 
 The bot check on five public forms: registration, Find my order, buyer
@@ -422,3 +462,6 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-03 | Zero Trust team `echoandaura.cloudflareaccess.com`; identity provider One-time PIN (apps use it only, instant auth); service token `github-deploy` → GitHub secrets; Access app `Dokploy` (`deploy.echoandaura.com`, policies `developer` + `github deploy`, 1 week; a Run workflow deploy got through); Access app `Admin` (`echoandaura.com/admin`, policy `admins`, 1 week); `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` in Dokploy → origin check on, sign-in verified (ADR-050) |
 | 2026-10-03 | WAF `block scanners` (on, probes answer 403) and `emergency - outside Bangladesh` (off); DNSSEC enabled; DS record published the same day (`dig +short DS echoandaura.com` answers, key tag 2371)                                                                                                                                                                                                                                                                                  |
 | 2026-10-03 | Members: developer added with their own login (Super Administrator) instead of sharing Raj's; both logins 2FA; API tokens reviewed (S4)                                                                                                                                                                                                                                                                                                                                            |
+| 2026-10-04 | Cache rule `spike - cache faq for anonymous visitors` (`/faq`, no `better-auth` cookie, edge TTL 30 s): MISS → HIT, ~170 → ~50 ms first byte, CSP and navigation fine                                                                                                                                                                                                                                                                                                              |
+| 2026-10-04 | Email Address Obfuscation off: the address was already plain in the RSC data, and the injected decoder broke CSP and hydration (React #418)                                                                                                                                                                                                                                                                                                                                        |
+| 2026-10-04 | Cache rule widened and renamed `public pages for anonymous visitors` (ADR-056 expression; 500-526 no cache): all nine pages MISS → HIT, `/events/<slug>` cached, `/register`, `/orders`, `/account`, `/api` and any `better-auth` cookie DYNAMIC                                                                                                                                                                                                                                   |
