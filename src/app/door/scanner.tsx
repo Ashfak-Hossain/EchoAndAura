@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ArrowLeft,
   Ban,
   BatteryCharging,
   BatteryLow,
@@ -9,8 +10,10 @@ import {
   CameraOff,
   Check,
   ChevronUp,
+  CircleCheck,
   CirclePause,
   CircleX,
+  ClipboardCheck,
   CloudOff,
   Flashlight,
   FlashlightOff,
@@ -54,10 +57,12 @@ import {
 import { loadFallbackDecoder, loadQrDetector } from './decoder';
 import { DisagreeAlert } from './disagree-alert';
 import { DoorSearch } from './door-search';
-import { forgetPageOffline, keepPageOffline } from './offline/keep-page';
+import { type SavedCopy, forgetPageOffline, keepPageOffline } from './offline/keep-page';
 import { type OfflineApi, useOffline } from './offline/use-offline';
 import { isIos, subscribeNever } from './platform';
 import { AUTO_DISMISS_MS, type Overlay, ResultOverlay, viewOf } from './result-overlay';
+import { type CheckLevel, selfTestRows } from './self-test';
+import { useBattery } from './use-battery';
 import { type CameraProblem, useCamera } from './use-camera';
 import { useFeedback } from './use-feedback';
 import { useRelay } from './use-relay';
@@ -217,7 +222,13 @@ export function Scanner({
   const offlineModeRef = useRef(false);
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState<'none' | 'type' | 'search' | 'checklist' | 'history'>('none');
+  const [panel, setPanel] = useState<
+    'none' | 'type' | 'search' | 'checklist' | 'history' | 'selftest'
+  >('none');
+  /** ADR-059: the saved copy, for the pre-doors test. */
+  const [savedCopy, setSavedCopy] = useState<'saving' | SavedCopy>('saving');
+  const [soundTest, setSoundTest] = useState<'untested' | 'played' | 'heard'>('untested');
+  const battery = useBattery();
   const [typed, setTyped] = useState('');
   const [undoFor, setUndoFor] = useState<RecentRow | null>(null);
   const [undoReason, setUndoReason] = useState<DoorUndoReason>('wrong_person');
@@ -329,9 +340,9 @@ export function Scanner({
         // signal must still be able to start the camera — with the
         // WebAssembly reader too, should the phone's own one fail then.
         // Failing to load them here costs nothing — Start tries again.
-        void Promise.allSettled([loadQrDetector(), loadFallbackDecoder()]).then(() =>
-          keepPageOffline(),
-        );
+        void Promise.allSettled([loadQrDetector(), loadFallbackDecoder()])
+          .then(() => keepPageOffline())
+          .then(setSavedCopy);
       }
       // Signal is back: send what was scanned without it, then show the
       // counts and last scans with those scans in them.
@@ -586,6 +597,7 @@ export function Scanner({
     zoom,
     readMs,
     decoder,
+    lens,
     cameras,
     awake,
     start: startCamera,
@@ -621,6 +633,12 @@ export function Scanner({
     // Inside the tap: sound, vibration and the wake lock all need a gesture.
     unlock();
     void startCamera();
+  }
+
+  /** ADR-059: the camera starts behind the test — the open panel stops any admit. */
+  function onSelfTest() {
+    setPanel('selftest');
+    begin();
   }
 
   function onStart() {
@@ -790,6 +808,20 @@ export function Scanner({
   ];
   const latest = recent[0];
   const listTime = offline.listAt ? formatDhakaClock(new Date(offline.listAt)) : null;
+  const selfTest =
+    panel === 'selftest'
+      ? selfTestRows({
+          camera: cam,
+          lens,
+          readMs,
+          decoder,
+          list: { ready: offline.ready, size: offline.size, listAt: offline.listAt },
+          now: offline.now(),
+          sound: soundTest,
+          battery,
+          saved: savedCopy,
+        })
+      : null;
   const countsTime = formatDhakaClock(new Date(status.serverTime));
   /** A code is on its way to the server: say so at once, never look frozen. */
   const reading = busy && !overlay;
@@ -1054,6 +1086,14 @@ export function Scanner({
             >
               <ScanLine aria-hidden className="size-6" />
               Start scanning
+            </button>
+            <button
+              type="button"
+              onClick={onSelfTest}
+              className="flex h-13 w-full max-w-xs items-center justify-center gap-2 rounded-[14px] border border-white/18 text-base font-semibold text-white"
+            >
+              <ClipboardCheck aria-hidden className="size-5" />
+              Run pre-doors test
             </button>
             <p className="max-w-xs text-[13px] text-white/55">
               A handheld scanner works without starting the camera.
@@ -1364,6 +1404,111 @@ export function Scanner({
         </section>
       ) : null}
 
+      {selfTest ? (
+        <section
+          aria-label="Pre-doors test"
+          data-testid="door-selftest"
+          data-ready={selfTest.ready}
+          className="fixed inset-0 z-50 flex flex-col gap-4.5 overflow-y-auto bg-[#161412] px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPanel('none')}
+              aria-label="Close the test"
+              className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/18 text-white"
+            >
+              <ArrowLeft aria-hidden className="size-6" />
+            </button>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h2 className="font-heading text-2xl font-extrabold text-white">Pre-doors test</h2>
+              <p className="truncate text-[13px] text-white/55">
+                {status.gate} · doors {status.practice ? 'open' : 'opened'} at {doorsOpen}
+              </p>
+            </div>
+          </div>
+          <ul className="flex flex-col rounded-[14px] bg-[#231f1b]">
+            {selfTest.rows.map((row) => {
+              const { icon: Icon, bg } = CHECK_STYLE[row.level];
+              return (
+                <li
+                  key={row.key}
+                  data-check={row.key}
+                  data-level={row.level}
+                  className="flex min-h-14 items-center gap-3 border-b border-white/6 px-3.5 py-1.5 last:border-b-0"
+                >
+                  <span
+                    className={cn(
+                      'flex size-7 shrink-0 items-center justify-center rounded-full',
+                      bg,
+                    )}
+                  >
+                    <Icon aria-hidden className="size-4.5 text-white" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-[15px] font-semibold text-white">{row.label}</span>
+                    <span className="font-mono text-[13px] text-white/75">{row.value}</span>
+                  </span>
+                  {row.key === 'sound' && row.level !== 'ok' ? (
+                    <span className="flex shrink-0 gap-1.5">
+                      {soundTest === 'played' ? (
+                        <button
+                          type="button"
+                          onClick={() => setSoundTest('heard')}
+                          className="h-12 rounded-full bg-[#eda43c] px-4 text-[15px] font-bold text-[#161412]"
+                        >
+                          Heard it
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          unlock();
+                          play('admit');
+                          setSoundTest('played');
+                        }}
+                        className="h-12 rounded-full border border-[#eda43c] px-4 text-[15px] font-bold text-[#eda43c]"
+                      >
+                        {soundTest === 'played' ? 'Again' : 'Test'}
+                      </button>
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex-1" />
+          {selfTest.ready ? (
+            <div className="flex flex-col gap-3 rounded-2xl bg-[#12803f] p-4">
+              <p className="flex items-center gap-2.5 font-heading text-[44px] leading-none font-black text-white">
+                <CircleCheck aria-hidden className="size-10" />
+                READY
+              </p>
+              <button
+                type="button"
+                onClick={() => setPanel('none')}
+                className="h-14 rounded-xl bg-white font-heading text-lg font-extrabold text-[#0d5a2b]"
+              >
+                Start scanning
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <p className="flex h-15 items-center justify-center rounded-[14px] border border-dashed border-white/20 bg-[#231f1b] text-base text-white/75">
+                {selfTest.left === 1 ? '1 check left' : `${selfTest.left} checks left`}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPanel('none')}
+                className="h-12 text-[15px] font-semibold text-white/75 underline underline-offset-4"
+              >
+                Start scanning anyway
+              </button>
+            </div>
+          )}
+        </section>
+      ) : null}
+
       {undoFor ? (
         <>
           <div
@@ -1475,6 +1620,14 @@ const PROBLEM_ICON: Record<CameraProblem, LucideIcon> = {
   none: CameraOff,
   insecure: LockOpen,
   decoder: TriangleAlert,
+};
+
+/** The pre-doors test's dots (ADR-059): amber warns, red fails, neither stops the gate. */
+const CHECK_STYLE: Record<CheckLevel, { icon: LucideIcon; bg: string }> = {
+  ok: { icon: Check, bg: 'bg-[#12803f]' },
+  warn: { icon: TriangleAlert, bg: 'bg-[#a65b00]' },
+  fail: { icon: X, bg: 'bg-[#c4242b]' },
+  wait: { icon: RefreshCw, bg: 'bg-white/20' },
 };
 
 const IOS_CHECKLIST: { icon: LucideIcon; title: string; body: string }[] = [
