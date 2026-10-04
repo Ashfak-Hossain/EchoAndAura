@@ -234,8 +234,8 @@ export const orders = pgTable(
     // never shown to the guest). One column, so the flag and the reason can
     // never disagree.
     complimentaryReason: text('complimentary_reason'),
-    // 24-hour inventory hold (ADR-002). The expiry job releases stock once this
-    // passes without payment being verified.
+    // 20-minute inventory hold (ADR-054; the buyer sees it count down). The expiry job releases stock
+    // once this plus a 2-minute grace passes with no trxID submitted.
     holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

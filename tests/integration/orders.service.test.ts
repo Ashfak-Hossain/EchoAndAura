@@ -5,10 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, queryClient } from '@/db/client';
 import * as schema from '@/db/schema';
 import {
+  HoldLapsedError,
   OrderReferenceCollisionError,
   SoldOutError,
   TrxIdAlreadyUsedError,
 } from '@/server/lib/errors';
+import { HOLD_GRACE_MINUTES, HOLD_MINUTES, lapsedBefore } from '@/server/lib/hold';
 import { isCheckViolation } from '@/server/lib/pg-errors';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
@@ -25,6 +27,11 @@ import { type CreateOrderInput, createOrdersService } from '@/server/services/or
  */
 
 const NOW = new Date('2026-09-20T10:00:00Z');
+const MINUTE = 60_000;
+/** NOW + m minutes (+ extra ms). */
+const plus = (m: number, ms = 0) => new Date(NOW.getTime() + m * MINUTE + ms);
+/** The cutoff of an order placed at NOW: the 20-minute hold plus the grace (ADR-054). */
+const CUTOFF_MIN = HOLD_MINUTES + HOLD_GRACE_MINUTES;
 
 describe('ordersService.createOrder (Postgres)', () => {
   let eventId: string;
@@ -92,7 +99,7 @@ describe('ordersService.createOrder (Postgres)', () => {
     expect(order.status).toBe('pending_payment');
     expect(order.totalPaisa).toBe(360_000);
     expect(order.attendeeNames).toEqual(['Guest 1', 'Guest 2', 'Guest 3']);
-    expect(order.holdExpiresAt?.toISOString()).toBe('2026-09-21T10:00:00.000Z');
+    expect(order.holdExpiresAt?.toISOString()).toBe('2026-09-20T10:20:00.000Z'); // +20 min (ADR-054)
 
     const [row] = await db.select().from(schema.ticketTypes).where(eq(schema.ticketTypes.id, tt));
     expect(row?.quantityReserved).toBe(3);
@@ -190,21 +197,20 @@ describe('ordersService.createOrder (Postgres)', () => {
       (await db.select().from(schema.ticketTypes).where(eq(schema.ticketTypes.id, tt)))[0]!;
     expect((await counters()).quantityReserved).toBe(5);
 
-    // Not yet.
-    expect(await svc.expireLapsedHolds(new Date(NOW.getTime() + 23 * 3_600_000))).toEqual({
-      expired: 0,
-      failed: 0,
-    });
-    expect((await counters()).quantityReserved).toBe(5);
+    // Not yet: the buyer's clock hit zero at +20 min, but the grace runs to +22.
+    for (const at of [plus(HOLD_MINUTES), plus(CUTOFF_MIN, -1_000)]) {
+      await svc.expireLapsedHolds(at);
+      expect((await counters()).quantityReserved).toBe(5);
+    }
 
-    // 25 h later: the unsubmitted hold goes, the submitted one waits for a person.
-    const later = new Date(NOW.getTime() + 25 * 3_600_000);
+    // Past the cutoff: the unsubmitted hold goes, the submitted one waits for a person.
+    const later = plus(CUTOFF_MIN, 1);
     // The job expires every lapsed hold in the database, and other files'
     // orders share it (the promo suite leaves one at this clock) — so the
     // bound is every lapsed pending hold, not only this event's.
     const before = (
       await db.select().from(schema.orders).where(eq(schema.orders.status, 'pending_payment'))
-    ).filter((o) => o.holdExpiresAt && o.holdExpiresAt < later).length;
+    ).filter((o) => o.holdExpiresAt && o.holdExpiresAt < lapsedBefore(later)).length;
     const result = await svc.expireLapsedHolds(later);
     expect(result.expired).toBeGreaterThanOrEqual(1);
     expect(result.expired).toBeLessThanOrEqual(before);
@@ -224,6 +230,7 @@ describe('ordersService.createOrder (Postgres)', () => {
       actor: 'system',
       action: 'order.expired',
       toStatus: 'expired',
+      note: `${HOLD_MINUTES}-minute hold lapsed; 3 released`,
     });
 
     // Idempotent for our rows: nothing more to release.
@@ -242,7 +249,7 @@ describe('ordersService.createOrder (Postgres)', () => {
   it('two concurrent expiry runs release each lapsed hold exactly once', async () => {
     const tt = await newTicketType(20);
     const held = await Promise.all([1, 2, 3].map((q) => svc.createOrder(input(tt, q))));
-    const later = new Date(NOW.getTime() + 25 * 3_600_000);
+    const later = plus(CUTOFF_MIN, 1);
 
     await Promise.all([svc.expireLapsedHolds(later), svc.expireLapsedHolds(later)]);
 
@@ -252,6 +259,49 @@ describe('ordersService.createOrder (Postgres)', () => {
       const evs = await ordersRepository.listEvents(o.id);
       expect(evs.filter((e) => e.action === 'order.expired')).toHaveLength(1);
     }
+  });
+
+  // ADR-054 against Postgres: a trxID is taken in the unannounced grace and
+  // refused at the cutoff, under the row lock, before the job has run.
+  it('takes a trxID inside the grace, refuses one at the cutoff and writes nothing', async () => {
+    const tt = await newTicketType(10);
+    const early = await svc.createOrder(input(tt, 1));
+    const late = await svc.createOrder(input(tt, 2));
+    const at = (when: Date) =>
+      createOrdersService({
+        orders: ordersRepository,
+        tickets: ticketsRepository,
+        events: eventsRepository,
+        ticketTypes: ticketTypesRepository,
+        inventory: createInventoryService(inventoryRepository),
+        runInTransaction: (fn) => db.transaction(fn),
+        now: () => when,
+      });
+    const trx = (p: string) => ({
+      trxId: p + tt.slice(0, 7).toUpperCase(),
+      senderMsisdn: '+8801712345678',
+    });
+
+    await expect(
+      at(plus(HOLD_MINUTES + 1)).submitPayment(early.id, trx('GRC')),
+    ).resolves.toMatchObject({ status: 'pending_verification' });
+
+    await expect(at(plus(CUTOFF_MIN)).submitPayment(late.id, trx('LAT'))).rejects.toBeInstanceOf(
+      HoldLapsedError,
+    );
+    const [row] = await db.select().from(schema.orders).where(eq(schema.orders.id, late.id));
+    expect(row).toMatchObject({ status: 'pending_payment', bkashTrxId: null });
+    expect(await ordersRepository.listEvents(late.id)).toHaveLength(1); // only order.created
+    const [counter] = await db
+      .select()
+      .from(schema.ticketTypes)
+      .where(eq(schema.ticketTypes.id, tt));
+    expect(counter?.quantityReserved).toBe(3);
+
+    // ADR-012: the submitted order never lapses; a correction is still taken.
+    await expect(
+      at(plus(CUTOFF_MIN + 60)).submitPayment(early.id, trx('FIX')),
+    ).resolves.toMatchObject({ status: 'pending_verification', bkashTrxId: trx('FIX').trxId });
   });
 
   // The CHECK behind Invariant 3: a raw write of an un-normalised trxID is refused.

@@ -1,5 +1,6 @@
-import { addDays, addHours } from 'date-fns';
+import { addDays } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
+import { holdEndsAt, lapsedBefore } from '@/server/lib/hold';
 import { REVENUE_STATUSES } from '@/server/lib/order-status';
 import type { OrdersRepository, QueueRow } from '@/server/repositories/orders.repository';
 import type { DayTotals, ReportsRepository } from '@/server/repositories/reports.repository';
@@ -14,7 +15,6 @@ import { DHAKA_TZ, dhakaDay } from '@/lib/time';
  */
 
 export const RECENT_ORDERS = 5;
-export const EXPIRING_WITHIN_HOURS = 2;
 
 export interface DashboardDeps {
   orders: Pick<OrdersRepository, 'countByStatus' | 'search'>;
@@ -25,6 +25,7 @@ export interface DashboardSummary {
   pendingVerification: number;
   today: DayTotals;
   yesterday: DayTotals;
+  /** Unpaid orders whose 20-minute hold is still live (ADR-054). */
   holdsExpiringSoon: number;
   /** Verified money per event id (paid + issued, comps excluded). */
   revenueByEvent: Map<string, number>;
@@ -65,7 +66,8 @@ export function createDashboardService(
           orders.countByStatus('pending_verification'),
           reports.dayTotals(todayStart, tomorrowStart),
           reports.dayTotals(yesterdayStart, todayStart),
-          reports.holdsExpiring(at, addHours(at, EXPIRING_WITHIN_HOURS)),
+          // Unpaid holds still live: every one lapses within 20 minutes (ADR-054).
+          reports.holdsExpiring(lapsedBefore(at), holdEndsAt(at)),
           reports.totalsByEventAndStatus(),
           orders.search({}, { limit: RECENT_ORDERS, offset: 0 }),
         ]);

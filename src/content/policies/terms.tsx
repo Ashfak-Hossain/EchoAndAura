@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Callout } from '@/components/public/help/layout';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
-import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
+import { HOLD_MINUTES, REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import type { PolicyDoc } from './types';
 
 /**
@@ -14,7 +14,7 @@ export const terms: PolicyDoc = {
   contactTitle: 'Questions about these terms?',
   shortVersion: [
     'A ticket admits one named person to one event. The price you see is the price you pay — no added fees.',
-    `Registering holds your tickets for ${HOLD_HOURS} hours while you pay by bKash. A person checks every payment before tickets are issued.`,
+    `Registering holds your tickets for ${HOLD_MINUTES} minutes while you pay by bKash. A person checks every payment before tickets are issued.`,
     `You can change the name on a ticket until registration closes, ${REGISTRATION_CLOSES_DAYS_BEFORE} days before the event.`,
     'Issued tickets are non-refundable, except as the refund policy sets out. Refunds are made by bKash, outside the app.',
     'Our responsibility is limited to the price of the tickets you bought.',
@@ -87,16 +87,17 @@ export const terms: PolicyDoc = {
       title: 'Holds and expiry',
       body: (
         <>
-          <Callout label="Holds" title={`Your tickets are held for ${HOLD_HOURS} hours`}>
+          <Callout label="Holds" title={`Your tickets are held for ${HOLD_MINUTES} minutes`}>
             Submit the transaction ID inside that time, or the order expires and the tickets go back
             on sale.
           </Callout>
           <p>
-            Registering holds your tickets for {HOLD_HOURS} hours. If no transaction ID is submitted
-            within that time the order expires and the tickets go back on sale. A submitted payment
-            that cannot be matched is rejected with a reason, and the tickets are released the same
-            way. See the <Link href="/refund">refund policy</Link> for what happens to money that
-            was sent.
+            Registering holds your tickets for {HOLD_MINUTES} minutes. If no transaction ID is
+            submitted within that time the order expires and the tickets go back on sale. Once a
+            transaction ID is submitted, the order no longer expires: it waits for the organizer to
+            check the payment. A submitted payment that cannot be matched is rejected with a reason,
+            and the tickets are released the same way. See the{' '}
+            <Link href="/refund">refund policy</Link> for what happens to money that was sent.
           </p>
         </>
       ),

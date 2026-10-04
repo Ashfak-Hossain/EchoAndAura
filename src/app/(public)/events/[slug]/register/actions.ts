@@ -12,6 +12,7 @@ import {
   TicketTypeNotOnSaleError,
   TooManyOpenOrdersError,
 } from '@/server/lib/errors';
+import { HOLD_MINUTES } from '@/server/lib/hold';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
 import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { requestIp } from '@/lib/request-ip';
@@ -35,7 +36,7 @@ const promoLimiter = createRateLimiter(redisRateLimitStore(), { onError: 'allow'
 const PROMO_LIMIT = { limit: 20, windowSeconds: 60 };
 const TOO_MANY = 'Too many tries. Please wait a minute and try again.';
 
-// Phase 7.6: every order holds seats for 24 hours, so placing them is
+// Phase 7.6: every order holds seats (20 minutes, ADR-054), so placing them is
 // throttled per network too (the service also caps open orders per phone).
 // Generous on purpose: Bangladeshi mobile carriers put many buyers behind
 // one address (CGNAT). A limiter outage lets the order through; the
@@ -191,7 +192,7 @@ function toBanner(err: unknown): NonNullable<RegistrationFormState['banner']> {
   if (err instanceof TooManyOpenOrdersError) {
     return {
       title: 'You already have orders waiting for this event',
-      body: `This mobile number has ${err.limit} orders waiting for payment or checking. Pay for one, or let its 24-hour hold end, before ordering again. You can find them with Find my order.`,
+      body: `This mobile number has ${err.limit} orders waiting for payment or checking. Pay for one, or let its ${HOLD_MINUTES}-minute hold end, before ordering again (an order already waiting for checking stays until the organizer answers). You can find them with Find my order.`,
     };
   }
   if (err instanceof InvalidQuantityError) {

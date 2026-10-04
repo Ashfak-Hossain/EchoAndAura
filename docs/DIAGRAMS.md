@@ -272,7 +272,7 @@ stateDiagram-v2
     pending_payment --> pending_verification : trxID submitted
     pending_verification --> paid : admin approves
     pending_verification --> rejected : admin rejects
-    pending_verification --> expired : 24h hold TTL
+    pending_payment --> expired : 20 min hold (+2 min grace)
     paid --> issued : tickets generated
     issued --> cancelled : admin cancels
     rejected --> [*]
@@ -282,6 +282,8 @@ stateDiagram-v2
 ```
 
 Inventory is held on order creation and released on `rejected` or `expired`.
+Only `pending_payment` expires; once a trxID is submitted a person decides
+(ADR-012, ADR-054).
 Every transition writes an append-only `order_events` row (Invariant 6), and only
 `fulfilment.service.ts` performs the `paid → issued` step (Invariant 4).
 
@@ -304,7 +306,7 @@ sequenceDiagram
     Web->>Svc: createOrder()
     Svc->>DB: atomic reserve — UPDATE ... WHERE available >= qty
     DB-->>Svc: reserved (or sold out)
-    Svc->>DB: insert order (pending_payment, 24h hold) + order_event
+    Svc->>DB: insert order (pending_payment, 20 min hold) + order_event
     Svc-->>Buyer: payment instructions (bKash number)
     Buyer->>Web: submit trxID + sender number
     Web->>Svc: submitTransaction()

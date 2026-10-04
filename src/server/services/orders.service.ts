@@ -1,4 +1,4 @@
-import { addDays, addHours } from 'date-fns';
+import { addDays } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import type { DbExecutor } from '@/db/executor';
 import {
@@ -11,10 +11,12 @@ import {
   TicketTypeNotFoundError,
   TicketTypeNotOnSaleError,
   EventNotFoundError,
+  HoldLapsedError,
   PromoCodeNotValidError,
   TooManyOpenOrdersError,
 } from '@/server/lib/errors';
 import { eventPhase } from '@/server/lib/event-phase';
+import { HOLD_MINUTES, holdEndsAt, holdLapsed, lapsedBefore } from '@/server/lib/hold';
 import { logger } from '@/server/lib/logger';
 import { generateOrderReference } from '@/server/lib/order-reference';
 import { assertOrderTransition, REVENUE_STATUSES } from '@/server/lib/order-status';
@@ -55,14 +57,21 @@ import {
 } from '@/lib/validation/orders-search';
 import { DHAKA_TZ } from '@/lib/time';
 
-/** Inventory is held this long from order creation (ADR-002). */
-export const HOLD_HOURS = 24;
+// The hold rule lives in one pure module (ADR-054): 20 minutes on the
+// buyer's clock, then an unannounced 2-minute grace before it lapses.
+export { HOLD_MINUTES } from '@/server/lib/hold';
 
 /** How many fresh references to try before giving up on a collision. */
 const REFERENCE_ATTEMPTS = 3;
 
-/** Lapsed holds handled per expiry run; the job repeats every minute. */
+/** Lapsed holds fetched per query; a run keeps fetching until none are left. */
 const EXPIRY_BATCH = 200;
+/**
+ * At most this many batches in one run (10 × 200 orders). After an on-sale
+ * rush every abandoned checkout lapses in the same minute; the rest wait
+ * for the next run, a minute later, rather than one run going on and on.
+ */
+const EXPIRY_MAX_BATCHES = 10;
 
 /** Statuses from which a buyer may submit or correct a transaction ID. */
 const SUBMITTABLE = ['pending_payment', 'pending_verification'] as const;
@@ -228,7 +237,7 @@ export function matchedField(row: QueueRow, term: OrdersSearchFilter['term']): M
 
 /**
  * Open orders (awaiting payment or verification) one phone number may have
- * on one event. Each holds up to 10 seats for 24 hours, so without a cap a
+ * on one event. Each holds up to 10 seats for 20 minutes (longer once a trxID is in), so without a cap a
  * few scripted orders could hold a whole event (Phase 7.6 review). Two
  * leaves room for a second order for friends; decided with the user,
  * 2026-09-30.
@@ -345,7 +354,13 @@ export function createOrdersService({
             // against the same buyer submitting twice at once; it is keyed
             // on this buyer only, so nobody else waits.
             await orders.lockBuyer(event.id, input.buyerPhone, tx);
-            const open = await orders.countOpenForBuyer(event.id, input.buyerPhone, at, tx);
+            // A lapsed hold (cutoff passed, job not run yet) no longer counts.
+            const open = await orders.countOpenForBuyer(
+              event.id,
+              input.buyerPhone,
+              lapsedBefore(at),
+              tx,
+            );
             if (open >= MAX_OPEN_ORDERS_PER_BUYER) {
               throw new TooManyOpenOrdersError(MAX_OPEN_ORDERS_PER_BUYER);
             }
@@ -369,7 +384,7 @@ export function createOrdersService({
                 buyerEmail: input.buyerEmail,
                 buyerPhone: input.buyerPhone,
                 attendeeNames: input.attendeeNames,
-                holdExpiresAt: addHours(at, HOLD_HOURS),
+                holdExpiresAt: holdEndsAt(at),
               },
               tx,
             );
@@ -534,7 +549,7 @@ export function createOrdersService({
      * database's (Invariant 3): the UNIQUE index surfaces as
      * TrxIdAlreadyUsedError, and the transaction — including the audit
      * row — rolls back with it.
-     * @throws OrderNotFoundError, OrderStatusConflictError, TrxIdAlreadyUsedError
+     * @throws OrderNotFoundError, OrderStatusConflictError, HoldLapsedError, TrxIdAlreadyUsedError
      */
     async submitPayment(orderId: string, input: SubmitPaymentInput): Promise<OrderRecord> {
       // Stored normalised (Invariant 3) whoever the caller is — the UNIQUE
@@ -550,6 +565,10 @@ export function createOrdersService({
         if (!SUBMITTABLE.includes(order.status as (typeof SUBMITTABLE)[number])) {
           throw new OrderStatusConflictError(orderId, order.status);
         }
+        // ADR-054: past the cutoff the seats are the next buyer's, even if
+        // the expiry job has not run yet — the order page already says
+        // "expired". Checked under the row lock, against the server clock.
+        if (holdLapsed(order, now())) throw new HoldLapsedError(orderId);
         const fromStatus = order.status;
         const first = fromStatus === 'pending_payment';
         if (first) assertOrderTransition(fromStatus, 'pending_verification');
@@ -585,53 +604,65 @@ export function createOrdersService({
     },
 
     /**
-     * The 24-hour expiry (ADR-002, ADR-012): only `pending_payment` orders
-     * lapse — once a trxID exists, a person decides. Per order, one
-     * transaction: flip the status conditionally, and only if that matched,
-     * release the hold and write the audit row. A second run, or a second
-     * worker, can never release the same hold twice.
+     * The hold expiry (ADR-054, ADR-012): only `pending_payment` orders
+     * lapse, at the cutoff (20 minutes plus the grace) — once a trxID
+     * exists, a person decides. Per order, one transaction: flip the status
+     * conditionally, and only if that matched, release the hold and write
+     * the audit row. A second run, or a second worker, can never release the
+     * same hold twice. Batches repeat until none are left (bounded), so a
+     * rush's abandoned checkouts all come back on sale in one run.
      */
     async expireLapsedHolds(at: Date = now()): Promise<{ expired: number; failed: number }> {
-      const lapsed = await orders.listLapsedHolds(at, EXPIRY_BATCH);
       let expired = 0;
       let failed = 0;
-      for (const hold of lapsed) {
-        // One order's failure (e.g. a corrupted counter) must never block
-        // the rest: it is logged and skipped, and the run reports it.
-        try {
-          const done = await runInTransaction(async (tx) => {
-            const updated = await orders.transition(
-              hold.id,
-              { from: ['pending_payment'], to: 'expired' },
-              tx,
-            );
-            if (!updated) return false; // submitted (or expired) in the meantime
-            await inventory.release(hold.ticketTypeId, hold.quantity, tx);
-            await orders.insertEvent(
-              {
-                orderId: hold.id,
-                actor: 'system',
-                action: 'order.expired',
-                fromStatus: 'pending_payment',
-                toStatus: 'expired',
-                note: `24h hold lapsed; ${hold.quantity} released`,
-              },
-              tx,
-            );
-            return true;
-          });
-          if (done) {
-            expired++;
-            logger.info(
-              { orderId: hold.id, quantity: hold.quantity },
-              'order expired, hold released',
-            );
-            await afterCommit(() => onOrderExpired(hold.id), 'onOrderExpired', hold.id);
+      // Orders that failed this run are not fetched again: the next run retries them.
+      const skipped = new Set<string>();
+      for (let batch = 0; batch < EXPIRY_MAX_BATCHES; batch++) {
+        const limit = EXPIRY_BATCH + skipped.size;
+        const fetched = await orders.listLapsedHolds(lapsedBefore(at), limit);
+        const lapsed = fetched.filter((h) => !skipped.has(h.id));
+        if (lapsed.length === 0) break;
+        for (const hold of lapsed) {
+          // One order's failure (e.g. a corrupted counter) must never block
+          // the rest: it is logged and skipped, and the run reports it.
+          try {
+            const done = await runInTransaction(async (tx) => {
+              const updated = await orders.transition(
+                hold.id,
+                { from: ['pending_payment'], to: 'expired' },
+                tx,
+              );
+              if (!updated) return false; // submitted (or expired) in the meantime
+              await inventory.release(hold.ticketTypeId, hold.quantity, tx);
+              await orders.insertEvent(
+                {
+                  orderId: hold.id,
+                  actor: 'system',
+                  action: 'order.expired',
+                  fromStatus: 'pending_payment',
+                  toStatus: 'expired',
+                  note: `${HOLD_MINUTES}-minute hold lapsed; ${hold.quantity} released`,
+                },
+                tx,
+              );
+              return true;
+            });
+            if (done) {
+              expired++;
+              logger.info(
+                { orderId: hold.id, quantity: hold.quantity },
+                'order expired, hold released',
+              );
+              await afterCommit(() => onOrderExpired(hold.id), 'onOrderExpired', hold.id);
+            }
+          } catch (err: unknown) {
+            failed++;
+            skipped.add(hold.id);
+            logger.error({ orderId: hold.id, err }, 'expire-holds: order skipped');
           }
-        } catch (err: unknown) {
-          failed++;
-          logger.error({ orderId: hold.id, err }, 'expire-holds: order skipped');
         }
+        // A short batch means nothing more is waiting.
+        if (fetched.length < limit) break;
       }
       return { expired, failed };
     },

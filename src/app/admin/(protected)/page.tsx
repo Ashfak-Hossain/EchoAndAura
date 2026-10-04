@@ -103,7 +103,7 @@ export default async function AdminDashboardPage() {
           detail={revenueTodayPaisa > 0 ? 'Verified payments only' : '—'}
         />
         <StatCard
-          label="Holds expiring < 2h"
+          label="Unpaid holds"
           value={<span data-testid="holds-expiring">{holdsExpiring}</span>}
           detail={
             holdsExpiring > 0 ? (

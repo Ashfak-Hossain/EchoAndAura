@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { ordersService } from '@/server/container';
 import {
+  HoldLapsedError,
   OrderNotFoundError,
   OrderStatusConflictError,
   TrxIdAlreadyUsedError,
@@ -50,14 +51,14 @@ export async function submitPaymentAction(
         values,
       };
     }
-    if (err instanceof OrderStatusConflictError) {
+    if (err instanceof OrderStatusConflictError || err instanceof HoldLapsedError) {
       // The page re-renders in its real state; the banner says why the
       // typed id was not saved rather than silently swapping frames.
       revalidatePath(`/orders/${orderId}`);
       return {
         banner: {
           title:
-            err.status === 'expired'
+            err instanceof HoldLapsedError || err.status === 'expired'
               ? 'The hold expired before your transaction ID was saved'
               : 'This order can no longer take a transaction ID',
           body: 'Already sent the money? Do not send it again — message the organizer with your order reference and TrxID.',

@@ -1,9 +1,18 @@
 /** Queue and job names shared by producers (app) and the worker. */
 export const ORDERS_QUEUE = 'orders';
 
-/** Repeating job: expire lapsed 24h holds (ADR-002, ADR-012). */
+/**
+ * Repeating job: expire lapsed holds (ADR-054, ADR-012). On a queue of its
+ * own, with its own worker: on the shared queue it waited behind emails
+ * (a 5/s limiter) — after an on-sale rush, the very emails its own
+ * expiries queue — and seats came back late.
+ */
+export const HOLDS_QUEUE = 'holds';
 export const EXPIRE_HOLDS_JOB = 'expire-holds';
 export const EXPIRE_HOLDS_EVERY_MS = 60_000;
+
+/** Repeating job on the orders queue: the email worker's heartbeat (ADR-054). */
+export const WORKER_PING_JOB = 'worker.ping';
 
 /** Email jobs: `email.<kind>` with payload `{ orderId }` (see email/dispatch.ts). */
 export const EMAIL_JOB_PREFIX = 'email.';

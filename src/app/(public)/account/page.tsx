@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ordersService } from '@/server/container';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
+import { holdLapsed } from '@/server/lib/hold';
 import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
 import { signOutBuyerAction } from './sign-in/actions';
@@ -16,6 +17,7 @@ export default async function AccountPage() {
   const session = await getPublicSession();
   if (!session) redirect('/account/sign-in');
   const orders = await ordersService.listForBuyer(session.email);
+  const now = new Date();
 
   return (
     <div className="mx-auto flex w-full max-w-160 flex-1 flex-col gap-6 px-4 py-8 lg:py-12">
@@ -56,7 +58,11 @@ export default async function AccountPage() {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono font-semibold">{order.reference}</span>
-                  <StatusChip kind="order" status={order.status} />
+                  {/* A lapsed hold reads "expired" before the job runs, as on the order page. */}
+                  <StatusChip
+                    kind="order"
+                    status={holdLapsed(order, now) ? 'expired' : order.status}
+                  />
                 </div>
                 <div className="text-[15px] font-medium">{eventTitle}</div>
                 <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-muted-foreground tabular">

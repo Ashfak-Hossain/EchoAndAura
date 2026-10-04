@@ -25,8 +25,8 @@ import { createOrdersService } from '@/server/services/orders.service';
  */
 // Later than the other files' clock: the race below may leave a public
 // pending_payment order behind, and the orders suite's expiry run (at its
-// NOW + 25 h) expires every lapsed hold in the shared database. A hold taken
-// at this clock outlives it. Registration is still open (closes 26 Sep).
+// NOW + 22 min: the 20-minute hold plus the grace, ADR-054) expires every
+// lapsed hold in the shared database. A hold taken at this clock outlives it. Registration is still open (closes 26 Sep).
 const NOW = new Date('2026-09-25T00:00:00Z');
 
 describe('complimentary tickets (Postgres)', () => {

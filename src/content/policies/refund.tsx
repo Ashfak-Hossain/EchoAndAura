@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Callout } from '@/components/public/help/layout';
-import { HOLD_HOURS, REFUND_WORKING_DAYS, REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
+import { HOLD_MINUTES, REFUND_WORKING_DAYS, REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import type { PolicyDoc } from './types';
 
 /**
@@ -41,13 +41,13 @@ export const refund: PolicyDoc = {
       title: 'If your hold expired',
       body: (
         <>
-          <Callout label="Holds" title={`An unpaid order is held for ${HOLD_HOURS} hours`}>
+          <Callout label="Holds" title={`An unpaid order is held for ${HOLD_MINUTES} minutes`}>
             After that its tickets are released if no transaction ID was submitted — even if the
             money was sent.
           </Callout>
           <p>
-            An unpaid order holds its tickets for {HOLD_HOURS} hours and then releases them. If you
-            sent money for an order that has since expired, message the organizer with the order
+            An unpaid order holds its tickets for {HOLD_MINUTES} minutes and then releases them. If
+            you sent money for an order that has since expired, message the organizer with the order
             reference and the transaction ID: the payment is matched to a new order while tickets
             remain, and returned the same way as above if the event has sold out.
           </p>

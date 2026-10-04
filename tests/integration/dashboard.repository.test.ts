@@ -5,6 +5,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, queryClient } from '@/db/client';
 import * as schema from '@/db/schema';
+import { holdEndsAt, lapsedBefore } from '@/server/lib/hold';
 import { reportsRepository } from '@/server/repositories/reports.repository';
 
 /**
@@ -108,5 +109,19 @@ describe('dashboard read models (Postgres)', () => {
     await insertOrder('pending_verification', at, { holdExpiresAt: addHours(at, 1) }); // paid, waiting
 
     expect(await reportsRepository.holdsExpiring(at, addHours(at, 2))).toBe(1);
+  });
+
+  // ADR-054: the dashboard's "Unpaid holds" window — every hold not yet past
+  // its cutoff, i.e. (now − grace, now + 20 min].
+  it('holdsExpiring over the dashboard window counts holds in their grace, not lapsed ones', async () => {
+    const at = new Date('2031-04-02T06:00:00Z');
+    await insertOrder('pending_payment', at, { holdExpiresAt: addMinutes(at, 10) }); // clock running
+    await insertOrder('pending_payment', at, { holdExpiresAt: addMinutes(at, -1) }); // in the grace
+    await insertOrder('pending_payment', at, { holdExpiresAt: holdEndsAt(at) }); // just made
+    await insertOrder('pending_payment', at, { holdExpiresAt: lapsedBefore(at) }); // at its cutoff
+    await insertOrder('pending_payment', at, { holdExpiresAt: addMinutes(at, -5) }); // lapsed
+    await insertOrder('pending_verification', at, { holdExpiresAt: addMinutes(at, 10) }); // submitted
+
+    expect(await reportsRepository.holdsExpiring(lapsedBefore(at), holdEndsAt(at))).toBe(3);
   });
 });

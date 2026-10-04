@@ -9,6 +9,7 @@ import {
   ilike,
   inArray,
   lt,
+  lte,
   or,
   sql,
   sum,
@@ -245,12 +246,15 @@ export const ordersRepository: OrdersRepository = {
   },
 
   listLapsedHolds(now, limit) {
-    return db
-      .select({ id: orders.id, ticketTypeId: orders.ticketTypeId, quantity: orders.quantity })
-      .from(orders)
-      .where(and(eq(orders.status, 'pending_payment'), lt(orders.holdExpiresAt, now)))
-      .orderBy(asc(orders.holdExpiresAt))
-      .limit(limit);
+    return (
+      db
+        .select({ id: orders.id, ticketTypeId: orders.ticketTypeId, quantity: orders.quantity })
+        .from(orders)
+        // `<=`: lapsed AT the cutoff, as holdLapsed says (ADR-054).
+        .where(and(eq(orders.status, 'pending_payment'), lte(orders.holdExpiresAt, now)))
+        .orderBy(asc(orders.holdExpiresAt))
+        .limit(limit)
+    );
   },
 
   async listVerificationQueue() {

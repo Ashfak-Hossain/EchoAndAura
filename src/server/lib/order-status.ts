@@ -6,7 +6,7 @@ import { InvalidOrderTransitionError } from '@/server/lib/errors';
  *
  *   pending_payment → pending_verification → paid → issued
  *                                          ↘ rejected
- *                                          ↘ expired   (24h TTL)
+ *                                          ↘ expired   (20 min hold, ADR-054)
  *                           issued → cancelled
  *
  * The enum bounds the values; this table bounds the moves. Every status

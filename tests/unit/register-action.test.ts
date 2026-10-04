@@ -153,7 +153,7 @@ describe('placing orders is limited per network', () => {
 });
 
 // ADR-048: a refused Turnstile token is answered before anything that
-// costs a real buyer — the limiter budgets, or seats held for 24 hours.
+// costs a real buyer — the limiter budgets, or seats held for 20 minutes.
 describe('the human check comes first', () => {
   it('a refused check keeps the input and touches neither limiter nor the service', async () => {
     passesHumanCheck.mockResolvedValue(false);

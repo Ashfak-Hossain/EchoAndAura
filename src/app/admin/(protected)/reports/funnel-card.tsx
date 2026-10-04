@@ -1,3 +1,4 @@
+import { HOLD_MINUTES } from '@/server/lib/hold';
 import { formatBDT } from '@/server/lib/money';
 import type { SalesReport } from '@/server/services/reports.service';
 import { percent } from '@/server/lib/sales-report';
@@ -53,7 +54,7 @@ export function FunnelCard({ report }: { report: SalesReport }) {
         <Line
           label="Waiting on the buyer"
           value={`${formatCount(f.pendingPayment.count)} · ${formatBDT(f.pendingPayment.paisa)}`}
-          note="held for 24 h"
+          note={`held for ${HOLD_MINUTES} min`}
         />
         <Line
           label="Waiting on you"

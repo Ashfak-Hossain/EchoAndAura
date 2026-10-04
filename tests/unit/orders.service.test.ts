@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AttendeeNamesMismatchError,
   EventNotFoundError,
+  HoldLapsedError,
   InventoryStateError,
   OrderNotFoundError,
   OrderReferenceCollisionError,
@@ -12,6 +13,8 @@ import {
   TooManyOpenOrdersError,
   TrxIdAlreadyUsedError,
 } from '@/server/lib/errors';
+import type { DbExecutor } from '@/db/executor';
+import { HOLD_GRACE_MINUTES, HOLD_MINUTES } from '@/server/lib/hold';
 import { createInventoryService } from '@/server/services/inventory.service';
 import {
   type CreateOrderInput,
@@ -22,7 +25,11 @@ import { NOW, event, fakeDb, ticketType } from './helpers/fake-db';
 
 function build(
   db: ReturnType<typeof fakeDb>,
-  over: { reference?: () => string; now?: () => Date } = {},
+  over: {
+    reference?: () => string;
+    now?: () => Date;
+    runInTransaction?: <T>(fn: (tx: DbExecutor) => Promise<T>) => Promise<T>;
+  } = {},
 ) {
   return createOrdersService({
     orders: db.orders,
@@ -30,11 +37,17 @@ function build(
     events: db.events,
     ticketTypes: db.ticketTypes,
     inventory: createInventoryService(db.inventoryRepo),
-    runInTransaction: db.runInTransaction,
+    runInTransaction: over.runInTransaction ?? db.runInTransaction,
     now: over.now ?? (() => NOW),
     reference: over.reference,
   });
 }
+
+const MINUTE = 60_000;
+/** NOW + m minutes (+ extra ms): orders in these tests are placed at NOW. */
+const plus = (m: number, ms = 0) => new Date(NOW.getTime() + m * MINUTE + ms);
+/** The cutoff of an order placed at NOW: the 20-minute hold plus the grace (ADR-054). */
+const CUTOFF_MIN = HOLD_MINUTES + HOLD_GRACE_MINUTES;
 
 const input: CreateOrderInput = {
   eventSlug: 'live-dhaka',
@@ -64,7 +77,7 @@ describe('ordersService.createOrder', () => {
       buyerEmail: 'nusrat@example.com',
       attendeeNames: input.attendeeNames,
     });
-    expect(order.holdExpiresAt?.toISOString()).toBe('2026-09-21T10:00:00.000Z'); // +24h
+    expect(order.holdExpiresAt?.toISOString()).toBe('2026-09-20T10:20:00.000Z'); // +20 min (ADR-054)
     expect(db.state.types.get('tt-1')?.quantityReserved).toBe(3);
     expect(db.state.events).toHaveLength(1);
     expect(db.state.events[0]).toMatchObject({
@@ -203,7 +216,7 @@ describe('ordersService.createOrder', () => {
   });
 });
 
-// Phase 7.6: a few orders must not be able to hold a whole event for 24 h.
+// Phase 7.6: a few orders must not be able to hold a whole event, 20 minutes at a time.
 describe('ordersService.createOrder: open orders per buyer', () => {
   const one = { ...input, quantity: 1, attendeeNames: ['Nusrat Jahan'] };
   const roomy = () =>
@@ -241,13 +254,40 @@ describe('ordersService.createOrder: open orders per buyer', () => {
     await expect(svc.createOrder(one)).rejects.toBeInstanceOf(TooManyOpenOrdersError);
   });
 
-  it('frees the slot once a hold has lapsed, even before the expiry job runs', async () => {
+  // ADR-054: lapsed means past the cutoff (the clock plus the grace), not
+  // just past the clock the buyer saw — the order can still be paid then.
+  it('frees the slot once a hold has lapsed by its cutoff, even before the expiry job runs', async () => {
     const db = roomy();
-    const svc = build(db);
+    const clock = { at: NOW };
+    const svc = build(db, { now: () => clock.at });
     await svc.createOrder(one);
+    clock.at = plus(10);
     await svc.createOrder(one);
-    db.state.orders[0]!.holdExpiresAt = new Date(NOW.getTime() - 1);
+
+    // The first order's clock hit zero at +20 min, but it is inside the grace: still open.
+    clock.at = plus(CUTOFF_MIN, -1);
+    await expect(svc.createOrder(one)).rejects.toBeInstanceOf(TooManyOpenOrdersError);
+    // At its cutoff it lapses and no longer counts.
+    clock.at = plus(CUTOFF_MIN);
     await expect(svc.createOrder(one)).resolves.toMatchObject({ status: 'pending_payment' });
+    expect(db.orders.countOpenForBuyer).toHaveBeenLastCalledWith(
+      'ev-1',
+      one.buyerPhone,
+      plus(HOLD_MINUTES),
+      expect.anything(),
+    );
+  });
+
+  it('an order awaiting verification keeps counting long after its hold would have lapsed', async () => {
+    const db = roomy();
+    const clock = { at: NOW };
+    const svc = build(db, { now: () => clock.at });
+    await svc.createOrder(one);
+    await svc.createOrder(one);
+    db.state.orders[0]!.status = 'pending_verification';
+    db.state.orders[1]!.status = 'pending_verification';
+    clock.at = plus(24 * 60);
+    await expect(svc.createOrder(one)).rejects.toBeInstanceOf(TooManyOpenOrdersError);
   });
 
   it('frees the slot for orders that are paid, issued, rejected, expired or cancelled', async () => {
@@ -363,8 +403,84 @@ describe('ordersService.submitPayment', () => {
   });
 });
 
+// ADR-054: the buyer sees 20 minutes; a trxID is still taken for an
+// unannounced 2-minute grace; at the cutoff it is refused, even before the
+// expiry job has flipped the order.
+describe('ordersService.submitPayment: the hold cutoff', () => {
+  const payment = { trxId: '9AB12CD34E', senderMsisdn: '+8801712345678' };
+
+  async function placed() {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const clock = { at: NOW };
+    const svc = build(db, { now: () => clock.at });
+    const order = await svc.createOrder(input);
+    return { db, clock, svc, order };
+  }
+
+  it('accepts a trxID after the clock hit zero, inside the grace', async () => {
+    const { svc, clock, order } = await placed();
+    clock.at = plus(HOLD_MINUTES + 1);
+    await expect(svc.submitPayment(order.id, payment)).resolves.toMatchObject({
+      status: 'pending_verification',
+      bkashTrxId: '9AB12CD34E',
+    });
+  });
+
+  it('accepts one 1 ms before the cutoff', async () => {
+    const { svc, clock, order } = await placed();
+    clock.at = plus(CUTOFF_MIN, -1);
+    await expect(svc.submitPayment(order.id, payment)).resolves.toMatchObject({
+      status: 'pending_verification',
+    });
+  });
+
+  it('refuses one at the cutoff with HoldLapsedError, writing and changing nothing', async () => {
+    const { db, svc, clock, order } = await placed();
+    clock.at = plus(CUTOFF_MIN);
+    const events = db.state.events.length;
+    const reserved = db.state.types.get('tt-1')?.quantityReserved;
+
+    const err = await svc.submitPayment(order.id, payment).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(err).toBeInstanceOf(HoldLapsedError);
+    expect((err as HoldLapsedError).orderId).toBe(order.id);
+    expect(db.state.events).toHaveLength(events); // no audit row
+    expect(db.state.orders.find((o) => o.id === order.id)).toMatchObject({
+      status: 'pending_payment', // the expiry job flips it, not this
+      bkashTrxId: null,
+      bkashSenderMsisdn: null,
+    });
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(reserved);
+    expect(db.orders.transition).not.toHaveBeenCalled();
+  });
+
+  it('still refuses long after the cutoff', async () => {
+    const { svc, clock, order } = await placed();
+    clock.at = plus(24 * 60);
+    await expect(svc.submitPayment(order.id, payment)).rejects.toBeInstanceOf(HoldLapsedError);
+  });
+
+  // ADR-012: once a trxID is in, nothing expires — a person decides.
+  it('a correction to an order awaiting verification works after the cutoff', async () => {
+    const { db, svc, clock, order } = await placed();
+    clock.at = plus(5);
+    await svc.submitPayment(order.id, payment);
+    clock.at = plus(CUTOFF_MIN + 60);
+    const updated = await svc.submitPayment(order.id, { ...payment, trxId: 'ZZ99ZZ99ZZ' });
+    expect(updated).toMatchObject({ status: 'pending_verification', bkashTrxId: 'ZZ99ZZ99ZZ' });
+    expect(db.state.events.at(-1)).toMatchObject({
+      action: 'payment.updated',
+      fromStatus: 'pending_verification',
+    });
+  });
+});
+
 describe('ordersService.expireLapsedHolds', () => {
-  const later = new Date(NOW.getTime() + 25 * 3_600_000); // hold is 24h
+  // Strictly past the cutoff of an order placed at NOW (20 min + 2 min grace).
+  const later = plus(CUTOFF_MIN, 1);
 
   it('expires only lapsed pending_payment orders, releasing stock and auditing each', async () => {
     const db = fakeDb({ events: [event()], ticketTypes: [ticketType({ quantityTotal: 50 })] });
@@ -410,16 +526,37 @@ describe('ordersService.expireLapsedHolds', () => {
     expect(db.state.types.get('tt-1')?.quantityReserved).toBe(3); // bad's hold untouched
   });
 
-  it('does nothing before the hold lapses', async () => {
+  it('does nothing before the hold lapses: not when the clock hits zero, not in the grace', async () => {
     const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
     const svc = build(db);
-    await svc.createOrder(input);
+    const order = await svc.createOrder(input);
     const started = db.txCalls.started;
-    expect(await svc.expireLapsedHolds(new Date(NOW.getTime() + 3_600_000))).toEqual({
-      expired: 0,
-      failed: 0,
-    });
+    for (const at of [plus(1), plus(HOLD_MINUTES), plus(HOLD_MINUTES + 1), plus(21, 59_000)]) {
+      expect(await svc.expireLapsedHolds(at)).toEqual({ expired: 0, failed: 0 });
+    }
     expect(db.txCalls.started).toBe(started);
+    expect(db.state.orders.find((o) => o.id === order.id)?.status).toBe('pending_payment');
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(3);
+  });
+
+  it('expires once the cutoff has passed, with the 20-minute note', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    const order = await svc.createOrder(input);
+    expect(await svc.expireLapsedHolds(plus(CUTOFF_MIN, 1))).toEqual({ expired: 1, failed: 0 });
+    expect(db.state.orders.find((o) => o.id === order.id)?.status).toBe('expired');
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(0);
+    expect(db.state.events.at(-1)).toMatchObject({
+      action: 'order.expired',
+      note: `${HOLD_MINUTES}-minute hold lapsed; 3 released`,
+    });
+  });
+
+  it('asks the repository for holds that ended before now minus the grace', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const spy = vi.spyOn(db.orders, 'listLapsedHolds');
+    await build(db).expireLapsedHolds(plus(30));
+    expect(spy).toHaveBeenCalledWith(plus(30 - HOLD_GRACE_MINUTES), 200);
   });
 
   // The race the conditional UPDATE exists for: a buyer submits between the
@@ -439,5 +576,99 @@ describe('ordersService.expireLapsedHolds', () => {
     expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 0, failed: 0 });
     expect(db.inventoryRepo.release).not.toHaveBeenCalled();
     expect(db.state.orders.find((o) => o.id === order.id)?.status).toBe('pending_verification');
+  });
+});
+
+// After an on-sale rush every abandoned checkout lapses in the same minute:
+// one run must bring them all back on sale, in bounded batches, and an order
+// that keeps failing must neither stop the rest nor keep the run going.
+describe('ordersService.expireLapsedHolds: batches', () => {
+  const later = plus(CUTOFF_MIN, 1);
+
+  /**
+   * `n` lapsed one-ticket holds on tt-1 (cloned from one real order), plus
+   * `bad` older ones on a ticket type whose counter cannot release — a
+   * corrupted row that fails on every attempt.
+   */
+  async function lapsedHolds(n: number, bad = 0) {
+    const db = fakeDb({
+      events: [event()],
+      ticketTypes: [ticketType({ quantityTotal: 10_000 }), ticketType({ id: 'tt-bad' })],
+    });
+    const template = await build(db).createOrder({
+      ...input,
+      quantity: 1,
+      attendeeNames: ['A B'],
+    });
+    db.state.orders.length = 0;
+    db.state.events.length = 0;
+    for (let i = 0; i < bad; i++) {
+      db.state.orders.push({
+        ...template,
+        id: `bad-${i}`,
+        ticketTypeId: 'tt-bad',
+        holdExpiresAt: new Date(template.holdExpiresAt!.getTime() - 1),
+      });
+    }
+    for (let i = 0; i < n; i++) db.state.orders.push({ ...template, id: `bulk-${i}` });
+    db.state.types.get('tt-1')!.quantityReserved = n;
+    const list = vi.spyOn(db.orders, 'listLapsedHolds');
+    // Capture the fake's tx handle so big runs can skip its per-transaction
+    // snapshot (rollback is not under test there).
+    const tx = await db.runInTransaction(async (t) => t);
+    const fast = <T>(fn: (t: DbExecutor) => Promise<T>) => fn(tx);
+    return { db, list, fast };
+  }
+
+  const pending = (db: ReturnType<typeof fakeDb>) =>
+    db.state.orders.filter((o) => o.status === 'pending_payment').length;
+
+  it('expires more than one batch (450) in a single run', async () => {
+    const { db, list, fast } = await lapsedHolds(450);
+    const svc = build(db, { now: () => later, runInTransaction: fast });
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 450, failed: 0 });
+    expect(pending(db)).toBe(0);
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(0);
+    expect(db.state.events.filter((e) => e.action === 'order.expired')).toHaveLength(450);
+    // 200 + 200 + a short batch of 50 that ends the run.
+    expect(list).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops after the batch cap (10 × 200); the next run takes the rest', async () => {
+    const { db, list, fast } = await lapsedHolds(2_500);
+    const svc = build(db, { now: () => later, runInTransaction: fast });
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 2_000, failed: 0 });
+    expect(list).toHaveBeenCalledTimes(10);
+    expect(pending(db)).toBe(500);
+    expect(db.state.types.get('tt-1')?.quantityReserved).toBe(500);
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 500, failed: 0 });
+    expect(pending(db)).toBe(0);
+  });
+
+  it('a failing order is skipped, counted once, rolled back, and the rest still expire', async () => {
+    const { db, list } = await lapsedHolds(250, 1);
+    const svc = build(db, { now: () => later });
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 250, failed: 1 });
+    expect(db.state.orders.find((o) => o.id === 'bad-0')?.status).toBe('pending_payment');
+    expect(db.state.events.filter((e) => e.orderId === 'bad-0')).toHaveLength(0);
+    expect(pending(db)).toBe(1);
+    // Batch 1 (200, the bad one first) then a short one: it is not fetched forever.
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('a whole batch of failing orders ends the run instead of looping on them', async () => {
+    const { db, list } = await lapsedHolds(3, 205);
+    const svc = build(db, { now: () => later });
+
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 3, failed: 205 });
+    expect(pending(db)).toBe(205);
+    expect(list.mock.calls.length).toBeLessThanOrEqual(3);
+
+    // The next run retries them (and they fail again): each counted once per run.
+    expect(await svc.expireLapsedHolds(later)).toEqual({ expired: 0, failed: 205 });
   });
 });
