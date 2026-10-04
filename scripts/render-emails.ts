@@ -49,6 +49,7 @@ const view: EmailView = {
     description: null,
     venue: 'ICCB Hall 4, Dhaka',
     venueHidden: false,
+    hideAvailability: false,
     venueArea: null,
     startsAt: new Date('2026-10-01T13:00:00Z'),
     endsAt: null,

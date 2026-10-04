@@ -14,6 +14,7 @@ export interface EventFormValues {
   description: string;
   venue: string;
   venueHidden: boolean;
+  hideAvailability: boolean;
   venueArea: string;
   startsAt: string;
   endsAt: string;
@@ -36,6 +37,7 @@ const empty: EventFormValues = {
   description: '',
   venue: '',
   venueHidden: false,
+  hideAvailability: false,
   venueArea: '',
   startsAt: '',
   endsAt: '',
@@ -141,6 +143,20 @@ export function EventForm({
               </Field>
             </div>
           </div>
+
+          <label className="flex items-start gap-2.5 text-[15px]">
+            <input
+              type="checkbox"
+              id="hideAvailability"
+              name="hideAvailability"
+              defaultChecked={values.hideAvailability}
+              className="mt-1 size-4 shrink-0 accent-foreground"
+            />
+            <span>
+              Hide how many tickets are left — the public never sees a count (event page, register
+              page, emails). &ldquo;Sold out&rdquo; still shows.
+            </span>
+          </label>
 
           <Field
             label="Presenting sponsor"

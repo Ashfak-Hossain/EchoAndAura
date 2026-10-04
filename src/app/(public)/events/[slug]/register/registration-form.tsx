@@ -19,9 +19,12 @@ export interface TicketOption {
   id: string;
   name: string;
   pricePaisa: number;
-  /** Tickets left right now (0 when not purchasable). */
-  available: number;
-  /** min(10, available) — 0 disables the row. */
+  /**
+   * Tickets left right now (0 when not purchasable). Null when the event
+   * hides its counts (ADR-055): the number never reaches the browser.
+   */
+  available: number | null;
+  /** min(10, available) — 0 disables the row. 10 when the count is hidden: the server decides. */
   maxPerOrder: number;
   /** Why the row is disabled, or null when it can be chosen. */
   reason: string | null;
@@ -77,7 +80,8 @@ export function RegistrationForm({
     return Number.isInteger(n) && n >= 1 ? n : 1;
   });
   const maxQty = selected?.maxPerOrder ?? 0;
-  const overStock = selected !== null && quantity > selected.available;
+  const overStock =
+    selected !== null && selected.available !== null && quantity > selected.available;
 
   const [buyerName, setBuyerName] = useState(str(values.buyerName) || (prefill?.name ?? ''));
 
@@ -223,13 +227,20 @@ export function RegistrationForm({
                 <span
                   className={cn(
                     'text-[13px]',
-                    !disabled && o.available <= 10 && 'font-medium text-[#7a4600]',
+                    !disabled &&
+                      o.available !== null &&
+                      o.available <= 10 &&
+                      'font-medium text-[#7a4600]',
                   )}
                 >
                   {o.id === soldOutId
                     ? 'Sold out'
                     : (o.reason ??
-                      (o.available <= 10 ? `Only ${o.available} left` : `${o.available} left`))}
+                      (o.available === null
+                        ? null
+                        : o.available <= 10
+                          ? `Only ${o.available} left`
+                          : `${o.available} left`))}
                 </span>
               </span>
             </label>
@@ -273,7 +284,9 @@ export function RegistrationForm({
         </div>
         <FieldHint>
           Max {MAX_TICKETS_PER_ORDER} per order.
-          {selected ? ` ${selected.available} left at this price.` : ''}
+          {selected && selected.available !== null
+            ? ` ${selected.available} left at this price.`
+            : ''}
         </FieldHint>
         {overStock && selected ? (
           <FieldError>

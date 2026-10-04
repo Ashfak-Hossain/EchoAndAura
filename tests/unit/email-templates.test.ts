@@ -252,6 +252,74 @@ describe('email templates', () => {
   });
 });
 
+// ADR-055: an event that hides its counts never prints one — in the html or
+// the plain-text part. A distinctive count makes a stray digit easy to spot.
+describe('C3/C4 when the event hides how many tickets are left', () => {
+  const COUNT = 4837;
+  const withCounts = (hideAvailability: boolean, status: 'rejected' | 'expired') => {
+    const base = view();
+    return view({
+      order: { ...base.order, status },
+      event: { ...base.event, hideAvailability },
+      availableNow: COUNT,
+    });
+  };
+  const noCount = (s: string) => {
+    expect(s).not.toContain(String(COUNT));
+    expect(s).not.toContain('4,837');
+    // The order's own quantity ("We held 2 General tickets") is fine; a count
+    // next to the availability wording is not.
+    expect(s).not.toMatch(/\d[\d,]*\s+General tickets are still available/);
+    expect(s).not.toMatch(/Still available\s*\d/i);
+  };
+
+  it('C3 hidden: says the type is still available, with no number', async () => {
+    const r = await renderEmail('rejected', withCounts(true, 'rejected'));
+    const html = joined(r.html);
+    expect(html).toContain('General tickets are still available');
+    expect(r.text).toContain('General tickets are still available');
+    noCount(html);
+    noCount(r.text);
+  });
+
+  it('C3 shown: the count is printed', async () => {
+    const r = await renderEmail('rejected', withCounts(false, 'rejected'));
+    expect(joined(r.html)).toContain(`${COUNT} General tickets are still available`);
+    expect(r.text).toContain(`${COUNT} General tickets are still available`);
+  });
+
+  it('C4 hidden: the "Still available" row answers yes, with no number', async () => {
+    const r = await renderEmail('expired', withCounts(true, 'expired'));
+    const html = joined(r.html);
+    expect(html).toMatch(/Still available\s*<\/span>\s*Yes — General tickets/);
+    expect(r.text).toContain('Yes — General tickets');
+    noCount(html);
+    noCount(r.text);
+  });
+
+  it('C4 shown: the count is printed', async () => {
+    const r = await renderEmail('expired', withCounts(false, 'expired'));
+    expect(joined(r.html)).toContain(`${COUNT} General tickets`);
+    expect(r.text).toContain(`${COUNT} General tickets`);
+  });
+
+  it('nothing left: neither mode mentions availability', async () => {
+    for (const hideAvailability of [true, false]) {
+      const base = view();
+      const r = await renderEmail(
+        'rejected',
+        view({
+          order: { ...base.order, status: 'rejected' },
+          event: { ...base.event, hideAvailability },
+          availableNow: 0,
+        }),
+      );
+      expect(joined(r.html)).not.toContain('still available');
+      expect(r.text).not.toContain('still available');
+    }
+  });
+});
+
 describe('admin account emails (ADR-038)', () => {
   const sender = {
     siteUrl: 'https://echoandaura.com',

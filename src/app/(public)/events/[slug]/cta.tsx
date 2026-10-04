@@ -9,6 +9,8 @@ interface Props {
   registrationOpensAt: Date | null;
   registrationClosesAt: Date | null;
   availableTotal: number;
+  /** ADR-055: never say how many are left; "closing soon" instead. */
+  hideAvailability?: boolean;
   facebookUrl: string | null;
   now: Date;
 }
@@ -27,6 +29,7 @@ export function EventCta({
   registrationOpensAt,
   registrationClosesAt,
   availableTotal,
+  hideAvailability = false,
   facebookUrl,
   now,
 }: Props) {
@@ -52,7 +55,11 @@ export function EventCta({
       return (
         <>
           <ButtonLink href={`/events/${slug}/register`} variant="cta" size="lg" className="w-full">
-            {phase === 'closing_soon' ? `Register — ${availableTotal} tickets left` : 'Register'}
+            {phase !== 'closing_soon'
+              ? 'Register'
+              : hideAvailability
+                ? 'Register — closing soon'
+                : `Register — ${availableTotal} tickets left`}
           </ButtonLink>
           {registrationClosesAt
             ? note(

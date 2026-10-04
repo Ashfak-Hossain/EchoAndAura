@@ -62,6 +62,8 @@ export interface CreateEventInput {
   /** Private venue: public pages show `venueArea` and a note instead (ADR-029). */
   venueHidden?: boolean;
   venueArea?: string;
+  /** ADR-055: never show the public how many tickets are left. */
+  hideAvailability?: boolean;
   startsAt: Date;
   endsAt?: Date;
   /** Either registration bound left undefined falls back to the 20/5-day rule. */
@@ -205,6 +207,7 @@ export function createEventsService(
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
         ...venueFields(input),
+        hideAvailability: input.hideAvailability ?? false,
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,
@@ -226,6 +229,7 @@ export function createEventsService(
         slug: input.slug ?? slugify(input.title),
         description: cleanDescription(input.description),
         ...venueFields(input),
+        hideAvailability: input.hideAvailability ?? false,
         startsAt: input.startsAt,
         endsAt: input.endsAt ?? null,
         registrationOpensAt: input.registrationOpensAt ?? defaults.registrationOpensAt,

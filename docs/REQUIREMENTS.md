@@ -27,6 +27,10 @@ and this file is stale.
   registration closes
 - Registration window: opens 20 days before the event, closes 5 days before
 - Early Bird as a separate ticket type with its own sales window
+- Ticket counts: the public pages show how many tickets of each type are
+  left, unless the event's "Hide how many tickets are left" option is on —
+  then no count is shown anywhere public (pages or buyer emails), only
+  "Sold out"; admins always see counts ([ADR-055](DECISIONS.md))
 - Promo codes: percentage or fixed, unlimited uses, restrictable by ticket type
 - Admin can cancel a ticket (releases inventory); refunds happen outside the
   system

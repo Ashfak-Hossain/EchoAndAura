@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "hide_availability" boolean DEFAULT false NOT NULL;

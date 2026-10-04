@@ -37,6 +37,7 @@ function fakeRepo(seed: EventRecord[] = []) {
     description: values.description ?? null,
     venue: values.venue ?? null,
     venueHidden: values.venueHidden ?? false,
+    hideAvailability: values.hideAvailability ?? false,
     venueArea: values.venueArea ?? null,
     startsAt: values.startsAt,
     endsAt: values.endsAt ?? null,
@@ -871,6 +872,46 @@ describe('eventsService — private venue', () => {
   });
 });
 
+// ADR-055: the organizer's "hide how many tickets are left" box is written
+// on create and replaced by every save, like the rest of the form.
+describe('eventsService — hide availability', () => {
+  it('create writes the flag to the repository; left out, it is written as false', async () => {
+    const { repo } = fakeRepo();
+    const insert = vi.spyOn(repo, 'insert');
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+
+    const hidden = await svc.createEvent({ title: 'Hidden', startsAt, hideAvailability: true });
+    expect(hidden.hideAvailability).toBe(true);
+    expect(insert.mock.calls[0]?.[0]).toMatchObject({ hideAvailability: true });
+
+    const plain = await svc.createEvent({ title: 'Plain', startsAt });
+    expect(plain.hideAvailability).toBe(false);
+    // Explicitly false, not merely missing — the fake would default it either way.
+    expect(insert.mock.calls[1]?.[0]).toHaveProperty('hideAvailability', false);
+  });
+
+  it('update replaces it: on, then a save without the box turns it off', async () => {
+    const { repo, rows } = fakeRepo();
+    const update = vi.spyOn(repo, 'update');
+    const svc = createEventsService(repo, fakeTicketTypes(), fakeStorage().storage, clock);
+    const created = await svc.createEvent({ title: 'Show', startsAt });
+
+    const on = await svc.updateEvent(created.id, {
+      title: 'Show',
+      startsAt,
+      hideAvailability: true,
+    });
+    expect(on.hideAvailability).toBe(true);
+    expect(rows.get(created.id)?.hideAvailability).toBe(true);
+    expect(update.mock.calls[0]?.[1]).toMatchObject({ hideAvailability: true });
+
+    const off = await svc.updateEvent(created.id, { title: 'Show', startsAt });
+    expect(off.hideAvailability).toBe(false);
+    expect(rows.get(created.id)?.hideAvailability).toBe(false);
+    expect(update.mock.calls[1]?.[1]).toHaveProperty('hideAvailability', false);
+  });
+});
+
 describe('eventsService.getSitemapEvents (ADR-042)', () => {
   const row = (slug: string, status: EventRecord['status'], updatedAt: string): EventRecord => ({
     id: `id-${slug}`,
@@ -879,6 +920,7 @@ describe('eventsService.getSitemapEvents (ADR-042)', () => {
     description: null,
     venue: 'ICCB',
     venueHidden: false,
+    hideAvailability: false,
     venueArea: null,
     startsAt,
     endsAt: null,

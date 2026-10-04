@@ -194,6 +194,48 @@ describe('heroCopy', () => {
     expect(copy({ phase: 'open', now }).countdown).toBeNull();
   });
 
+  // ADR-055: an event that hides its counts never shows one in the hero.
+  describe('when the event hides how many tickets are left', () => {
+    const hidden = { ...event, hideAvailability: true };
+
+    it('open: no tickets-left line; everything else as when shown', () => {
+      const now = at('2026-10-05T06:00:00Z');
+      const shown = copy({ phase: 'open', now });
+      const out = copy({ phase: 'open', event: hidden, now });
+      expect(out.leftLabel).toBeNull();
+      expect(out).toEqual({ ...shown, leftLabel: null });
+      // Not even a singular or a grouped count slips through.
+      expect(copy({ phase: 'open', event: hidden, availableTotal: 1, now }).leftLabel).toBeNull();
+      expect(
+        copy({ phase: 'open', event: hidden, availableTotal: 1200, now }).leftLabel,
+      ).toBeNull();
+    });
+
+    it('closing soon: no tickets-left line, still buyable, the sentence unchanged', () => {
+      const now = at('2026-10-10T06:00:00Z');
+      const shown = copy({ phase: 'closing_soon', availableTotal: 38, now });
+      const out = copy({ phase: 'closing_soon', event: hidden, availableTotal: 38, now });
+      expect(shown.leftLabel).toBe('38 tickets left');
+      expect(out).toEqual({ ...shown, leftLabel: null });
+      expect(out.canBuy).toBe(true);
+      expect(JSON.stringify(out)).not.toMatch(/\b38\b/);
+    });
+
+    it('sold out: the same public copy as an event that shows its counts', () => {
+      const now = at('2026-10-05T06:00:00Z');
+      expect(copy({ phase: 'sold_out', event: hidden, availableTotal: 0, now })).toEqual(
+        copy({ phase: 'sold_out', availableTotal: 0, now }),
+      );
+    });
+
+    it('an explicit false is the same as leaving it out', () => {
+      const now = at('2026-10-05T06:00:00Z');
+      expect(
+        copy({ phase: 'open', event: { ...event, hideAvailability: false }, now }).leftLabel,
+      ).toBe('112 tickets left');
+    });
+  });
+
   it('exposes the countdown labels', () => {
     expect(COUNTDOWN_LABELS).toEqual({
       close: 'Registration closes in',

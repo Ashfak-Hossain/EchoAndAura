@@ -23,6 +23,8 @@ export interface HeroCopyInput {
     startsAt: Date;
     registrationOpensAt: Date | null;
     registrationClosesAt: Date | null;
+    /** ADR-055: the organizer hides how many tickets are left. */
+    hideAvailability?: boolean;
   };
   offer: Pick<OfferSummary, 'fromPricePaisa' | 'fromTypeName' | 'fromIsEarlyBird' | 'earlyBird'>;
   /** Sum of (total − sold − reserved) across ticket types. */
@@ -76,7 +78,7 @@ export function heroCopy({ phase, event, offer, availableTotal, now }: HeroCopyI
   // countdown is for); once nothing can be bought it is noise.
   const priceLabel = canBuy || phase === 'not_open' ? fromPriceLabel(offer) : null;
   const leftLabel =
-    canBuy && availableTotal > 0
+    canBuy && availableTotal > 0 && !event.hideAvailability
       ? `${groupThousands(availableTotal)} ${availableTotal === 1 ? 'ticket' : 'tickets'} left`
       : null;
   const common = { priceLabel, leftLabel, canBuy };

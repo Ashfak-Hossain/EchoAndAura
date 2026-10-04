@@ -56,8 +56,16 @@ export default async function RegisterPage({ params }: Props) {
       id: t.id,
       name: t.name,
       pricePaisa: t.pricePaisa,
-      available: a.kind === 'left' ? a.count : 0,
-      maxPerOrder: a.kind === 'left' ? Math.min(MAX_TICKETS_PER_ORDER, a.count) : 0,
+      // ADR-055: a hidden count never leaves the server — not even in the
+      // page payload. The stepper then allows the usual 10 and the order's
+      // atomic hold answers "sold out" if there are not that many.
+      available: event.hideAvailability ? null : a.kind === 'left' ? a.count : 0,
+      maxPerOrder:
+        a.kind !== 'left'
+          ? 0
+          : event.hideAvailability
+            ? MAX_TICKETS_PER_ORDER
+            : Math.min(MAX_TICKETS_PER_ORDER, a.count),
       reason:
         a.kind === 'sold_out'
           ? 'Sold out'

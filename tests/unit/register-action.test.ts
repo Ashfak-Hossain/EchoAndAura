@@ -13,6 +13,8 @@ const passesHumanCheck = vi.fn<(formData: FormData, action: string) => Promise<b
   async () => true,
 );
 
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
     throw new Error(`redirect ${url}`);
@@ -31,7 +33,7 @@ vi.mock('@/lib/human-check', async (importActual) => ({
 
 const { registerAction, checkPromoCodeAction } =
   await import('@/app/(public)/events/[slug]/register/actions');
-const { TooManyOpenOrdersError } = await import('@/server/lib/errors');
+const { SoldOutError, TooManyOpenOrdersError } = await import('@/server/lib/errors');
 const { HUMAN_CHECK_FAILED } = await import('@/lib/human-check');
 
 /** The order limiter says yes, the promo budget is spent: they are separate. */
@@ -190,5 +192,37 @@ describe('the human check comes first', () => {
     await checkPromoCodeAction('live-dhaka', { code: 'dhaka15', ticketTypeId: TT });
     expect(checkPromo).toHaveBeenCalled();
     expect(passesHumanCheck).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-055: with counts hidden the buyer may ask for more than remain. Only a
+// refused single ticket proves the type is gone; a larger refusal keeps the
+// row choosable so they can try fewer.
+describe('a refused hold says what the buyer can do next', () => {
+  beforeEach(() => {
+    revalidatePath.mockClear();
+    allow.mockImplementation(onlyOrdersAllowed);
+  });
+
+  it('one ticket refused: the type sold out, and the form disables that row', async () => {
+    createOrder.mockRejectedValue(new SoldOutError(TT, 1));
+    const state = await registerAction('live-dhaka', {}, form({ quantity: '1' }));
+    expect(state.banner?.title).toBe('That ticket type sold out while you were choosing');
+    expect(state.banner?.soldOutTicketTypeId).toBe(TT);
+    expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan' });
+    expect(revalidatePath).toHaveBeenCalledWith('/events/live-dhaka/register');
+  });
+
+  it('several refused: "not that many left", and the row stays choosable', async () => {
+    createOrder.mockRejectedValue(new SoldOutError(TT, 3));
+    const state = await registerAction('live-dhaka', {}, form({ quantity: '3' }));
+    expect(state.banner?.title).toBe('Not that many tickets are left');
+    expect(state.banner?.body).toMatch(/Choose fewer tickets/);
+    expect(state.banner).not.toHaveProperty('soldOutTicketTypeId');
+    // Never a number: the event may hide its counts.
+    expect(`${state.banner?.title} ${state.banner?.body}`).not.toMatch(/\d/);
+    expect(state.values).toMatchObject({ quantity: '3' });
+    // Today's numbers for the form, so it never says "3 left" beside the banner.
+    expect(revalidatePath).toHaveBeenCalledWith('/events/live-dhaka/register');
   });
 });

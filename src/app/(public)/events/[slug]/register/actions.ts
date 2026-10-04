@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { ordersService, type PromoCheck } from '@/server/container';
 import {
@@ -116,6 +117,9 @@ export async function registerAction(
     if (err instanceof PromoCodeNotValidError) {
       return { fieldErrors: { promoCode: promoMessage(err.reason) }, values };
     }
+    // Fewer seats than the page showed: re-render it with today's numbers,
+    // so the form never says "3 left" beside "not that many are left".
+    if (err instanceof SoldOutError) revalidatePath(`/events/${eventSlug}/register`);
     return { banner: toBanner(err), values };
   }
 
@@ -171,9 +175,18 @@ export async function checkPromoCodeAction(
 
 function toBanner(err: unknown): NonNullable<RegistrationFormState['banner']> {
   if (err instanceof SoldOutError) {
+    // Only a refused single ticket proves none are left. A larger order may
+    // just be more than remains — usual when the event hides its counts
+    // (ADR-055) — so the type stays choosable for a smaller quantity.
+    if (err.requested > 1) {
+      return {
+        title: 'Not that many tickets are left',
+        body: 'Nothing has been charged. Choose fewer tickets, or another ticket type — it may also have sold out while you were choosing.',
+      };
+    }
     return {
       title: 'That ticket type sold out while you were choosing',
-      body: 'Nothing has been charged. Pick another ticket type or a smaller quantity to carry on.',
+      body: 'Nothing has been charged. Pick another ticket type to carry on.',
       soldOutTicketTypeId: err.ticketTypeId,
     };
   }
