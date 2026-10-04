@@ -32,9 +32,12 @@ function supported(): boolean {
   );
 }
 
+/** What the pre-doors test shows (ADR-059). */
+export type SavedCopy = 'saved' | 'failed' | 'unsupported';
+
 /** Register the worker and save this page for a reload without signal. Never throws. */
-export async function keepPageOffline(): Promise<void> {
-  if (!supported()) return;
+export async function keepPageOffline(): Promise<SavedCopy> {
+  if (!supported()) return 'unsupported';
   const gen = generation;
   try {
     await navigator.serviceWorker.register(WORKER_URL, { scope: WORKER_SCOPE });
@@ -44,7 +47,7 @@ export async function keepPageOffline(): Promise<void> {
     );
     // A fresh render for the saved copy: the cookie says which pass.
     const page = await fetch(PAGE_PATH, { cache: 'no-store', credentials: 'same-origin' });
-    if (!page.ok || page.redirected) return;
+    if (!page.ok || page.redirected) return 'failed';
     const [pageCache, fileCache] = await Promise.all([
       caches.open(PAGE_CACHE),
       caches.open(FILES_CACHE),
@@ -61,15 +64,17 @@ export async function keepPageOffline(): Promise<void> {
       const res = await fetch(path);
       if (res.ok) await fileCache.put(path, res);
     }
-    if (gen !== generation) return;
+    if (gen !== generation) return 'failed';
     await pageCache.put(PAGE_PATH, page);
     // A new build's page runs on new files: the old ones are dead weight.
     const wanted = new Set(files);
     await Promise.all(
       [...had].filter((path) => !wanted.has(path)).map((path) => fileCache.delete(path)),
     );
+    return 'saved';
   } catch {
     // No copy this time: the gate works as it did, online or offline.
+    return 'failed';
   }
 }
 
