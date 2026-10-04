@@ -3502,7 +3502,7 @@ so HTML and RSC data cannot share an entry.
   (docs/infra/CLOUDFLARE.md § Cache rules): `/`, `/events`, `/archive`,
   `/about`, `/faq`, `/terms`, `/privacy`, `/refund`, `/contact`, and
   `/events/<slug>` but not `/events/<slug>/register`. Edge TTL 30 s,
-  ignoring the origin's `no-store`; 5xx never cached; Browser TTL follows
+  ignoring the origin's `no-store`; 500-526 never cached (the free plan stops at 526); Browser TTL follows
   the origin, so browsers still keep nothing.
 - **Any cookie containing `better-auth` bypasses it** — admins, signed-in
   buyers, even an expired session. Those are the only visitors the public

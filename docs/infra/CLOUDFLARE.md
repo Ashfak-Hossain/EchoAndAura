@@ -295,7 +295,7 @@ visitors who are not signed in. Caching → Cache Rules →
 
 - **Cache eligibility:** Eligible for cache
 - **Edge TTL:** Ignore cache-control header and use this TTL, **30 seconds**;
-  status code TTL **500-599 → No cache** (an error page is never kept)
+  status code TTL **500-526 → No cache** (526 is the highest the free plan offers, and the highest Cloudflare uses) (an error page is never kept)
 - **Browser TTL:** Respect origin TTL (browsers still get `no-store`)
 - **Cache key:** default (the query string is part of it)
 
@@ -464,3 +464,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-03 | Members: developer added with their own login (Super Administrator) instead of sharing Raj's; both logins 2FA; API tokens reviewed (S4)                                                                                                                                                                                                                                                                                                                                            |
 | 2026-10-04 | Cache rule `spike - cache faq for anonymous visitors` (`/faq`, no `better-auth` cookie, edge TTL 30 s): MISS → HIT, ~170 → ~50 ms first byte, CSP and navigation fine                                                                                                                                                                                                                                                                                                              |
 | 2026-10-04 | Email Address Obfuscation off: the address was already plain in the RSC data, and the injected decoder broke CSP and hydration (React #418)                                                                                                                                                                                                                                                                                                                                        |
+| 2026-10-04 | Cache rule widened and renamed `public pages for anonymous visitors` (ADR-056 expression; 500-526 no cache): all nine pages MISS → HIT, `/events/<slug>` cached, `/register`, `/orders`, `/account`, `/api` and any `better-auth` cookie DYNAMIC                                                                                                                                                                                                                                   |
