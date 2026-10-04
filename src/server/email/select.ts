@@ -2,19 +2,26 @@ import { EMAIL_JOB_PREFIX } from '@/server/queue/names';
 import { logger } from '@/server/lib/logger';
 import { createLogMailer } from './log-mailer';
 import { type Mailer, readMailerEnv } from './mailer';
+import { createCloudflareMailer, readCloudflareEmailEnv } from './cloudflare-mailer';
 import { createSesMailer, readSesEnv } from './ses-mailer';
 import { EMAIL_KINDS, type EmailKind } from './templates/render';
 
 /**
- * Which adapter sends, from `MAILER`. Production refuses anything but SES:
- * a "log" send is not a send, and a misconfigured VPS must fail on boot,
- * not silently drop every ticket email into a tmp folder.
+ * Which adapter sends, from `MAILER`. Production sends for real or not at
+ * all: `cloudflare` (ADR-057) or `ses` (the rollback). A "log" send is not a
+ * send, and a misconfigured VPS must fail on boot, not silently drop every
+ * ticket email into a tmp folder.
  */
 export function selectMailer(env: NodeJS.ProcessEnv = process.env): Mailer {
   const choice = env.MAILER ?? (env.NODE_ENV === 'production' ? 'ses' : 'log');
+  if (choice === 'cloudflare') {
+    return createCloudflareMailer(readMailerEnv(env), readCloudflareEmailEnv(env));
+  }
   if (choice === 'ses') return createSesMailer(readMailerEnv(env), readSesEnv(env));
   if (env.NODE_ENV === 'production') {
-    throw new Error(`MAILER=${choice} is not allowed in production — set MAILER=ses`);
+    throw new Error(
+      `MAILER=${choice} is not allowed in production — set MAILER=cloudflare (or ses)`,
+    );
   }
   logger.warn(
     { mailer: choice },

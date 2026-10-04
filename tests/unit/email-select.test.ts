@@ -12,6 +12,24 @@ describe('selectMailer', () => {
     expect(() => selectMailer(env({ NODE_ENV: 'production' }))).toThrow(/EMAIL_FROM|AWS_SES/);
     expect(selectMailer(env({ NODE_ENV: 'development' }))).toBeTruthy();
   });
+
+  it('sends through Cloudflare when chosen, and checks its values at boot', () => {
+    const from = { EMAIL_FROM: 'echoandaura <tickets@echoandaura.com>' };
+    expect(() =>
+      selectMailer(env({ NODE_ENV: 'production', MAILER: 'cloudflare', ...from })),
+    ).toThrow(/CLOUDFLARE_ACCOUNT_ID/);
+    expect(
+      selectMailer(
+        env({
+          NODE_ENV: 'production',
+          MAILER: 'cloudflare',
+          ...from,
+          CLOUDFLARE_ACCOUNT_ID: '0123456789abcdef0123456789abcdef',
+          CLOUDFLARE_EMAIL_API_TOKEN: 'x'.repeat(40),
+        }),
+      ),
+    ).toBeTruthy();
+  });
 });
 
 describe('emailKindOf', () => {

@@ -98,10 +98,14 @@ services:
         condition: service_completed_successfully
     environment:
       <<: *app-env
-      MAILER: ses
+      # ADR-057: `cloudflare` sends; `ses` is the rollback. The worker checks
+      # the chosen provider's values at boot, so a missing one stops it.
+      MAILER: ${MAILER:-ses}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_EMAIL_API_TOKEN: ${CLOUDFLARE_EMAIL_API_TOKEN:-}
       AWS_SES_REGION: ${AWS_SES_REGION:-ap-south-1}
-      AWS_SES_ACCESS_KEY_ID: ${AWS_SES_ACCESS_KEY_ID:?Set AWS_SES_ACCESS_KEY_ID in Dokploy}
-      AWS_SES_SECRET_ACCESS_KEY: ${AWS_SES_SECRET_ACCESS_KEY:?Set AWS_SES_SECRET_ACCESS_KEY in Dokploy}
+      AWS_SES_ACCESS_KEY_ID: ${AWS_SES_ACCESS_KEY_ID:-}
+      AWS_SES_SECRET_ACCESS_KEY: ${AWS_SES_SECRET_ACCESS_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM in Dokploy}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
     # ~300 MB idle (measured 2026-09-27); a ticket PDF render comes on top,

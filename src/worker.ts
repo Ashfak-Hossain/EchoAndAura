@@ -197,7 +197,8 @@ async function main(): Promise<void> {
     {
       connection,
       concurrency: 2,
-      // Well under SES's default 14/s; the sandbox allows 1/s (ENVIRONMENT.md).
+      // A steady pace for the provider (ADR-057); a burst past its quota is
+      // throttled and retried, never dropped.
       limiter: { max: 5, duration: 1000 },
     },
   );

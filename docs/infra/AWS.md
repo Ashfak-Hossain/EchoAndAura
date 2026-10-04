@@ -2,8 +2,9 @@
 
 Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
 
-This project uses two AWS services: **Amazon SES**, for outbound
-transactional email, and one **S3 bucket** for the off-site copy of the
+This project uses two AWS services: **Amazon SES**, now only the
+**rollback** for outbound email (Cloudflare Email Service sends since
+ADR-057; SES is retired after a few clean weeks), and one **S3 bucket** for the off-site copy of the
 database backups ([S3 off-site backups](#s3-off-site-backups), ADR-051).
 Everything else on the account exists to keep those safe and cheap: IAM
 principals, three budgets, one send-only key, one upload-only key, and
