@@ -23,6 +23,11 @@ ADR-016 (and ADR-014 for the hooks, ADR-017 for the sign-in link).
 | `expired`              | C4     | `onOrderExpired` — the worker's `expire-holds` job (every 60 s, `holds` queue) | `expired`                                                   | —                | `templates/expired.tsx`              |
 | sign-in link           | C6     | better-auth `magicLink` plugin → `sendMagicLink` → `enqueueSignInEmail`        | n/a (no order; skipped for admin emails)                    | —                | `templates/sign-in.tsx`              |
 
+C3 and C4 tell the buyer whether the ticket type is still available.
+They print the count ("4 General tickets") only when the event shows its
+counts; an event with "Hide how many tickets are left" on gets the same
+line without a number (`v.event.hideAvailability`, ADR-055).
+
 Every template is React Email (`src/server/email/templates/`), rendered
 to HTML **and** plain text. `pnpm email:render` writes all of them to
 `tmp/emails/` from sample data for eyeballing.

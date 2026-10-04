@@ -31,6 +31,7 @@ function submittedValues(formData: FormData): EventFormValues {
     description: str('description'),
     venue: str('venue'),
     venueHidden: formData.get('venueHidden') === 'on',
+    hideAvailability: formData.get('hideAvailability') === 'on',
     venueArea: str('venueArea'),
     startsAt: str('startsAt'),
     endsAt: str('endsAt'),

@@ -98,3 +98,26 @@ describe('event form actions — presenting sponsor', () => {
     expect(blank).toMatchObject({ error: 'Title is required', field: undefined });
   });
 });
+
+// ADR-055: the "hide how many tickets are left" box reaches the service, and a
+// refused form re-seeds it as ticked so a save never silently drops it.
+describe('event form actions — hide availability', () => {
+  it('ticked reaches the service as true; unticked as false', async () => {
+    createEvent.mockResolvedValue({ id: EVENT_ID });
+    await expect(createEventAction({}, form({ hideAvailability: 'on' }))).rejects.toThrow(
+      'REDIRECT',
+    );
+    expect(createEvent.mock.calls[0]?.[0]).toMatchObject({ hideAvailability: true });
+
+    updateEvent.mockResolvedValue({ id: EVENT_ID });
+    await expect(updateEventAction(EVENT_ID, {}, form())).rejects.toThrow('REDIRECT');
+    expect(updateEvent.mock.calls[0]?.[1]).toMatchObject({ hideAvailability: false });
+  });
+
+  it('a refused form keeps the box as it was submitted', async () => {
+    const ticked = await createEventAction({}, form({ hideAvailability: 'on', title: ' ' }));
+    expect(ticked.values?.hideAvailability).toBe(true);
+    const unticked = await createEventAction({}, form({ title: ' ' }));
+    expect(unticked.values?.hideAvailability).toBe(false);
+  });
+});

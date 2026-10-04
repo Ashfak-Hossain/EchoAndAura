@@ -13,6 +13,8 @@ interface Props {
   compact?: boolean;
   /** The row to tint marigold: the Early Bird while it sells (`offerSummary().highlightId`). */
   highlightId?: string | null;
+  /** ADR-055: no "N left" — Sold out, Closed and Not yet still show. */
+  hideCounts?: boolean;
 }
 
 /**
@@ -21,7 +23,14 @@ interface Props {
  * or closed type stays visible, greyed, with its price — removing it makes
  * the page look wrong to anyone who saw it earlier.
  */
-export function TicketList({ ticketTypes, phase, now, compact, highlightId }: Props) {
+export function TicketList({
+  ticketTypes,
+  phase,
+  now,
+  compact,
+  highlightId,
+  hideCounts = false,
+}: Props) {
   const showQuantities = phase === 'open' || phase === 'closing_soon' || phase === 'sold_out';
   const scarce = phase === 'closing_soon';
 
@@ -68,7 +77,7 @@ export function TicketList({ ticketTypes, phase, now, compact, highlightId }: Pr
               {subtitle && showQuantities ? (
                 <div className="mt-0.5 text-[13px] text-muted-foreground tabular">{subtitle}</div>
               ) : null}
-              {compact && showQuantities && availability.kind === 'left' ? (
+              {compact && showQuantities && !hideCounts && availability.kind === 'left' ? (
                 <div
                   className={cn(
                     'mt-0.5 text-[13px] font-medium',
@@ -89,9 +98,11 @@ export function TicketList({ ticketTypes, phase, now, compact, highlightId }: Pr
               />
               {!compact && showQuantities ? (
                 availability.kind === 'left' ? (
-                  <Chip size="sm" tone={scarce ? 'warning' : 'success'}>
-                    {availability.count} left
-                  </Chip>
+                  hideCounts ? null : (
+                    <Chip size="sm" tone={scarce ? 'warning' : 'success'}>
+                      {availability.count} left
+                    </Chip>
+                  )
                 ) : availability.kind === 'sold_out' ? (
                   <Chip size="sm" tone="neutralStrong">
                     Sold out

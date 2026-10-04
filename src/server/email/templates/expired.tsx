@@ -31,7 +31,10 @@ export function ExpiredEmail({ v }: { v: EmailView }) {
       </Row>
       {v.availableNow > 0 ? (
         <Row label="Still available">
-          {v.availableNow} {v.ticketType.name} tickets
+          {/* ADR-055: an event that hides its counts never shows one, here either. */}
+          {v.event.hideAvailability
+            ? `Yes — ${v.ticketType.name} tickets`
+            : `${v.availableNow} ${v.ticketType.name} tickets`}
         </Row>
       ) : null}
 

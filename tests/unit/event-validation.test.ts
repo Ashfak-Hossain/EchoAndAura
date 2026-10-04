@@ -46,6 +46,19 @@ describe('eventFormSchema', () => {
     expect(picked.success && picked.data.presentingSponsorId).toBe(id);
   });
 
+  // ADR-055: an HTML checkbox sends "on" when ticked and nothing when not.
+  it('reads the hide-availability checkbox: "on" is true, absent is false', () => {
+    const ticked = eventFormSchema.safeParse({ ...valid, hideAvailability: 'on' });
+    expect(ticked.success && ticked.data.hideAvailability).toBe(true);
+    const unticked = eventFormSchema.safeParse(valid);
+    expect(unticked.success).toBe(true);
+    expect(unticked.success && unticked.data.hideAvailability).toBe(false);
+  });
+
+  it('rejects a hide-availability value a checkbox cannot send', () => {
+    expect(eventFormSchema.safeParse({ ...valid, hideAvailability: 'yes' }).success).toBe(false);
+  });
+
   it('lower-cases an explicit slug', () => {
     const r = eventFormSchema.safeParse({ ...valid, slug: 'Launch-Night' });
     expect(r.success && r.data.slug).toBe('launch-night');

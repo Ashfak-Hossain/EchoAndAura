@@ -71,6 +71,11 @@ export const eventFormSchema = z
       .optional()
       .transform((v) => v === 'on'),
     venueArea: optionalText(120),
+    // Checkbox (ADR-055): hide "N tickets left" on every public surface.
+    hideAvailability: z
+      .literal('on')
+      .optional()
+      .transform((v) => v === 'on'),
     startsAt: dhakaDateTime,
     endsAt: optionalDhakaDateTime,
     registrationOpensAt: optionalDhakaDateTime,

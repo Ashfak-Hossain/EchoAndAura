@@ -27,7 +27,10 @@ export interface EmailView extends EmailSender {
   bkashAccountType: 'personal' | 'merchant';
   /** "usually within 4 hours" */
   verificationPromise: string;
-  /** Tickets still available for this type, for C3/C4's "still available". */
+  /**
+   * Tickets still available for this type, for C3/C4's "still available".
+   * Printed only when the event shows its counts (`event.hideAvailability`, ADR-055).
+   */
   availableNow: number;
   /** When the relevant thing happened (approval, rejection, expiry), for the copy. */
   at: Date;

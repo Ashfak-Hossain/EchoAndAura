@@ -183,6 +183,13 @@
       "when": 1791057234669,
       "tag": "0025_door_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791094722312,
+      "tag": "0026_event_hide_availability",
+      "breakpoints": true
     }
   ]
 }

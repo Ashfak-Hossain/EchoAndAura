@@ -59,6 +59,9 @@ export const events = pgTable(
     // and show the optional `venue_area` hint instead; ticket holders get the
     // venue on their tickets, PDF, calendar file and tickets email.
     venueHidden: boolean('venue_hidden').notNull().default(false),
+    // ADR-055: public pages and emails never say how many tickets are left.
+    // Sold out (and the schema.org availability) stays public.
+    hideAvailability: boolean('hide_availability').notNull().default(false),
     venueArea: text('venue_area'),
     startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }),

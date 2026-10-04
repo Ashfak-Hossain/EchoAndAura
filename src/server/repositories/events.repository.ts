@@ -22,6 +22,7 @@ export type EventPatch = Partial<
     | 'venue'
     | 'venueHidden'
     | 'venueArea'
+    | 'hideAvailability'
     | 'startsAt'
     | 'endsAt'
     | 'registrationOpensAt'

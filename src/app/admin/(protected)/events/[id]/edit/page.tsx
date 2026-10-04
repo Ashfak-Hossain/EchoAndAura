@@ -63,6 +63,7 @@ export default async function EditEventPage({ params, searchParams }: Props) {
     description: descriptionToHtml(event.description) ?? '',
     venue: event.venue ?? '',
     venueHidden: event.venueHidden,
+    hideAvailability: event.hideAvailability,
     venueArea: event.venueArea ?? '',
     startsAt: toDhakaInput(event.startsAt),
     endsAt: event.endsAt ? toDhakaInput(event.endsAt) : '',

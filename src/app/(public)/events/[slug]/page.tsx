@@ -99,6 +99,7 @@ export default async function PublicEventPage({ params }: Props) {
       registrationOpensAt={event.registrationOpensAt}
       registrationClosesAt={event.registrationClosesAt}
       availableTotal={availableTotal}
+      hideAvailability={event.hideAvailability}
       facebookUrl={facebook}
       now={now}
     />
@@ -125,6 +126,7 @@ export default async function PublicEventPage({ params }: Props) {
         now={now}
         compact
         highlightId={offer.highlightId}
+        hideCounts={event.hideAvailability}
       />
       {withCta ? <div className="flex flex-col gap-2">{cta}</div> : null}
       <p className="flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-border pt-3 text-center text-[12px] text-muted-foreground">

@@ -43,7 +43,9 @@ export function RejectedEmail({ v }: { v: EmailView }) {
       <Text style={styles.p}>
         3. If it never left, register again
         {v.availableNow > 0
-          ? ` — ${v.availableNow} ${v.ticketType.name} tickets are still available`
+          ? v.event.hideAvailability
+            ? ` — ${v.ticketType.name} tickets are still available`
+            : ` — ${v.availableNow} ${v.ticketType.name} tickets are still available`
           : ''}
         .
       </Text>
