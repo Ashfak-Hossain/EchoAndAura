@@ -75,6 +75,8 @@ test.describe('registration (A3 → A4)', () => {
     await expect(page).toHaveURL(/\/orders\/[0-9a-f-]{36}$/);
     await expect(page.getByTestId('order-reference')).toHaveText(/^EA-[A-Z2-9]{6}$/);
     await expect(page.getByText('Awaiting payment')).toBeVisible();
+    // ADR-054: a 20-minute clock, counted on the server's time.
+    await expect(page.getByTestId('hold-countdown')).toContainText(/^(20:00|19:[0-5]\d)/);
     await expect(page.getByText('৳2,400.00').first()).toBeVisible();
     await expect(page.getByText('2 × General')).toBeVisible();
     await expect(page.getByRole('heading', { name: /how to pay with bkash/i })).toBeVisible();

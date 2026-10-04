@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Money } from '@/components/money';
-import { Countdown } from './countdown';
 import { PaymentForm } from './payment-form';
 import type { PaymentFormState } from './actions';
 
@@ -14,7 +13,6 @@ interface Props {
   trxId: string;
   senderMsisdn: string;
   submittedAt: string | null;
-  holdExpiresAt: string | null;
   contactEmail: string | null;
   action: (prev: PaymentFormState, formData: FormData) => Promise<PaymentFormState>;
 }
@@ -27,7 +25,6 @@ export function CheckingPayment({
   trxId,
   senderMsisdn,
   submittedAt,
-  holdExpiresAt,
   contactEmail,
   action,
 }: Props) {
@@ -100,12 +97,6 @@ export function CheckingPayment({
                 <a href={`mailto:${contactEmail}`} className="underline">
                   {contactEmail}
                 </a>
-              </>
-            ) : null}
-            {holdExpiresAt ? (
-              <>
-                {' '}
-                before the hold expires (<Countdown until={holdExpiresAt} /> left)
               </>
             ) : null}
             .

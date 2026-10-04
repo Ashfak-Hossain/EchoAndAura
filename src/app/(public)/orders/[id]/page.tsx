@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { z } from 'zod';
 import { ordersService } from '@/server/container';
 import { OrderNotFoundError } from '@/server/lib/errors';
+import { holdCutoff, holdLapsed } from '@/server/lib/hold';
 import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-reasons';
 import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
@@ -44,12 +45,12 @@ const load = cache(async (id: string) => {
 
 type Frame = 'awaiting' | 'checking' | 'expired' | 'rejected' | 'paid' | 'issued' | 'other';
 
-/** Which A4 frame to draw. A hold past its time is shown as expired before the job runs. */
+/**
+ * Which A4 frame to draw. A hold past its cutoff is shown as expired before
+ * the job runs — the same rule submitPayment enforces (ADR-054).
+ */
 function frameOf({ order }: OrderView, now: Date): Frame {
-  if (order.status === 'pending_payment') {
-    const lapsed = order.holdExpiresAt !== null && order.holdExpiresAt.getTime() <= now.getTime();
-    return lapsed ? 'expired' : 'awaiting';
-  }
+  if (order.status === 'pending_payment') return holdLapsed(order, now) ? 'expired' : 'awaiting';
   if (order.status === 'pending_verification') return 'checking';
   if (order.status === 'expired') return 'expired';
   if (order.status === 'rejected') return 'rejected';
@@ -65,7 +66,8 @@ export default async function OrderPage({ params }: Props) {
   const { id } = await params;
   const [view, settings] = await Promise.all([load(id), getSiteSettings()]);
   const { order, event, ticketType, events, tickets, promoCode } = view;
-  const frame = frameOf(view, new Date());
+  const renderedAt = new Date();
+  const frame = frameOf(view, renderedAt);
   const receiveNumber = settings.bkashReceiveNumber;
   const contactEmail = settings.supportEmail;
   // The bKash menu item differs by account type (B14): personal accounts
@@ -132,11 +134,21 @@ export default async function OrderPage({ params }: Props) {
               ) : null}
             </p>
             {order.holdExpiresAt ? (
-              <p className="border-t border-border pt-3 text-sm leading-relaxed">
-                Your tickets are held for you. Hold expires in{' '}
-                <Countdown until={order.holdExpiresAt.toISOString()} /> —{' '}
-                <span className="tabular">{formatDhakaLong(order.holdExpiresAt)} (Dhaka)</span>.
-              </p>
+              <div className="flex flex-col gap-2 border-t border-border pt-3">
+                <p className="text-sm leading-relaxed">
+                  Your tickets are held for you. Send the money and paste the transaction ID below
+                  before the clock runs out.
+                </p>
+                <Countdown
+                  until={order.holdExpiresAt.toISOString()}
+                  cutoff={holdCutoff(order.holdExpiresAt).toISOString()}
+                  serverNow={renderedAt.toISOString()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hold ends{' '}
+                  <span className="tabular">{formatDhakaLong(order.holdExpiresAt)} (Dhaka)</span>.
+                </p>
+              </div>
             ) : null}
           </section>
 
@@ -218,7 +230,6 @@ export default async function OrderPage({ params }: Props) {
           submittedAt={
             lastSubmission ? `${formatDhakaLong(lastSubmission.createdAt)} (Dhaka)` : null
           }
-          holdExpiresAt={order.holdExpiresAt ? order.holdExpiresAt.toISOString() : null}
           contactEmail={contactEmail}
           action={submitPaymentAction.bind(null, order.id)}
         />

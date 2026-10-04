@@ -4,11 +4,18 @@ import { EXPIRE_HOLDS_EVERY_MS } from './names';
 /**
  * ADR-040: the worker's proof of life for `/api/health`. Without it a dead
  * worker is invisible: the site still answers, but no email goes out and
- * no 24h hold is ever released. The worker writes the time when it starts
+ * no lapsed hold is ever released. The worker writes the time when it starts
  * and at the start of every expire-holds run, so a fresh value means both
  * that the process is up and that its scheduled jobs are being picked up.
  */
 export const WORKER_HEARTBEAT_KEY = 'echoandaura:worker:heartbeat';
+/**
+ * ADR-054: expiry runs on its own queue and worker, so its heartbeat says
+ * nothing about the email worker. A once-a-minute ping job on the orders
+ * queue writes this second key: it waits behind the emails like any job,
+ * so a stalled or swamped email worker goes stale too.
+ */
+export const ORDERS_WORKER_HEARTBEAT_KEY = 'echoandaura:worker:heartbeat:orders';
 
 /** Three missed runs, so a single late run (a deploy, a slow minute) is not an outage. */
 export const WORKER_HEARTBEAT_MAX_AGE_MS = 3 * EXPIRE_HOLDS_EVERY_MS;

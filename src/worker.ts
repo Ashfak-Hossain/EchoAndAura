@@ -3,8 +3,9 @@
  *
  * It imports business logic from src/server/** directly and never from
  * next/* (CLAUDE.md). Jobs:
- *   - expire-holds (every minute): ordersService.expireLapsedHolds — the
- *     only authority on the 24h hold (ADR-012).
+ *   - expire-holds (every minute, on its own `holds` queue and worker):
+ *     ordersService.expireLapsedHolds — the only authority on the 20-minute
+ *     hold (ADR-054, ADR-012).
  *   - email.<kind> ({ orderId }): render + send one transactional email
  *     through the configured Mailer, then write the audit row (ADR-016).
  *   - auth.sign-in ({ to, url }): a buyer's magic link.
@@ -22,7 +23,7 @@ import { MailerPermanentError, MailerThrottledError } from '@/server/email/maile
 import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
 import { createRedisConnection } from '@/server/queue/connection';
-import { recordWorkerHeartbeat } from '@/server/queue/heartbeat';
+import { ORDERS_WORKER_HEARTBEAT_KEY, recordWorkerHeartbeat } from '@/server/queue/heartbeat';
 import { renderSignInEmail } from '@/server/email/templates/sign-in';
 import { renderAccountEmail } from '@/server/email/templates/account';
 import { EMAIL_CHANGE_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
@@ -31,8 +32,10 @@ import {
   ACCOUNT_EMAIL_JOB,
   EXPIRE_HOLDS_EVERY_MS,
   EXPIRE_HOLDS_JOB,
+  HOLDS_QUEUE,
   ORDERS_QUEUE,
   SIGN_IN_JOB,
+  WORKER_PING_JOB,
 } from '@/server/queue/names';
 import { closeProducer } from '@/server/queue/producer';
 import { ordersRepository } from '@/server/repositories/orders.repository';
@@ -70,27 +73,53 @@ async function main(): Promise<void> {
     env,
   });
 
-  await queue.upsertJobScheduler(
+  const holdsQueue = new Queue(HOLDS_QUEUE, { connection });
+  // The schedule moved to its own queue (ADR-054): drop the one a worker
+  // before this version left on the shared queue, or it would keep firing.
+  await queue.removeJobScheduler(EXPIRE_HOLDS_JOB);
+  await holdsQueue.upsertJobScheduler(
     EXPIRE_HOLDS_JOB,
     { every: EXPIRE_HOLDS_EVERY_MS },
     { name: EXPIRE_HOLDS_JOB, opts: { removeOnComplete: 100, removeOnFail: 500 } },
   );
-  logger.info({ queue: ORDERS_QUEUE, everyMs: EXPIRE_HOLDS_EVERY_MS }, 'expire-holds scheduled');
+  logger.info({ queue: HOLDS_QUEUE, everyMs: EXPIRE_HOLDS_EVERY_MS }, 'expire-holds scheduled');
+  await queue.upsertJobScheduler(
+    WORKER_PING_JOB,
+    { every: EXPIRE_HOLDS_EVERY_MS },
+    { name: WORKER_PING_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } },
+  );
+
+  const expireHolds = async () => {
+    // Before the database work (ADR-040): the heartbeat says "the worker
+    // picks up its jobs"; a Postgres outage is reported by the health
+    // check's own database probe.
+    await recordWorkerHeartbeat(connection);
+    const { expired, failed } = await ordersService.expireLapsedHolds();
+    if (expired > 0 || failed > 0) logger.info({ expired, failed }, 'expire-holds run');
+    // Skipped orders are logged individually; failing the job makes the
+    // run visible in the queue's failed list too.
+    if (failed > 0) throw new Error(`expire-holds: ${failed} order(s) could not be expired`);
+    return { expired };
+  };
+
+  // One run at a time, no limiter: nothing else ever waits in front of it.
+  const holdsWorker = new Worker(
+    HOLDS_QUEUE,
+    async (job) => {
+      if (job.name === EXPIRE_HOLDS_JOB) return expireHolds();
+      throw new Error(`unknown job ${job.name}`);
+    },
+    { connection, concurrency: 1 },
+  );
 
   const worker = new Worker(
     ORDERS_QUEUE,
     async (job) => {
-      if (job.name === EXPIRE_HOLDS_JOB) {
-        // Before the database work (ADR-040): the heartbeat says "the
-        // worker picks up its jobs"; a Postgres outage is reported by the
-        // health check's own database probe.
-        await recordWorkerHeartbeat(connection);
-        const { expired, failed } = await ordersService.expireLapsedHolds();
-        if (expired > 0 || failed > 0) logger.info({ expired, failed }, 'expire-holds run');
-        // Skipped orders are logged individually; failing the job makes
-        // the run visible in the queue's failed list too.
-        if (failed > 0) throw new Error(`expire-holds: ${failed} order(s) could not be expired`);
-        return { expired };
+      // A run the old schedule queued on this queue before the deploy.
+      if (job.name === EXPIRE_HOLDS_JOB) return expireHolds();
+      if (job.name === WORKER_PING_JOB) {
+        await recordWorkerHeartbeat(connection, Date.now(), ORDERS_WORKER_HEARTBEAT_KEY);
+        return { ok: true };
       }
 
       if (job.name === SIGN_IN_JOB) {
@@ -201,11 +230,19 @@ async function main(): Promise<void> {
   // Without listeners BullMQ swallows these to console.error — outside pino.
   worker.on('error', (err) => logger.error({ err }, 'worker error'));
   queue.on('error', (err) => logger.error({ err }, 'queue error'));
+  holdsWorker.on('failed', (job, err) =>
+    logger.error({ jobId: job?.id, name: job?.name, err }, 'job failed'),
+  );
+  holdsWorker.on('error', (err) => logger.error({ err }, 'worker error'));
+  holdsQueue.on('error', (err) => logger.error({ err }, 'queue error'));
   // At boot too, so /api/health is green within seconds of a deploy rather
   // than after the first scheduled run (the deploy smoke test waits for it).
-  await worker.waitUntilReady();
-  await recordWorkerHeartbeat(connection);
-  logger.info({ queue: ORDERS_QUEUE }, 'worker started');
+  await Promise.all([worker.waitUntilReady(), holdsWorker.waitUntilReady()]);
+  await Promise.all([
+    recordWorkerHeartbeat(connection),
+    recordWorkerHeartbeat(connection, Date.now(), ORDERS_WORKER_HEARTBEAT_KEY),
+  ]);
+  logger.info({ queues: [ORDERS_QUEUE, HOLDS_QUEUE] }, 'worker started');
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down');
@@ -214,8 +251,8 @@ async function main(): Promise<void> {
     const deadline = setTimeout(() => process.exit(1), 10_000);
     deadline.unref();
     try {
-      await worker.close();
-      await queue.close();
+      await Promise.all([worker.close(), holdsWorker.close()]);
+      await Promise.all([queue.close(), holdsQueue.close()]);
       await closeProducer(); // this process enqueues too (expiry → C4)
       await connection.quit();
       process.exit(0);

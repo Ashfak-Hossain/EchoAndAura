@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
-import { HOLD_HOURS } from '@/content/site';
+import { HOLD_MINUTES } from '@/content/site';
 import { cn } from '@/lib/utils';
 import { SectionHeading, homeColumn, homeSection, sectionLink } from './section-heading';
 
@@ -14,7 +14,7 @@ export function howItWorksSteps(verificationPromise: string) {
   return [
     {
       title: 'Register',
-      body: `Choose a ticket type and up to ${MAX_TICKETS_PER_ORDER} tickets on one order, under one name. Your tickets are held for ${HOLD_HOURS} hours.`,
+      body: `Choose a ticket type and up to ${MAX_TICKETS_PER_ORDER} tickets on one order, under one name. Your tickets are held for ${HOLD_MINUTES} minutes while you pay.`,
     },
     {
       title: 'Pay by bKash',

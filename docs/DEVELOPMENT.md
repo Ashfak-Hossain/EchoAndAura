@@ -29,7 +29,7 @@ pnpm dev                        # http://localhost:3000
 `pnpm db:seed` builds five Dhaka events — one open with ~60 orders, one
 closing soon with a **private venue**, one sold out, one not open yet, one
 past and archived — plus ~155 orders in every state (issued, awaiting
-verification, awaiting payment with one hold ending within 2 hours,
+verification, awaiting payment with live 20-minute holds (they lapse within about 20 minutes of seeding: reseed to see a clock running),
 rejected, expired, a cancelled ticket, comps) and the promo codes DHAKA15,
 VIP500 and EARLYFRIENDS. It also adds eight sponsors across the three
 levels (one hidden, one on a dark tile, one without a website) with
@@ -81,7 +81,7 @@ obtain each.
 | `pnpm db:migrate`          | Apply migrations                                                                                                                                                          |
 | `pnpm db:studio`           | Drizzle Studio                                                                                                                                                            |
 | `pnpm db:seed [--reset]`   | Realistic demo data through the real services; `--reset` empties events/orders first (dev database only) — see "Demo data"                                                |
-| `pnpm worker`              | BullMQ worker: expire-holds every minute + the four transactional emails. Needs Redis                                                                                     |
+| `pnpm worker`              | BullMQ worker: expire-holds every minute (own `holds` queue) + the four transactional emails. Needs Redis                                                                 |
 | `pnpm jobs:expire-holds`   | Run the hold-expiry once and exit (ops / manual check)                                                                                                                    |
 | `pnpm worker:build`        | Bundle the worker to `dist/worker.mjs` (esbuild); `pnpm worker` does this first                                                                                           |
 | `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                                                                                                    |

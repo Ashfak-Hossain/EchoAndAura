@@ -1,6 +1,6 @@
-import { addHours } from 'date-fns';
 import { describe, expect, it } from 'vitest';
 import { sponsorFormSchema } from '@/lib/validation/sponsors';
+import { holdCutoff, holdEndsAt } from '@/server/lib/hold';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { inspectLogo } from '@/server/lib/sponsor-logo';
 import { logoSvg, logoUpload } from '../../scripts/seed/logos';
@@ -41,11 +41,12 @@ describe.each(NOWS)('buildSeedPlan(%s)', (now) => {
     }
   });
 
-  it('each step follows the last, inside the 24 h hold, and before now', () => {
+  it('each step follows the last, inside the 20-minute hold, and before now', () => {
     for (const o of plan.orders) {
       if (o.submittedAt) {
         expect(o.submittedAt > o.createdAt).toBe(true);
-        expect(o.submittedAt < addHours(o.createdAt, 24)).toBe(true);
+        // Inside the clock the buyer sees, not just the silent grace.
+        expect(o.submittedAt < holdEndsAt(o.createdAt)).toBe(true);
         expect(o.submittedAt <= now).toBe(true);
         expect(o.trxId).toMatch(/^[A-Z0-9]{10}$/);
       }
@@ -54,8 +55,12 @@ describe.each(NOWS)('buildSeedPlan(%s)', (now) => {
         expect(o.decidedAt <= now).toBe(true);
       }
       if (o.cancelledAt) expect(o.cancelledAt > o.decidedAt! && o.cancelledAt <= now).toBe(true);
-      if (o.story === 'expired') expect(addHours(o.createdAt, 24) < now).toBe(true);
-      if (o.story === 'pending_payment') expect(addHours(o.createdAt, 24) > now).toBe(true);
+      // Lapsed (grace over) by now, so the seed's expiry run releases it.
+      if (o.story === 'expired') expect(holdCutoff(holdEndsAt(o.createdAt)) <= now).toBe(true);
+      // Still live, with minutes to spare for the seed itself to run.
+      if (o.story === 'pending_payment') {
+        expect(holdEndsAt(o.createdAt).getTime() - now.getTime()).toBeGreaterThan(3 * 60_000);
+      }
     }
   });
 
@@ -111,9 +116,14 @@ describe.each(NOWS)('buildSeedPlan(%s)', (now) => {
     const expiringSoon = plan.orders.filter(
       (o) =>
         o.story === 'pending_payment' &&
-        addHours(o.createdAt, 24).getTime() - now.getTime() < 2 * 3_600_000,
+        holdEndsAt(o.createdAt).getTime() - now.getTime() < 10 * 60_000,
     );
     expect(expiringSoon.length).toBeGreaterThanOrEqual(1);
+    // A hold that lapsed in the last hour, besides the old ones.
+    const justLapsed = plan.orders.filter(
+      (o) => o.story === 'expired' && now.getTime() - o.createdAt.getTime() < 60 * 60_000,
+    );
+    expect(justLapsed.length).toBeGreaterThanOrEqual(1);
 
     const live = eventOf('live');
     expect(live.registrationOpensAt < now && now < live.registrationClosesAt).toBe(true);

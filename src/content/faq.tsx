@@ -15,7 +15,7 @@ export const FAQ_TOPICS = [
 export type FaqTopicId = (typeof FAQ_TOPICS)[number]['id'];
 
 export type FaqEntry = FaqItem & { topic: FaqTopicId };
-import { HOLD_HOURS, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
+import { HOLD_MINUTES, REGISTRATION_CLOSES_DAYS_BEFORE } from './site';
 
 /**
  * A7 FAQ copy. Order matters: the questions people actually ask, most
@@ -116,9 +116,9 @@ export const faqItems = (verificationPromise: string): FaqEntry[] => [
     question: 'My hold expired but I sent the money',
     answer: (
       <p>
-        Tickets are held for {HOLD_HOURS} hours from registration. If you sent the money but did not
-        submit the TrxID in time, message the organizer with your order reference and the TrxID —
-        see <Link href="/contact">Contact</Link>. If tickets are still available, the payment is
+        Tickets are held for {HOLD_MINUTES} minutes from registration. If you sent the money but did
+        not submit the TrxID in time, message the organizer with your order reference and the TrxID
+        — see <Link href="/contact">Contact</Link>. If tickets are still available, the payment is
         matched to a new order for you; if the event sold out in the meantime, the money is returned
         by bKash transfer (see the <Link href="/refund">refund policy</Link>).
       </p>

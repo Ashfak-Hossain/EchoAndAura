@@ -78,8 +78,9 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
   const metaLine = [
     `Created ${formatDhakaLong(order.createdAt)} (Dhaka)`,
     submitted ? `submitted ${formatRelative(submitted.createdAt, now)}` : null,
-    order.holdExpiresAt &&
-    (order.status === 'pending_payment' || order.status === 'pending_verification')
+    // Only an unpaid order has a live hold: once a trxID is in it waits for
+    // the organizer and never lapses (ADR-054, ADR-012).
+    order.holdExpiresAt && order.status === 'pending_payment'
       ? `hold ends ${formatDhakaShort(order.holdExpiresAt)}`
       : null,
   ]
@@ -221,9 +222,6 @@ export default async function AdminOrderPage({ params, searchParams }: Props) {
               {order.bkashSenderMsisdn ?? '—'}
             </Row>
             <Row label="Submitted">{submitted ? formatDhakaShort(submitted.createdAt) : '—'}</Row>
-            <Row label="Hold expires">
-              {order.holdExpiresAt ? formatDhakaShort(order.holdExpiresAt) : '—'}
-            </Row>
           </Card>
         )}
       </div>

@@ -20,7 +20,7 @@ ADR-016 (and ADR-014 for the hooks, ADR-017 for the sign-in link).
 | `payment-instructions` | C1     | `onOrderCreated` — registration committed                                      | `pending_payment` / `pending_verification`, hold not lapsed | —                | `templates/payment-instructions.tsx` |
 | `tickets-issued`       | C2     | `onTicketsIssued` — admin approved; `onTicketsResendRequested` — admin re-send | `issued`                                                    | tickets PDF (C5) | `templates/tickets-issued.tsx`       |
 | `rejected`             | C3     | `onOrderRejected` — admin rejected                                             | `rejected`                                                  | —                | `templates/rejected.tsx`             |
-| `expired`              | C4     | `onOrderExpired` — the worker's `expire-holds` job (every 60 s)                | `expired`                                                   | —                | `templates/expired.tsx`              |
+| `expired`              | C4     | `onOrderExpired` — the worker's `expire-holds` job (every 60 s, `holds` queue) | `expired`                                                   | —                | `templates/expired.tsx`              |
 | sign-in link           | C6     | better-auth `magicLink` plugin → `sendMagicLink` → `enqueueSignInEmail`        | n/a (no order; skipped for admin emails)                    | —                | `templates/sign-in.tsx`              |
 
 Every template is React Email (`src/server/email/templates/`), rendered
@@ -69,7 +69,10 @@ Step by step:
    sandbox 1/s.
 4. **The dispatcher** (`src/server/email/dispatch.ts`) loads the order and
    applies the **status guard**: C1 only for an order still awaiting money
-   (and not past its hold deadline), C2 only for `issued`, etc. Anything
+   (and not past its hold deadline — the 20-minute clock, not the 2-minute
+   grace — so a C1 throttled behind a rush can be skipped once the clock
+   has run out), C2 only for `issued`, etc. C4 goes to every abandoned
+   checkout, about 22 minutes after it was placed (ADR-054). Anything
    else writes `email.skipped` and returns — a stale job can never send a
    misleading email. It then renders the template, attaches the PDF for
    C2, and hands an `OutgoingEmail` to the mailer.

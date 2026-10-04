@@ -1,4 +1,5 @@
 import { Link, Text } from '@react-email/components';
+import { HOLD_MINUTES } from '@/server/lib/hold';
 import { formatBDT } from '@/server/lib/money';
 import { formatDhakaLong } from '@/lib/time';
 import { EmailLayout, Hr, Row, styles } from './layout';
@@ -17,11 +18,11 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
   const orderUrl = `${v.siteUrl}/orders/${v.order.id}`;
   return (
     <EmailLayout
-      preview={`Send ${amount} by bKash and paste the transaction ID. Held 24 hours.`}
+      preview={`Send ${amount} by bKash and paste the transaction ID. Held ${HOLD_MINUTES} minutes.`}
       sender={v}
       footerNote="You are getting this because you registered for an event. No refunds in the app."
     >
-      <Text style={styles.h1}>Your tickets are held for 24 hours</Text>
+      <Text style={styles.h1}>Your tickets are held for {HOLD_MINUTES} minutes</Text>
       <Text style={styles.p}>
         Hello {firstName(v.order.buyerName)}, thanks for registering. Nothing is confirmed until you
         send the money and paste the transaction ID back to us.
@@ -45,7 +46,8 @@ export function PaymentInstructionsEmail({ v }: { v: EmailView }) {
       ) : null}
       {deadline ? (
         <Text style={styles.p}>
-          Send by <strong>{deadline}</strong>. After that the seats go back on sale automatically.
+          Send the money <strong>and paste the transaction ID</strong> on your order page by{' '}
+          <strong>{deadline}</strong>. After that the seats go back on sale automatically.
         </Text>
       ) : null}
 

@@ -199,7 +199,7 @@ The last line stops cloud-init (the provider's first-boot tool) from
 renaming the server at the next boot.
 
 The clock was already synced by `systemd-timesyncd`. Certificates,
-login sessions, the 24-hour holds and gate scan times all depend on it.
+login sessions, the 20-minute holds and gate scan times all depend on it.
 
 **Check:** `hostname` is `echoandaura`; `timedatectl` shows
 `System clock synchronized: yes` and `NTP service: active`.

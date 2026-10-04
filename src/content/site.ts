@@ -2,9 +2,9 @@
  * The numbers and names the site's copy quotes — policy pages, FAQ, the
  * order page. One place, so when the organizer changes a promise (the
  * verification SLA, the refund turnaround) every page that states it
- * changes together. Business promises, not code constants: the hold and
- * rename windows mirror the rules in src/server/lib, and a change there
- * must be mirrored here.
+ * changes together. Business promises, not code constants: the rename window
+ * mirrors the rule in src/server/lib, and a change there must be mirrored
+ * here. The hold is the rule itself (below).
  */
 
 /**
@@ -15,8 +15,11 @@
  */
 export const VERIFICATION_SLA = 'usually within 4 hours, always within a day';
 
-/** How long an unpaid order holds its tickets (ADR-002). */
-export const HOLD_HOURS = 24;
+/**
+ * How long an unpaid order holds its tickets (ADR-054). Re-exported from the
+ * rule itself, so the copy can never promise a different hold.
+ */
+export { HOLD_MINUTES } from '@/server/lib/hold';
 
 /** Working days for a refund by bKash after a rejected-but-debited payment or a cancelled event. */
 export const REFUND_WORKING_DAYS = 3;

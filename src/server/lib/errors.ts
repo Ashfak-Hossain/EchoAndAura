@@ -141,7 +141,7 @@ export class SoldOutError extends DomainError {
 /**
  * This phone number already has the most open orders one buyer may have on
  * this event (awaiting payment or verification). Stops one person holding
- * every seat for 24 hours with a handful of orders. Thrown inside the order
+ * every seat for 20 minutes at a time with a handful of orders. Thrown inside the order
  * transaction, before anything is held.
  */
 export class TooManyOpenOrdersError extends DomainError {
@@ -207,6 +207,17 @@ export class AttendeeNamesMismatchError extends DomainError {
 export class TrxIdAlreadyUsedError extends DomainError {
   constructor(public readonly trxId: string) {
     super(`Transaction ID ${trxId} has already been used`);
+  }
+}
+
+/**
+ * ADR-054: a trxID arrived after the hold's cutoff (20 minutes plus the
+ * unannounced grace), before the expiry job flipped the order. Refused like
+ * an expired order: the seats are about to go back on sale.
+ */
+export class HoldLapsedError extends DomainError {
+  constructor(public readonly orderId: string) {
+    super(`Order ${orderId}: the hold lapsed before the transaction ID arrived`);
   }
 }
 

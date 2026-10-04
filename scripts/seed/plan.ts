@@ -1,5 +1,6 @@
 import { addDays, addHours, addMinutes } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+import { HOLD_MINUTES } from '@/server/lib/hold';
 import { takaToPaisa } from '@/server/lib/money';
 import { DHAKA_TZ } from '@/lib/time';
 import type { SponsorLevel, SponsorTileTone } from '@/server/repositories/sponsors.repository';
@@ -201,7 +202,9 @@ export function buildSeedPlan(now: Date): SeedPlan {
       story === 'cancel_one' ||
       story === 'pending_verification'
     ) {
-      o.submittedAt = cap(addMinutes(createdAt, int(12, 360)));
+      // submitPayment refuses a trxID once the hold has lapsed (ADR-054), so
+      // the buyer pastes it while the 20-minute clock is still running.
+      o.submittedAt = cap(addMinutes(createdAt, int(1, HOLD_MINUTES - 1)));
       o.trxId = nextTrx();
     }
     if (story === 'issued' || story === 'rejected' || story === 'cancel_one') {
@@ -469,9 +472,13 @@ export function buildSeedPlan(now: Date): SeedPlan {
       addHours(now, -30),
       addHours(now, -1),
     );
-  order('live', 'general', 2, 'pending_payment', addHours(now, -22.5), addHours(now, -22.5)); // hold ends within 2h
-  order('live', 'general', 1, 'pending_payment', addHours(now, -8), addHours(now, -2));
-  order('live', 'general', 2, 'pending_payment', addHours(now, -3), addHours(now, -1));
+  // Live holds: the 20-minute clock is still running when the seed finishes,
+  // so these are minutes old (an hour-old one would expire at seed time).
+  order('live', 'general', 2, 'pending_payment', addMinutes(now, -15), addMinutes(now, -14)); // ends in ~5 min
+  order('live', 'general', 1, 'pending_payment', addMinutes(now, -9), addMinutes(now, -5));
+  order('live', 'general', 2, 'pending_payment', addMinutes(now, -3), addMinutes(now, -1));
+  // A hold that lapsed just now: the seed's expiry run releases it.
+  order('live', 'general', 1, 'expired', addMinutes(now, -50), addMinutes(now, -30));
   for (let i = 0; i < 2; i++)
     order('live', 'general', int(1, 2), 'rejected', liveFrom, addDays(now, -1));
   for (let i = 0; i < 3; i++)
@@ -506,7 +513,7 @@ export function buildSeedPlan(now: Date): SeedPlan {
     );
   }
   order('monsoon', 'general', 2, 'pending_verification', addHours(now, -10), addHours(now, -1));
-  order('monsoon', 'general', 1, 'pending_payment', addHours(now, -5), addHours(now, -1));
+  order('monsoon', 'general', 1, 'pending_payment', addMinutes(now, -12), addMinutes(now, -6));
   order('monsoon', 'general', 2, 'comp', addDays(now, -3), addDays(now, -2), {
     reason: 'Artist guest list — Arnob',
   });

@@ -6,6 +6,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { EMAIL_KINDS, renderEmail } from '@/server/email/templates/render';
+import { holdEndsAt } from '@/server/lib/hold';
 import type { EmailView } from '@/server/email/templates/view';
 import { resolveSettings } from '@/server/services/settings.service';
 
@@ -37,7 +38,7 @@ const view: EmailView = {
     rejectionNote:
       'No credit of ৳3,600.00 from 01712345678 appears in the statement for 9AB12CD34E.',
     complimentaryReason: null,
-    holdExpiresAt: new Date(NOW.getTime() + 24 * 3_600_000),
+    holdExpiresAt: holdEndsAt(NOW),
     createdAt: T0,
     updatedAt: T0,
   },

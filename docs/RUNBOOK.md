@@ -37,12 +37,12 @@ Open `https://echoandaura.com/api/health`. It answers with booleans only:
 { "ok": false, "database": true, "queue": true, "worker": false }
 ```
 
-| What you see                   | Meaning                                                                                                                   | Do                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| No answer, or Cloudflare 52x   | the web container, Traefik or the whole server                                                                            | [Nothing answers](#nothing-answers) |
-| `"database": false`            | Postgres is down or unreachable. **Nothing works**: no pages with data, no orders                                         | [Postgres down](#postgres-down)     |
-| `"queue": false`               | Redis is down. Orders are still taken, but their emails can't be queued, and buyer sign-in links are refused              | [Redis down](#redis-down)           |
-| `"worker": false` (queue true) | the worker has not run its every-minute job for 3 minutes. Emails wait in the queue, and holds past 24 h are not released | [Worker down](#worker-down)         |
+| What you see                   | Meaning                                                                                                                          | Do                                  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| No answer, or Cloudflare 52x   | the web container, Traefik or the whole server                                                                                   | [Nothing answers](#nothing-answers) |
+| `"database": false`            | Postgres is down or unreachable. **Nothing works**: no pages with data, no orders                                                | [Postgres down](#postgres-down)     |
+| `"queue": false`               | Redis is down. Orders are still taken, but their emails can't be queued, and buyer sign-in links are refused                     | [Redis down](#redis-down)           |
+| `"worker": false` (queue true) | the worker has not run its every-minute job for 3 minutes. Emails wait in the queue, and lapsed 20-minute holds are not released | [Worker down](#worker-down)         |
 
 ### Nothing answers
 
@@ -387,8 +387,9 @@ next plan.
 The admin's verification queue is the list of orders waiting on a person.
 An order that has its transaction ID submitted (`pending_verification`)
 **does not expire**: its tickets stay held until someone approves or
-rejects it. Only unpaid orders lapse after 24 hours. What a backlog costs
-is buyers waiting for their tickets, and messages to the organizer.
+rejects it. Only unpaid orders lapse, 20 minutes (plus a 2-minute grace)
+after they are placed. What a backlog costs is buyers waiting for their
+tickets, and messages to the organizer.
 
 - Agree a turnaround with Raj before launch. The risk register suggests
   about 4 hours.

@@ -10,7 +10,7 @@
  * events, orders, tickets, promo codes and sponsors first; users and
  * settings stay.
  */
-import { addHours, addSeconds } from 'date-fns';
+import { addSeconds } from 'date-fns';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, queryClient } from '@/db/client';
 import { events, orderEvents, orders, promoCodes, sponsors, tickets } from '@/db/schema';
@@ -30,6 +30,7 @@ import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createSponsorsService } from '@/server/services/sponsors.service';
 import { createTicketTypesService } from '@/server/services/ticket-types.service';
 import { createS3ObjectStorage, readStorageEnv } from '@/server/storage/object-storage';
+import { holdCutoff, holdEndsAt } from '@/server/lib/hold';
 import { isRejectionReason } from '@/server/lib/rejection-reasons';
 import { siteUrl } from '@/lib/env.public';
 import { renderCover } from './covers';
@@ -344,7 +345,9 @@ async function main(): Promise<void> {
       'payment.rejected': d,
       'ticket.cancelled': seed.cancelledAt,
       'order.cancelled': seed.cancelledAt ? addSeconds(seed.cancelledAt, 1) : undefined,
-      'order.expired': seed.story === 'expired' ? addHours(seed.createdAt, 24) : undefined,
+      // The job releases a hold once its grace is over (ADR-054): stamp that moment.
+      'order.expired':
+        seed.story === 'expired' ? holdCutoff(holdEndsAt(seed.createdAt)) : undefined,
     };
     for (const [action, at] of Object.entries(stamps)) {
       if (!at) continue;

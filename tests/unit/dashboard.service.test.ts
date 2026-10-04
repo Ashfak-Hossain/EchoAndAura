@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { HOLD_GRACE_MINUTES, HOLD_MINUTES } from '@/server/lib/hold';
 import type { DayTotals } from '@/server/repositories/reports.repository';
 import {
-  EXPIRING_WITHIN_HOURS,
   RECENT_ORDERS,
   createDashboardService,
   dhakaDayStart,
@@ -60,7 +60,7 @@ describe('quietDay', () => {
 });
 
 describe('dashboardService.summary', () => {
-  it('asks for today and yesterday in Dhaka, the next 2 h of holds, and the 5 newest orders', async () => {
+  it('asks for today and yesterday in Dhaka, every live unpaid hold, and the 5 newest orders', async () => {
     const today: DayTotals = { ordersPlaced: 12, approvedOrders: 9, approvedPaisa: 1_080_000 };
     const yesterday: DayTotals = { ordersPlaced: 8, approvedOrders: 7, approvedPaisa: 840_000 };
     const deps = {
@@ -93,9 +93,11 @@ describe('dashboardService.summary', () => {
       new Date('2026-09-23T18:00:00Z'),
       new Date('2026-09-24T18:00:00Z'),
     );
+    // ADR-054: every unpaid hold not yet past its cutoff (expiresAt + grace
+    // > now) — a hold made now ends HOLD_MINUTES later, so that bounds it.
     expect(deps.reports.holdsExpiring).toHaveBeenCalledWith(
-      NOW,
-      new Date(NOW.getTime() + EXPIRING_WITHIN_HOURS * 3_600_000),
+      new Date(NOW.getTime() - HOLD_GRACE_MINUTES * 60_000),
+      new Date(NOW.getTime() + HOLD_MINUTES * 60_000),
     );
     expect(deps.orders.search).toHaveBeenCalledWith({}, { limit: RECENT_ORDERS, offset: 0 });
     expect(s).toMatchObject({ pendingVerification: 4, today, yesterday, holdsExpiringSoon: 2 });

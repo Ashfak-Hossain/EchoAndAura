@@ -6,7 +6,11 @@ import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
 import type { SiteSettings } from '@/server/services/settings.service';
+import { HOLD_GRACE_MINUTES, HOLD_MINUTES } from '@/server/lib/hold';
 import { NOW, event, fakeDb, ticketType } from './helpers/fake-db';
+
+/** Past the cutoff of an order placed at NOW: the 20-minute hold plus the grace (ADR-054). */
+const LAPSED = new Date(NOW.getTime() + (HOLD_MINUTES + HOLD_GRACE_MINUTES) * 60_000 + 1_000);
 
 /** What a fresh database resolves to with no env set. */
 const FALLBACK_SETTINGS: SiteSettings = {
@@ -137,7 +141,7 @@ describe('after-commit email hooks', () => {
       buyerPhone: '+8801712345678',
       attendeeNames: ['Late Buyer'],
     });
-    await orders.expireLapsedHolds(new Date(NOW.getTime() + 25 * 3_600_000));
+    await orders.expireLapsedHolds(LAPSED);
     expect(hooks.expiredHook).toEqual([third.id]);
     expect(db.state.orders.find((o) => o.id === third.id)?.status).toBe('expired');
   });
@@ -276,7 +280,7 @@ describe('emailDispatcher.dispatch', () => {
           throw new Error('ses down');
         }),
       },
-      // Pinned: with the real clock the fixture's 24 h hold lapses and C1 is skipped instead.
+      // Pinned: with the real clock the fixture's 20-minute hold lapses and C1 is skipped instead.
       now: () => NOW,
       env: { siteUrl: 'https://x', settings: async () => FALLBACK_SETTINGS },
     });
@@ -292,7 +296,7 @@ describe('emailDispatcher.dispatch', () => {
       ordersRepo: db.orders,
       ticketTypes: db.ticketTypes,
       mailer: { send: vi.fn(async () => ({ messageId: 'x' })) },
-      now: () => new Date(NOW.getTime() + 25 * 3_600_000),
+      now: () => LAPSED,
       env: { siteUrl: 'https://x', settings: async () => FALLBACK_SETTINGS },
     });
     await expect(late.dispatch('payment-instructions', order.id)).rejects.toBeInstanceOf(
@@ -360,7 +364,7 @@ describe('after-commit ordering (Invariant 7)', () => {
 
     await mk('B');
     seq.length = 0;
-    await orders.expireLapsedHolds(new Date(NOW.getTime() + 25 * 3_600_000));
+    await orders.expireLapsedHolds(LAPSED);
     expect(seq).toEqual(['commit', 'expired-hook']);
   });
 });

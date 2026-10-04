@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { formatBDT } from '@/server/lib/money';
 import { adminColumnHelper, type DataTableColumn } from '@/components/admin/data-table';
-import { cn } from '@/lib/utils';
 
 export interface QueueRowData {
   id: string;
@@ -19,8 +18,6 @@ export interface QueueRowData {
   /** "8 min ago" — formatted on the server against the request clock. */
   submittedLabel: string;
   /** "in 1h 05m" / "lapsed" — formatted on the server. */
-  holdLabel: string;
-  holdUrgent: boolean;
 }
 
 const col = adminColumnHelper<QueueRowData>();
@@ -75,15 +72,5 @@ export const queueColumns: DataTableColumn<QueueRowData>[] = col.columns([
     id: 'submitted',
     header: 'Submitted',
     meta: { sortKey: 'submitted', className: 'tabular' },
-  }),
-  col.accessor('holdLabel', {
-    id: 'hold',
-    header: 'Hold expires',
-    meta: { sortKey: 'hold', className: 'tabular' },
-    cell: ({ row }) => (
-      <span className={cn(row.original.holdUrgent && 'font-semibold text-destructive')}>
-        {row.original.holdLabel}
-      </span>
-    ),
   }),
 ]);

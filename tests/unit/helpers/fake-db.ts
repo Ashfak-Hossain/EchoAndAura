@@ -298,9 +298,14 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         })),
       };
     },
-    listLapsedHolds: async (at, limit) =>
+    // Mirrors the repository: `before` is what the service passes
+    // (lapsedBefore(at), ADR-054), compared strictly, oldest hold first.
+    listLapsedHolds: async (before, limit) =>
       state.orders
-        .filter((o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt < at)
+        .filter(
+          (o) => o.status === 'pending_payment' && o.holdExpiresAt && o.holdExpiresAt <= before,
+        )
+        .sort((a, b) => a.holdExpiresAt!.getTime() - b.holdExpiresAt!.getTime())
         .slice(0, limit)
         .map((o) => ({ id: o.id, ticketTypeId: o.ticketTypeId, quantity: o.quantity })),
     // One caller at a time already (the fake transaction is synchronous);
@@ -308,14 +313,18 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
     lockBuyer: vi.fn(async (_eventId, _phone, tx) => {
       expect(tx).toBe(TX);
     }),
-    countOpenForBuyer: vi.fn(async (eventId, phone, at, tx) => {
+    // Mirrors the repository: a pending_payment hold counts while
+    // hold_expires_at > the value given (the service passes lapsedBefore(at)).
+    countOpenForBuyer: vi.fn(async (eventId, phone, before, tx) => {
       expect(tx).toBe(TX);
       return state.orders.filter(
         (o) =>
           o.eventId === eventId &&
           o.buyerPhone === phone &&
           (o.status === 'pending_verification' ||
-            (o.status === 'pending_payment' && o.holdExpiresAt !== null && o.holdExpiresAt > at)),
+            (o.status === 'pending_payment' &&
+              o.holdExpiresAt !== null &&
+              o.holdExpiresAt > before)),
       ).length;
     }),
   };

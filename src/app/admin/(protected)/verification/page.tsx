@@ -7,31 +7,20 @@ import { PageHeader } from '@/components/page-header';
 import { DataTable } from '@/components/admin/data-table';
 import { parseSort, type SortState } from '@/lib/table-sort';
 import { formatRelative } from '@/lib/time';
-import { cn } from '@/lib/utils';
 import { queueColumns, type QueueRowData } from './columns';
 
 export const metadata: Metadata = { title: 'Verification' };
 export const dynamic = 'force-dynamic';
 
-const QUEUE_SORT_COLUMNS = ['submitted', 'amount', 'hold'] as const;
+const QUEUE_SORT_COLUMNS = ['submitted', 'amount'] as const;
 type QueueSortColumn = (typeof QUEUE_SORT_COLUMNS)[number];
 /** Oldest submission first: the person who has waited longest is on top. */
 const DEFAULT_SORT: SortState<QueueSortColumn> = { column: 'submitted', desc: false };
-
-/** Under this, the hold column turns red (B7). */
-const URGENT_HOLD_MS = 2 * 3_600_000;
 
 function waited(ms: number): string {
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
-}
-
-function holdIn(expiresAt: Date | null, now: Date): { text: string; urgent: boolean } {
-  if (!expiresAt) return { text: '—', urgent: false };
-  const ms = expiresAt.getTime() - now.getTime();
-  if (ms <= 0) return { text: 'lapsed', urgent: true };
-  return { text: `in ${waited(ms)}`, urgent: ms < URGENT_HOLD_MS };
 }
 
 // B7: oldest first — the person who has waited longest is always on top.
@@ -53,14 +42,10 @@ export default async function VerificationQueuePage({
     const cmp =
       sort.column === 'amount'
         ? a.order.totalPaisa - b.order.totalPaisa
-        : sort.column === 'hold'
-          ? (a.order.holdExpiresAt?.getTime() ?? Infinity) -
-            (b.order.holdExpiresAt?.getTime() ?? Infinity)
-          : a.submittedAt.getTime() - b.submittedAt.getTime();
+        : a.submittedAt.getTime() - b.submittedAt.getTime();
     return dir * cmp;
   });
   const rows: QueueRowData[] = sorted.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
-    const hold = holdIn(order.holdExpiresAt, now);
     return {
       id: order.id,
       reference: order.reference,
@@ -73,8 +58,6 @@ export default async function VerificationQueuePage({
       trxId: order.bkashTrxId ?? '',
       sender: order.bkashSenderMsisdn ?? '',
       submittedLabel: formatRelative(submittedAt, now),
-      holdLabel: hold.text,
-      holdUrgent: hold.urgent,
     };
   });
 
@@ -112,7 +95,6 @@ export default async function VerificationQueuePage({
           {/* Phone cards */}
           <ul className="flex flex-col gap-3 lg:hidden">
             {sorted.map(({ order, eventTitle, ticketTypeName, submittedAt }) => {
-              const hold = holdIn(order.holdExpiresAt, now);
               return (
                 <li key={order.id}>
                   <Link
@@ -121,13 +103,8 @@ export default async function VerificationQueuePage({
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="font-mono font-semibold">{order.reference}</span>
-                      <span
-                        className={cn(
-                          'text-[13px] tabular',
-                          hold.urgent ? 'font-semibold text-destructive' : 'text-muted-foreground',
-                        )}
-                      >
-                        Hold ends {hold.text}
+                      <span className="text-[13px] text-muted-foreground tabular">
+                        waiting {waited(now.getTime() - submittedAt.getTime())}
                       </span>
                     </div>
                     <div className="text-[15px]">{order.buyerName}</div>

@@ -20,7 +20,9 @@ and this file is stale.
 - One order = one ticket type, any quantity, max 10 per order
 - Manual bKash payment: buyer submits trxID + sending number, admin verifies
   against the bKash statement, approve/reject with audit trail
-- 24-hour inventory hold from order submission; released on rejection or expiry
+- 20-minute inventory hold from order submission, shown as a countdown (a
+  trxID is still accepted for 2 more minutes); released on rejection or
+  expiry. A submitted trxID never expires (ADR-012, ADR-054)
 - Named, transferable tickets — buyer can edit attendee name until
   registration closes
 - Registration window: opens 20 days before the event, closes 5 days before

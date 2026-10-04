@@ -7,7 +7,7 @@ import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { forPublic } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import type { SiteSettings } from '@/server/services/settings.service';
-import { HOLD_HOURS } from '@/content/site';
+import { HOLD_MINUTES } from '@/content/site';
 import { event, ticketType } from './helpers/fake-db';
 import { coverSources } from './helpers/next-image';
 
@@ -369,7 +369,7 @@ describe('HowItWorks (N9)', () => {
     ]);
     expect(out).toMatch(/^<section[^>]*><div[^>]*>.*<ol /);
     expect(text(out)).toContain(
-      `up to ${MAX_TICKETS_PER_ORDER} tickets on one order, under one name. Your tickets are held for ${HOLD_HOURS} hours.`,
+      `up to ${MAX_TICKETS_PER_ORDER} tickets on one order, under one name. Your tickets are held for ${HOLD_MINUTES} minutes while you pay.`,
     );
     expect(text(out)).toContain(`A person checks it, ${promise}, and your tickets are emailed.`);
     expect(links(out)).toEqual([['/faq', 'Questions? Read the FAQ →']]);

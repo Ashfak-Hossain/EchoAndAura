@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, queryClient } from '@/db/client';
 import * as schema from '@/db/schema';
 import { TooManyOpenOrdersError } from '@/server/lib/errors';
+import { HOLD_GRACE_MINUTES, HOLD_MINUTES } from '@/server/lib/hold';
 import { eventsRepository } from '@/server/repositories/events.repository';
 import { inventoryRepository } from '@/server/repositories/inventory.repository';
 import { ordersRepository } from '@/server/repositories/orders.repository';
@@ -110,20 +111,31 @@ describe('open orders per buyer (Postgres)', () => {
     expect(await reserved()).toBe(before + 6);
   });
 
-  it('the same phone may order again once its holds have lapsed (24 h later)', async () => {
+  // ADR-054: lapsed means past the cutoff (20 minutes plus the grace) —
+  // inside the grace the orders still count, at the cutoff they do not.
+  it('the same phone may order again once its holds have lapsed by their cutoff', async () => {
     const phone = '+8801711111111'; // capped in the first test
     await expect(svc.createOrder(order(phone, 1))).rejects.toBeInstanceOf(TooManyOpenOrdersError);
-    const dayLater = createOrdersService({
-      orders: ordersRepository,
-      tickets: ticketsRepository,
-      events: eventsRepository,
-      ticketTypes: ticketTypesRepository,
-      inventory: createInventoryService(inventoryRepository),
-      runInTransaction: (fn) => db.transaction(fn),
-      now: () => new Date(NOW.getTime() + 25 * 60 * 60_000),
-    });
-    // Registration closes 2026-09-26; a day later is still inside the window.
-    await expect(dayLater.createOrder(order(phone, 1))).resolves.toMatchObject({
+    const at = (minutes: number, ms = 0) =>
+      createOrdersService({
+        orders: ordersRepository,
+        tickets: ticketsRepository,
+        events: eventsRepository,
+        ticketTypes: ticketTypesRepository,
+        inventory: createInventoryService(inventoryRepository),
+        runInTransaction: (fn) => db.transaction(fn),
+        now: () => new Date(NOW.getTime() + minutes * 60_000 + ms),
+      });
+    const cutoff = HOLD_MINUTES + HOLD_GRACE_MINUTES;
+    // The clock the buyer saw is over, but the grace still holds the seats.
+    await expect(at(HOLD_MINUTES + 1).createOrder(order(phone, 1))).rejects.toBeInstanceOf(
+      TooManyOpenOrdersError,
+    );
+    await expect(at(cutoff, -1).createOrder(order(phone, 1))).rejects.toBeInstanceOf(
+      TooManyOpenOrdersError,
+    );
+    // At the cutoff they lapse — before any expiry job has run.
+    await expect(at(cutoff).createOrder(order(phone, 1))).resolves.toMatchObject({
       status: 'pending_payment',
     });
   });
