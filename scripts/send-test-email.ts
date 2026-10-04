@@ -1,24 +1,23 @@
 /**
- * SES smoke test: `pnpm email:test you@example.com`. Sends a one-line
- * message through the configured mailer (MAILER=ses required to prove
- * SES; the log mailer only writes to tmp/emails). Exits non-zero on failure.
+ * Mailer smoke test: `pnpm email:test you@example.com`. Sends a one-line
+ * message through the mailer `MAILER` selects (`cloudflare` or `ses` to
+ * prove a provider; the log mailer only writes to tmp/emails). Exits
+ * non-zero on failure.
  */
-import { createLogMailer } from '@/server/email/log-mailer';
-import { readMailerEnv } from '@/server/email/mailer';
-import { createSesMailer, readSesEnv } from '@/server/email/ses-mailer';
+import { selectMailer } from '@/server/email/select';
 
 async function main(): Promise<void> {
   const to = process.argv[2];
   if (!to) throw new Error('usage: pnpm email:test <to-address>');
-  const useSes = (process.env.MAILER ?? 'log') === 'ses';
-  const mailer = useSes ? createSesMailer(readMailerEnv(), readSesEnv()) : createLogMailer();
+  const provider = process.env.MAILER ?? 'log';
+  const mailer = selectMailer({ ...process.env, MAILER: provider });
   const { messageId } = await mailer.send({
     to,
     subject: 'echoandaura test email',
-    html: '<p>If you can read this, SES is configured and DKIM is signing.</p>',
-    text: 'If you can read this, SES is configured and DKIM is signing.',
+    html: '<p>If you can read this, the mailer is configured and DKIM is signing.</p>',
+    text: 'If you can read this, the mailer is configured and DKIM is signing.',
   });
-  console.log(`${useSes ? 'SES' : 'log mailer'} accepted the message: ${messageId}`);
+  console.log(`${provider} accepted the message: ${messageId}`);
 }
 
 main().catch((err: unknown) => {
