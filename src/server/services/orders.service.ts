@@ -28,6 +28,7 @@ import {
   promoAppliesTo,
   promoDiscountPaisa,
 } from '@/server/lib/promo';
+import { normaliseDigits } from '@/server/lib/digits';
 import { formatBDT } from '@/server/lib/money';
 import { ticketTypeSaleState } from '@/server/lib/ticket-type-sale-state';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
@@ -489,7 +490,7 @@ export function createOrdersService({
      * mismatch — the page says one generic thing either way.
      */
     async findByReferenceAndPhone(reference: string, phone: string): Promise<OrderRecord | null> {
-      const order = await orders.findByReference(reference.trim().toUpperCase());
+      const order = await orders.findByReference(normaliseDigits(reference).trim().toUpperCase());
       if (!order || order.buyerPhone !== phone) return null;
       return order;
     },
@@ -553,8 +554,9 @@ export function createOrdersService({
      */
     async submitPayment(orderId: string, input: SubmitPaymentInput): Promise<OrderRecord> {
       // Stored normalised (Invariant 3) whoever the caller is — the UNIQUE
-      // index compares bytes, so "9ab…" and "9AB…" must never both exist.
-      const trxId = input.trxId.trim().toUpperCase();
+      // index compares bytes, so "9ab…" and "9AB…" — or "৯AB…" — must never
+      // both exist (ADR-060).
+      const trxId = normaliseDigits(input.trxId).trim().toUpperCase();
 
       return runInTransaction(async (tx) => {
         // Read under the row lock so the audit row's from-status and the

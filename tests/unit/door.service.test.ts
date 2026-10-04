@@ -491,7 +491,7 @@ describe('doorService undo', () => {
       action: 'ticket.check_in_undone',
       actor: 'raj@example.com',
       // Which check-in was taken back: 16:00 Dhaka at Gate A.
-      note: `${tickets[0]!.code} (in 16:00 · Gate A): Scanned the wrong one of the group`,
+      note: `${tickets[0]!.code} (in 4:00 PM · Gate A): Scanned the wrong one of the group`,
     });
   });
 

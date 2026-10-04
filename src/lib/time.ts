@@ -33,14 +33,14 @@ export function toDhakaIso(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
-/** Human display, e.g. "1 Oct 2026, 19:00". */
+/** Human display, e.g. "1 Oct 2026, 7:00 PM" (12-hour, ADR-060). */
 export function formatDhaka(date: Date): string {
-  return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, HH:mm');
+  return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, h:mm a');
 }
 
-/** Display with weekday, e.g. "Thu 1 Oct 2026, 19:00" (B3/B4 headers). */
+/** Display with weekday, e.g. "Thu 1 Oct 2026, 7:00 PM" (B3/B4 headers). */
 export function formatDhakaLong(date: Date): string {
-  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM yyyy, HH:mm');
+  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM yyyy, h:mm a');
 }
 
 /** "8 min ago", "Yesterday", or a Dhaka date once it is older than a week (B4 "Updated"). */
@@ -57,12 +57,12 @@ export function formatRelative(date: Date, now: Date = new Date()): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy');
 }
 
-/** Just the Dhaka clock time, e.g. "20:51" (the gate's "already in" answer). */
+/** Just the Dhaka clock time, e.g. "8:51 PM" (the gate's "already in" answer). */
 export function formatDhakaClock(date: Date): string {
-  return formatInTimeZone(date, DHAKA_TZ, 'HH:mm');
+  return formatInTimeZone(date, DHAKA_TZ, 'h:mm a');
 }
 
-/** Short weekday form for prose, e.g. "Thu 1 Oct, 19:00" (B5 "dates in plain words"). */
+/** Short weekday form for prose, e.g. "Thu 1 Oct, 7:00 PM" (B5 "dates in plain words"). */
 export function formatDhakaShort(date: Date): string {
-  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM, HH:mm');
+  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM, h:mm a');
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normaliseDigits } from '@/server/lib/digits';
 import { DOOR_UNDO_REASONS, type DoorUndoReason, SCAN_INPUT_MAX } from '@/server/lib/door-rules';
 
 /**
@@ -13,7 +14,10 @@ import { DOOR_UNDO_REASONS, type DoorUndoReason, SCAN_INPUT_MAX } from '@/server
 export const OFFLINE_SYNC_BATCH = 50;
 
 export const doorSessionSchema = z.object({
-  code: z.string().trim().min(1).max(40),
+  code: z
+    .string()
+    .transform((v) => normaliseDigits(v).trim())
+    .pipe(z.string().min(1).max(40)),
 });
 
 const scanItem = z
@@ -23,7 +27,8 @@ const scanItem = z
     ticketId: z.uuid().optional(),
     phoneLast3: z
       .string()
-      .regex(/^\d{3}$/)
+      .transform(normaliseDigits)
+      .pipe(z.string().regex(/^\d{3}$/))
       .optional(),
     method: z.enum(['qr', 'typed', 'search']),
     scannedAt: z.iso.datetime().optional(),

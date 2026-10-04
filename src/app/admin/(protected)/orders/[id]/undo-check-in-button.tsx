@@ -20,7 +20,7 @@ import type { VerificationActionState } from './actions';
 interface Props {
   code: string;
   attendeeName: string;
-  /** "20:51 · Gate A", as the row shows it. */
+  /** "8:51 PM · Gate A", as the row shows it. */
   admitted: string;
   undo: (prev: VerificationActionState, formData: FormData) => Promise<VerificationActionState>;
 }

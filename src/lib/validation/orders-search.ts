@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { orderStatus } from '@/db/schema';
 import { ORDER_REFERENCE_PATTERN } from '@/server/lib/order-reference';
 import { parseSort, type SortState } from '@/lib/table-sort';
+import { normaliseDigits } from '@/server/lib/digits';
 import { bdMobile } from './orders';
 
 /**
@@ -84,7 +85,7 @@ const TRX_ID = /^[A-Z0-9]{10}$/;
  * parses is returned and the repository ORs them.
  */
 export function normaliseSearchTerm(raw: string): SearchTerm {
-  const term = raw.trim();
+  const term = normaliseDigits(raw).trim();
   if (!term) return { reference: null, trxId: null, phone: null, email: null };
 
   const upper = term.toUpperCase();

@@ -83,11 +83,13 @@ describe('Hero (N7)', () => {
     expect(out).toMatch(
       /<span aria-hidden="true" class="size-2 rounded-full bg-current"><\/span>On sale</,
     );
-    expect(out).toMatch(/<dt[^>]*>When<\/dt><dd[^>]*>Sat 17 Oct 2026, 19:00 \(Dhaka\)<\/dd>/);
+    expect(out).toMatch(/<dt[^>]*>When<\/dt><dd[^>]*>Sat 17 Oct 2026, 7:00 PM \(Dhaka\)<\/dd>/);
     expect(out).toMatch(/<dt[^>]*>Where<\/dt>/);
     expect(text(out)).toContain('The Attic, Gulshan 2, Dhaka');
     expect(out).toMatch(/<strong[^>]*>On sale\.<\/strong>/);
-    expect(text(out)).toContain('On sale. Registration is open until Mon 12 Oct, 23:59 (Dhaka).');
+    expect(text(out)).toContain(
+      'On sale. Registration is open until Mon 12 Oct, 11:59 PM (Dhaka).',
+    );
     expect(out).toContain('role="timer"');
     expect(out).toContain('aria-label="Registration closes in"');
     expect(text(out)).toContain('From ৳1,200.00');
@@ -118,7 +120,7 @@ describe('Hero (N7)', () => {
     expect(out).toContain('data-phase="closing_soon"');
     expect(out).toMatch(/bg-current"><\/span>Closing soon</);
     expect(text(out)).toContain(
-      'Closing soon. Registration closes Sat 26 Sep, 23:59 (Dhaka), 5 days before the show.',
+      'Closing soon. Registration closes Sat 26 Sep, 11:59 PM (Dhaka), 5 days before the show.',
     );
     expect(out).toContain('role="timer"');
     expect(text(out)).toContain('38 tickets left');
@@ -157,7 +159,7 @@ describe('Hero (N7)', () => {
     // The hero's chip says "Not on sale yet"; the date is in the sentence.
     expect(out).toMatch(/bg-current"><\/span>Not on sale yet</);
     expect(text(out)).toContain(
-      'Not on sale yet. Tickets go on sale Thu 1 Oct, 10:00 (Dhaka). Early Bird runs until Sun 4 Oct, 23:59.',
+      'Not on sale yet. Tickets go on sale Thu 1 Oct, 10:00 AM (Dhaka). Early Bird runs until Sun 4 Oct, 11:59 PM.',
     );
     expect(out).toContain('aria-label="Tickets go on sale in"');
     expect(text(out)).toContain('From ৳600.00 · Early Bird');
@@ -170,7 +172,7 @@ describe('Hero (N7)', () => {
     const out = hero(featured({ phase: 'closed', availableTotal: 30, at: now }), now);
     expect(out).toMatch(/bg-current"><\/span>Registration closed</);
     expect(text(out)).toContain(
-      'Closed. Registration for this show has closed. It starts Sat 17 Oct, 19:00 (Dhaka).',
+      'Closed. Registration for this show has closed. It starts Sat 17 Oct, 7:00 PM (Dhaka).',
     );
     expect(out).not.toContain('role="timer"');
     expect(text(out)).not.toContain('From ৳');

@@ -66,7 +66,7 @@ test.describe('admin ticket types', () => {
     const rows = page.getByRole('row');
     const earlyBird = rows.filter({ hasText: 'Early Bird' });
     await expect(earlyBird).toContainText('৳799.50');
-    await expect(earlyBird).toContainText('1 Sep 2030, 00:00 → 15 Sep 2030, 23:59');
+    await expect(earlyBird).toContainText('1 Sep 2030, 12:00 AM → 15 Sep 2030, 11:59 PM');
     await expect(rows.filter({ hasText: 'General' })).toContainText('৳1,200.00');
     await expect(rows.filter({ hasText: 'VIP' })).toContainText('৳3,500.00');
     await expect(earlyBird.getByRole('cell')).toHaveCount(8);

@@ -74,7 +74,7 @@ test.describe('gate scanner (ADR-030)', () => {
     await expect(phoneB.getByText('Gate B', { exact: true })).toBeVisible();
     const red = await typeCode(phoneB, codes[0]!);
     await expect(red).toHaveAttribute('data-result', 'already_in');
-    await expect(red).toContainText(/\d\d:\d\d · Gate A/);
+    await expect(red).toContainText(/\d{1,2}:\d\d [AP]M · Gate A/);
     await dismiss(phoneB);
     const junk = await typeCode(phoneB, 'TKT-ZZZZZZZZ');
     await expect(junk).toHaveAttribute('data-result', 'unknown');
@@ -87,7 +87,7 @@ test.describe('gate scanner (ADR-030)', () => {
       await phoneA.getByLabel('Name or ticket code').fill('nusrat');
       const results = phoneA.getByRole('region', { name: 'Find by name' }).getByRole('listitem');
       await expect(results).toHaveCount(3);
-      await expect(results.filter({ hasText: /In at \d\d:\d\d · Gate A/ })).toHaveCount(1);
+      await expect(results.filter({ hasText: /In at \d{1,2}:\d\d [AP]M · Gate A/ })).toHaveCount(1);
       await expect(phoneA.getByRole('region', { name: 'Find by name' })).not.toContainText('678');
       await results
         .getByRole('button', { name: /^Admit / })
@@ -128,7 +128,7 @@ test.describe('gate scanner (ADR-030)', () => {
       .click();
     await expect(page).toHaveURL(/show=in/);
     await expect(page.getByTestId('check-in-row')).toHaveCount(1);
-    await expect(page.getByTestId('check-in-row').first()).toContainText(/\d\d:\d\d · Gate A/);
+    await expect(page.getByTestId('check-in-row').first()).toContainText(/\d{1,2}:\d\d [AP]M · Gate A/);
     await expect(page.getByRole('button', { name: /print list/i })).toBeDisabled();
     const csv = await (await page.request.get(`${checkInUrl}/export.csv?show=in`)).text();
     const lines = csv.split('\r\n').filter(Boolean);

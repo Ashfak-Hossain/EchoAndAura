@@ -16,6 +16,7 @@ import {
   TicketRenameConflictError,
 } from '@/server/lib/errors';
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
+import { normaliseDigits } from '@/server/lib/digits';
 import type { OrderRecord, OrdersRepository } from '@/server/repositories/orders.repository';
 import type {
   TicketTypeRecord,
@@ -88,7 +89,7 @@ export interface CheckInList {
 
 /** Codes are typed and read aloud: normalise before lookup. */
 export function normaliseTicketCode(raw: string): string {
-  return raw.trim().toUpperCase();
+  return normaliseDigits(raw).trim().toUpperCase();
 }
 
 export function createTicketsService({

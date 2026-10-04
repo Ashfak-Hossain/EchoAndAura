@@ -103,8 +103,8 @@ test.describe('gate scanner offline (ADR-034)', () => {
     const conflicts = page.getByTestId('offline-conflict-row');
     await expect(conflicts).toHaveCount(1);
     await expect(conflicts.first()).toContainText('Tahmina Akter');
-    await expect(conflicts.first()).toContainText(/In first \d\d:\d\d · Gate B/);
-    await expect(conflicts.first()).toContainText(/admitted offline \d\d:\d\d · Gate A/);
+    await expect(conflicts.first()).toContainText(/In first \d{1,2}:\d\d [AP]M · Gate B/);
+    await expect(conflicts.first()).toContainText(/admitted offline \d{1,2}:\d\d [AP]M · Gate A/);
     await expect(page.getByTestId('gate-pass-row').filter({ hasText: 'Gate A' })).toContainText(
       /\d+ offline/,
     );
