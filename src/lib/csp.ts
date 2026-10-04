@@ -22,11 +22,23 @@ export interface CspOptions {
   uploadOrigin: string | null;
   /** The gate scanner compiles its QR decoder from WebAssembly (ADR-030). */
   door: boolean;
+  /**
+   * The gate relay's WebSocket origin (ADR-058), e.g.
+   * `wss://relay.echoandaura.com`. Door pages only.
+   */
+  relayOrigin?: string | null;
   /** `next dev`: React rebuilds server error stacks with eval. */
   dev: boolean;
 }
 
-export function buildCsp({ nonce, mediaOrigin, uploadOrigin, door, dev }: CspOptions): string {
+export function buildCsp({
+  nonce,
+  mediaOrigin,
+  uploadOrigin,
+  door,
+  relayOrigin = null,
+  dev,
+}: CspOptions): string {
   const script = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
   if (door) script.push("'wasm-unsafe-eval'");
   if (dev) script.push("'unsafe-eval'");
@@ -37,6 +49,7 @@ export function buildCsp({ nonce, mediaOrigin, uploadOrigin, door, dev }: CspOpt
   // 'self' covers the dev server's HMR websocket too (same host).
   const connect = ["'self'"];
   if (uploadOrigin) connect.push(uploadOrigin);
+  if (door && relayOrigin) connect.push(relayOrigin);
 
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],
@@ -69,6 +82,11 @@ export function originFrom(value: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+/** `https://relay.example.com` → `wss://relay.example.com` (http → ws); null when unset. */
+export function wsOriginFrom(value: string | undefined): string | null {
+  return originFrom(value)?.replace(/^http/, 'ws') ?? null;
 }
 
 /** A random UUID (122 random bits), base64 — what Next's CSP guide uses. */

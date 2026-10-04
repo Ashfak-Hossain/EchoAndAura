@@ -7,7 +7,7 @@ import {
   readAccessConfig,
   type AccessVerifier,
 } from '@/lib/cf-access';
-import { buildCsp, newNonce, originFrom } from '@/lib/csp';
+import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
 
 const LOGIN_PATH = '/admin/login';
 /** Pages for a signed-out admin: sign in and its code step (ADR-049), and the password reset (ADR-038). */
@@ -54,6 +54,7 @@ export async function proxy(request: NextRequest) {
     mediaOrigin: originFrom(process.env.R2_PUBLIC_URL),
     uploadOrigin: admin ? originFrom(process.env.R2_ENDPOINT) : null,
     door: pathname === '/door' || pathname.startsWith('/door/'),
+    relayOrigin: wsOriginFrom(process.env.RELAY_URL),
     dev: process.env.NODE_ENV === 'development',
   });
   const requestHeaders = new Headers(request.headers);

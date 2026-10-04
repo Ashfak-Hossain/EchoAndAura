@@ -79,6 +79,11 @@ services:
       # both are set (empty = check off, the state before the Admin app exists).
       CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
       CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
+      # ADR-058: the gate relay — the web signs door phones' passes and
+      # queues announcements. Both or neither (empty = relay off; gates
+      # share by the status ping alone). The secret is the Worker's too.
+      RELAY_URL: ${RELAY_URL:-}
+      RELAY_SECRET: ${RELAY_SECRET:-}
     # Resized covers survive a deploy (ADR-033).
     volumes:
       - image-cache:/app/.next-build/cache/images
@@ -108,6 +113,10 @@ services:
       AWS_SES_SECRET_ACCESS_KEY: ${AWS_SES_SECRET_ACCESS_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:?Set EMAIL_FROM in Dokploy}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      # ADR-058: the worker delivers the gate relay announcements (the web
+      # app queues them). The same two values as the web's.
+      RELAY_URL: ${RELAY_URL:-}
+      RELAY_SECRET: ${RELAY_SECRET:-}
     # ~300 MB idle (measured 2026-09-27); a ticket PDF render comes on top,
     # and a job killed for memory mid-send is worse than a bigger limit.
     mem_limit: 768m

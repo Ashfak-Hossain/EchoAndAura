@@ -17,7 +17,17 @@ import {
   type WireSearchResult,
   doorApi,
 } from '../door-api';
-import { type OfflineUndo, listCovers, localUndo } from './rules';
+import {
+  type Mark,
+  type OfflineUndo,
+  type RelayOwnMark,
+  type RelayRow,
+  listCovers,
+  localUndo,
+  markFromRelay,
+  relayUndoRemoves,
+  unconfirmedOwnClaims,
+} from './rules';
 import { type OfflineStore, type OutboxItem, type StoredList, openOfflineStore } from './store';
 
 /**
@@ -35,20 +45,6 @@ const SYNC_EVERY_MS = 10_000;
 /** Per request; the route accepts at most this many (OFFLINE_SYNC_BATCH). */
 const SYNC_BATCH = 50;
 const SEARCH_LIMIT = 10;
-
-interface Mark {
-  /** When they were checked in (corrected clock, ms) — what the screen says. */
-  at: number;
-  gate: string;
-  byThisPhone: boolean;
-  /**
-   * When the server is known to have had this check-in (corrected clock,
-   * ms); null while it is still in the outbox. A new list drops the mark
-   * only if the list was read after this — never by `at`, which for an
-   * offline admit can be long before the server heard of it.
-   */
-  knownSince: number | null;
-}
 
 export type { OfflineUndo } from './rules';
 
@@ -87,8 +83,16 @@ export interface OfflineApi {
    * admit that replaces that request (same rules as ADR-034's).
    */
   queueEarlyAdmit(raw: string, method: 'qr' | 'typed', supersedesScanId: string): Promise<void>;
-  /** Check-ins other gates made (from the status ping): the next read here knows. */
+  /** Check-ins other gates made (the status ping, the relay): the next read here knows. */
   learnCheckIns(rows: WireCheckIn[]): void;
+  /** ADR-058: check-ins heard through the relay (claims and confirmations). */
+  learnRelayRows(rows: RelayRow[]): void;
+  /** ADR-058: a check-in taken back, heard through the relay (rules: `relayUndoRemoves`). */
+  learnRelayUndo(ticketId: string, undo: { by: 'gate' | 'server'; at: string }): void;
+  /** ADR-058: what to re-send whenever the relay link opens. */
+  ownClaims(): RelayOwnMark[];
+  /** ADR-058: this phone's way into the gate relay, from the saved list. */
+  relay: { url: string; pass: string } | null;
   /** The server's clock from a status ping, to keep the offset fresh. */
   learnServerTime(serverTime: string, sentAt: number, receivedAt: number): void;
   undo(scanId: string): Promise<OfflineUndo>;
@@ -111,10 +115,13 @@ export function useOffline({
   passId,
   gate,
   onSignedOut,
+  onOwnMark,
 }: {
   passId: string;
   gate: string;
   onSignedOut: (message: string) => void;
+  /** ADR-058: this phone admitted someone, or took it back — tell the other gates. */
+  onOwnMark?: (mark: RelayOwnMark) => void;
 }): OfflineApi {
   const store = useRef<OfflineStore | null>(null);
   const list = useRef<StoredList | null>(null);
@@ -125,19 +132,25 @@ export function useOffline({
   /** The send in progress: a second caller waits for it, never skips it. */
   const running = useRef<Promise<boolean> | null>(null);
   const listing = useRef(false);
+  const ownMark = useRef(onOwnMark);
+  useEffect(() => {
+    ownMark.current = onOwnMark;
+  }, [onOwnMark]);
 
   /** What the screen shows — refreshed from the refs whenever they change. */
   const [snap, setSnap] = useState<{
     listAt: string | null;
     size: number;
     pending: OutboxItem[];
-  }>({ listAt: null, size: 0, pending: [] });
+    relay: { url: string; pass: string } | null;
+  }>({ listAt: null, size: 0, pending: [], relay: null });
   const bump = useCallback(
     () =>
       setSnap({
         listAt: list.current?.list.serverTime ?? null,
         size: list.current?.list.entries.length ?? 0,
         pending: outbox.current,
+        relay: list.current?.list.relay ?? null,
       }),
     [],
   );
@@ -163,6 +176,7 @@ export function useOffline({
             gate,
             byThisPhone: true,
             knownSince: null,
+            source: 'own',
           });
         }
       }
@@ -370,7 +384,14 @@ export function useOffline({
           : {}),
       };
       if (j.verdict === 'admitted' && entry) {
-        marks.current.set(entry.id, { at, gate, byThisPhone: true, knownSince: null });
+        marks.current.set(entry.id, {
+          at,
+          gate,
+          byThisPhone: true,
+          knownSince: null,
+          source: 'own',
+        });
+        ownMark.current?.({ t: 'in', ticketId: entry.id, at });
       }
       outbox.current = [...outbox.current, item];
       await store.current.putOutbox(item);
@@ -398,14 +419,23 @@ export function useOffline({
       if (!list.current) return;
       if (result.result !== 'admitted' && result.result !== 'already_in') return;
       const id = read.ticketId ?? (read.raw ? (await findEntry(read.raw))?.id : undefined);
-      if (!id || marks.current.has(id)) return;
+      if (!id) return;
+      const existing = marks.current.get(id);
+      // The server's answer outranks a relay claim; this phone's own stand.
+      if (existing && existing.source !== 'relay') return;
+      const own = result.result === 'admitted' || result.byThisPass === true;
+      const at = result.at ? Date.parse(result.at) : now();
       marks.current.set(id, {
-        at: result.at ? Date.parse(result.at) : now(),
+        at,
         gate: result.gate ?? gate,
-        byThisPhone: result.result === 'admitted' || result.byThisPass === true,
+        byThisPhone: own,
         // An online answer: the server has it as of now.
         knownSince: now(),
+        source: own ? 'own' : 'server',
       });
+      // Every other gate hears of it now, straight from this phone — not
+      // only when the server's own announcement gets through (ADR-058).
+      if (result.result === 'admitted') ownMark.current?.({ t: 'in', ticketId: id, at });
     },
     [findEntry, gate, now],
   );
@@ -446,7 +476,15 @@ export function useOffline({
 
   const admitEarly = useCallback(
     (ticketId: string) => {
-      marks.current.set(ticketId, { at: now(), gate, byThisPhone: true, knownSince: null });
+      const at = now();
+      marks.current.set(ticketId, {
+        at,
+        gate,
+        byThisPhone: true,
+        knownSince: null,
+        source: 'own',
+      });
+      ownMark.current?.({ t: 'in', ticketId, at });
     },
     [gate, now],
   );
@@ -456,7 +494,11 @@ export function useOffline({
       const known = now();
       if (result.result === 'admitted') {
         const mark = marks.current.get(ticketId);
-        if (mark) mark.knownSince = known;
+        if (mark) {
+          mark.knownSince = known;
+          // The server's time for it: an undo names the check-in by it.
+          if (result.at) mark.at = Date.parse(result.at);
+        }
       } else if (result.result === 'already_in') {
         // In first somewhere else: that is what the next read must say.
         marks.current.set(ticketId, {
@@ -464,10 +506,13 @@ export function useOffline({
           gate: result.gate ?? gate,
           byThisPhone: result.byThisPass === true,
           knownSince: known,
+          source: 'server',
         });
       } else {
-        // Cancelled, or not a ticket after all: nobody is in on it.
+        // Cancelled, or not a ticket after all: nobody is in on it — and the
+        // other gates must not keep this phone's early claim either.
         marks.current.delete(ticketId);
+        ownMark.current?.({ t: 'undo', ticketId });
       }
     },
     [gate, now],
@@ -506,18 +551,53 @@ export function useOffline({
       const known = now();
       const onList = new Set(current.list.entries.map((e) => e.id));
       for (const row of rows) {
-        // This phone's own marks (its admits, still unsent ones too) stand.
-        if (!onList.has(row.ticketId) || marks.current.has(row.ticketId)) continue;
+        if (!onList.has(row.ticketId)) continue;
+        const existing = marks.current.get(row.ticketId);
+        // This phone's own marks (its admits, still unsent ones too) stand;
+        // a relay claim becomes the server's word.
+        if (existing && existing.source !== 'relay') continue;
         marks.current.set(row.ticketId, {
           at: Date.parse(row.at),
           gate: row.gate ?? '?',
           byThisPhone: row.gate === gate,
           knownSince: known,
+          source: 'server',
         });
       }
     },
     [gate, now],
   );
+
+  const learnRelayRows = useCallback(
+    (rows: RelayRow[]) => {
+      const current = list.current;
+      if (!current || rows.length === 0) return;
+      const known = now();
+      const onList = new Set(current.list.entries.map((e) => e.id));
+      for (const row of rows) {
+        if (!onList.has(row.ticketId)) continue;
+        const next = markFromRelay(marks.current.get(row.ticketId), row, known);
+        if (next) marks.current.set(row.ticketId, next);
+      }
+    },
+    [now],
+  );
+
+  const learnRelayUndo = useCallback(
+    (ticketId: string, undo: { by: 'gate' | 'server'; at: string }) => {
+      const mark = marks.current.get(ticketId);
+      if (relayUndoRemoves(mark, undo)) {
+        marks.current.delete(ticketId);
+      } else if (mark?.source === 'own' && mark.knownSince === null) {
+        // This phone's own admit the server has not had: whatever the room
+        // just dropped, it must hear this one again (S-B).
+        ownMark.current?.({ t: 'in', ticketId, at: mark.at });
+      }
+    },
+    [],
+  );
+
+  const ownClaims = useCallback(() => unconfirmedOwnClaims(marks.current, outbox.current), []);
 
   const learnServerTime = useCallback((serverTime: string, sentAt: number, receivedAt: number) => {
     const current = list.current;
@@ -533,7 +613,10 @@ export function useOffline({
       if (!item || outcome !== 'done' || !store.current) return outcome;
       const undone: OutboxItem = { ...item, verdict: 'undone' };
       outbox.current = outbox.current.map((i) => (i.scanId === scanId ? undone : i));
-      if (item.ticketId) marks.current.delete(item.ticketId);
+      if (item.ticketId) {
+        marks.current.delete(item.ticketId);
+        ownMark.current?.({ t: 'undo', ticketId: item.ticketId });
+      }
       await store.current.putOutbox(undone);
       bump();
       return 'done';
@@ -597,6 +680,10 @@ export function useOffline({
     settleEarly,
     queueEarlyAdmit,
     learnCheckIns,
+    learnRelayRows,
+    learnRelayUndo,
+    ownClaims,
+    relay: snap.relay,
     learnServerTime,
     undo,
     search,

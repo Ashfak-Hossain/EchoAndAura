@@ -314,6 +314,49 @@ twice: `MISS` (or `EXPIRED`) then `HIT`. With
 **Switch it off:** toggle the rule off. Nothing in the app depends on it;
 pages go back to ~170 ms first byte.
 
+## Gate relay (ADR-058)
+
+The Worker `echoandaura-relay` at `relay.echoandaura.com`: one Durable
+Object room per event that passes check-ins between door phones live, and
+keeps doing so when our server is down. Code and config in `relay/`
+(`wrangler.toml`). Needs Workers Paid (bought 2026-10-04). Deployed by
+hand, never by CI.
+
+**Set up (once):**
+
+1. `pnpm exec wrangler login`: the browser opens; sign in as yourself and
+   allow. (Only your laptop holds this login.)
+2. `pnpm relay:deploy`: uploads the Worker, creates the room class, and
+   attaches the custom domain `relay.echoandaura.com` (Cloudflare adds its
+   DNS record and certificate itself).
+3. Make the shared secret and keep it in Bitwarden as **`Gate relay
+secret`**: `openssl rand -base64 48 | tr -d '\n/+=' | cut -c1-48`.
+4. Give it to the Worker: `pnpm exec wrangler secret put RELAY_SECRET -c
+relay/wrangler.toml`, then paste it. It applies at once.
+5. Give the same secret to the app: Dokploy → the compose app →
+   Environment: `RELAY_URL=https://relay.echoandaura.com` and
+   `RELAY_SECRET=<the same>` → Deploy. (The compose file passes both to the
+   web, which signs passes, and the worker, which delivers announcements.)
+
+**Check it:** `curl https://relay.echoandaura.com/health` says `ok`; a
+door phone shows **Live** next to the count within a few seconds.
+
+**Change the code:** merge, then `pnpm relay:deploy` again — never during
+an event: a change to the room's tables rebuilds every room empty. Phones
+reconnect by themselves and re-send what they claimed.
+
+**Logs:** the relay's invocation logs are off (`wrangler.toml`): a door
+phone's pass rides in a request header and must not land in Cloudflare's
+logs. Errors still show in Workers → `echoandaura-relay` → Logs.
+
+**Rotate the secret:** new secret in Bitwarden → step 4 → step 5. Phones
+reconnect with the pass from their next list download (within a minute);
+until then they fall back to the status ping.
+
+**Switch it off:** remove `RELAY_URL` and `RELAY_SECRET` in Dokploy and
+deploy. The door works as before ADR-058, sharing by the ping alone. The
+Worker can stay, unused.
+
 ## Email Address Obfuscation: keep it off
 
 Security → Settings → Email Address Obfuscation is **off** (2026-10-04).

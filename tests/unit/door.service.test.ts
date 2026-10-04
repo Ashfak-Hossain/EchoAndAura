@@ -9,7 +9,13 @@ import {
   TicketNotFoundError,
 } from '@/server/lib/errors';
 import type { EventRecord } from '@/server/repositories/events.repository';
-import { type DoorContext, type ScanItem, createDoorService } from '@/server/services/door.service';
+import {
+  type DoorContext,
+  type DoorServiceDeps,
+  type ScanItem,
+  createDoorService,
+} from '@/server/services/door.service';
+import type { DoorRelay, RelayAnnouncement } from '@/server/relay/relay';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
@@ -31,7 +37,7 @@ const sid = () => `00000000-0000-4000-a000-${String(++scanSeq).padStart(12, '0')
  * passes stop at NOW + 13 h. The fake db stamps a check-in at NOW; the door
  * clock starts 5 s later.
  */
-async function setup(over: Partial<EventRecord> = {}) {
+async function setup(over: Partial<EventRecord> = {}, deps: Pick<DoorServiceDeps, 'relay'> = {}) {
   const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
   const inventory = createInventoryService(db.inventoryRepo);
   const orders = createOrdersService({
@@ -81,6 +87,7 @@ async function setup(over: Partial<EventRecord> = {}) {
     runInTransaction: fake.runInTransaction,
     now: () => clock.at,
     passCode: () => codes.shift() ?? 'ZZZZZZZZZZZZ',
+    ...deps,
   });
   const gateA = await svc.createPass('ev-1', 'Gate A', 'raj@example.com');
   const gateB = await svc.createPass('ev-1', 'Gate B', 'raj@example.com');
@@ -520,6 +527,7 @@ describe('doorService undo', () => {
         code: tickets[0]!.code,
         orderId: tickets[0]!.orderId,
         checkedInScanId: byA.scanId,
+        checkedInAt: new Date(),
       },
     ]);
     expect(await svc.revokeAndUndo('ev-1', gateA.id, 'leak', 'raj')).toBe(0);
@@ -896,5 +904,101 @@ describe('doorService race: decisions and shared check-ins (ADR-053)', () => {
     expect(checkIns).toEqual([{ ticketId: tickets[1]!.id, at: NOW, gate: 'Gate B' }]);
     // Asked after it: nothing new.
     expect((await svc.status(await ctx(CODE_A), NOW)).checkIns).toEqual([]);
+  });
+});
+
+describe('doorService and the gate relay (ADR-058)', () => {
+  /** A relay that records what it was told, and signs nothing. */
+  function fakeRelay() {
+    const told: { eventId: string; message: RelayAnnouncement }[] = [];
+    const relay: DoorRelay = {
+      ticket: async ({ eventId, passId, gate, until }) => ({
+        url: `wss://relay.test/events/${eventId}/ws`,
+        pass: `pass:${passId}:${gate}:${until.toISOString()}`,
+      }),
+      announce: (eventId, message) => {
+        told.push({ eventId, message });
+      },
+    };
+    return { relay, told };
+  }
+
+  it('announces a check-in after it commits, with its gate and time — and nothing for a refusal', async () => {
+    const { relay, told } = fakeRelay();
+    const { svc, ctx, tickets } = await setup({}, { relay });
+    const admitted = await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code));
+    expect(told).toEqual([
+      {
+        eventId: 'ev-1',
+        message: { kind: 'in', ticketId: tickets[0]!.id, at: admitted.at, gate: 'Gate A' },
+      },
+    ]);
+    // Already in: the room has it; a second announcement would add nothing.
+    await svc.scan(await ctx(CODE_B), typed(tickets[0]!.code));
+    expect(told).toHaveLength(1);
+  });
+
+  it('announces nothing when the check-in rolls back', async () => {
+    const { relay, told } = fakeRelay();
+    const { svc, ctx, tickets, gateA } = await setup({}, { relay });
+    const c = await ctx(CODE_A);
+    await svc.revokePass('ev-1', gateA.id, 'raj@example.com');
+    told.length = 0;
+    await expect(svc.scan(c, typed(tickets[0]!.code))).rejects.toBeInstanceOf(DoorPassRevokedError);
+    expect(told).toEqual([]);
+  });
+
+  it("announces the gate's own undo and the organizer's, each with the check-in it undid", async () => {
+    const { relay, told } = fakeRelay();
+    const { svc, ctx, tickets, order } = await setup({}, { relay });
+    const first = typed(tickets[0]!.code);
+    const firstIn = await svc.scan(await ctx(CODE_A), first);
+    await svc.undoOwnAdmit(await ctx(CODE_A), first.scanId, 'mis_tap');
+    const second = typed(tickets[1]!.code);
+    const secondIn = await svc.scan(await ctx(CODE_A), second);
+    await svc.undoCheckInAsAdmin(tickets[1]!.id, {
+      orderId: order.id,
+      expectedScanId: second.scanId,
+      reason: 'Wrong one',
+      actor: 'raj@example.com',
+    });
+    expect(told.map((t) => t.message.kind)).toEqual(['in', 'undo', 'in', 'undo']);
+    expect(told[1]!.message).toEqual({ kind: 'undo', ticketId: tickets[0]!.id, at: firstIn.at });
+    expect(told[3]).toEqual({
+      eventId: 'ev-1',
+      message: { kind: 'undo', ticketId: tickets[1]!.id, at: secondIn.at },
+    });
+  });
+
+  it('announces a revoke, and every check-in revoke-and-undo took back', async () => {
+    const { relay, told } = fakeRelay();
+    const { svc, ctx, tickets, gateA, gateB } = await setup({}, { relay });
+    const until = (await ctx(CODE_A)).window.validUntil;
+    const a = await svc.scan(await ctx(CODE_A), typed(tickets[0]!.code));
+    const b = await svc.scan(await ctx(CODE_A), typed(tickets[1]!.code));
+    told.length = 0;
+    await svc.revokeAndUndo('ev-1', gateA.id, 'Posted in a group', 'raj@example.com');
+    expect(told.map((t) => t.message)).toEqual([
+      { kind: 'revoke', passId: gateA.id, until },
+      { kind: 'undo', ticketId: tickets[0]!.id, at: a.at },
+      { kind: 'undo', ticketId: tickets[1]!.id, at: b.at },
+    ]);
+    told.length = 0;
+    await svc.revokePass('ev-1', gateB.id, 'raj@example.com');
+    expect(told).toEqual([
+      { eventId: 'ev-1', message: { kind: 'revoke', passId: gateB.id, until } },
+    ]);
+  });
+
+  it("puts the phone's pass into its ticket list, valid for the pass's window — none when the relay is off", async () => {
+    const { relay } = fakeRelay();
+    const on = await setup({}, { relay });
+    const c = await on.ctx(CODE_A);
+    expect((await on.svc.offlineList(c)).relay).toEqual({
+      url: 'wss://relay.test/events/ev-1/ws',
+      pass: `pass:${on.gateA.id}:Gate A:${c.window.validUntil.toISOString()}`,
+    });
+    const off = await setup();
+    expect((await off.svc.offlineList(await off.ctx(CODE_A))).relay).toBeNull();
   });
 });

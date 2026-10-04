@@ -18,7 +18,8 @@ import { sponsorsRepository } from '@/server/repositories/sponsors.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
 import { ticketsRepository } from '@/server/repositories/tickets.repository';
 import { createEventsService } from '@/server/services/events.service';
-import { enqueueEmail } from '@/server/queue/producer';
+import { enqueueEmail, enqueueRelayAnnounce } from '@/server/queue/producer';
+import { logger } from '@/server/lib/logger';
 import { createFulfilmentService } from '@/server/services/fulfilment.service';
 import { createInventoryService } from '@/server/services/inventory.service';
 import { createOrdersService } from '@/server/services/orders.service';
@@ -26,6 +27,7 @@ import { createPromoCodesService } from '@/server/services/promo-codes.service';
 import { createReportsService } from '@/server/services/reports.service';
 import { createDashboardService } from '@/server/services/dashboard.service';
 import { createDoorService } from '@/server/services/door.service';
+import { readRelayConfig, signRelayTicket, toWire } from '@/server/relay/relay';
 import { createHealthService } from '@/server/services/health.service';
 import { healthRepository } from '@/server/repositories/health.repository';
 import { pingRedis, probeWorker } from '@/server/queue/probe';
@@ -115,12 +117,33 @@ export const promoCodesService = createPromoCodesService({
 });
 
 // ADR-030: gate passes and check-in at the door.
+// ADR-058: and the gate relay, when RELAY_URL/RELAY_SECRET are set.
+const relayConfig = readRelayConfig();
 export const doorService = createDoorService({
   door: doorRepository,
   tickets: ticketsRepository,
   orders: ordersRepository,
   events: eventsRepository,
   runInTransaction: (fn) => db.transaction(fn),
+  relay: relayConfig
+    ? {
+        ticket: (input) => signRelayTicket(relayConfig, input),
+        // Queued, never sent from the request (all I/O is queued); the
+        // worker delivers it in order, with retries.
+        announce: (eventId, message) => {
+          enqueueRelayAnnounce({ eventId, message: toWire(message) }).catch((err: unknown) =>
+            logger.warn(
+              {
+                eventId,
+                kind: message.kind,
+                err: err instanceof Error ? err.message : String(err),
+              },
+              'relay: announcement not queued',
+            ),
+          );
+        },
+      }
+    : null,
 });
 
 // B15: sponsors. Logos are uploaded by the server before the transaction

@@ -42,3 +42,120 @@ export function localUndo(
   if (now - Date.parse(item.scannedAt) > DOOR_UNDO_WINDOW_MS) return 'not_found';
   return 'done';
 }
+
+/**
+ * Where a phone's "already in" mark came from. `own`: this phone let them
+ * in. `server`: the server said so (an answer, the status ping). `relay`:
+ * another gate said so through the relay (ADR-058) — a claim until the
+ * server confirms it.
+ */
+export type MarkSource = 'own' | 'server' | 'relay';
+
+export interface Mark {
+  /** When they were checked in (corrected clock, ms) — what the screen says. */
+  at: number;
+  gate: string;
+  byThisPhone: boolean;
+  /**
+   * When the server is known to have had this check-in (corrected clock,
+   * ms); null while it does not yet (an unsent admit here, or another
+   * gate's unconfirmed claim). A new list drops the mark only if the list
+   * was read after this.
+   */
+  knownSince: number | null;
+  source: MarkSource;
+}
+
+/** A row from the relay (relay/src/room.ts `RoomCheckIn`). */
+export interface RelayRow {
+  ticketId: string;
+  at: string;
+  gate: string | null;
+  confirmed: boolean;
+  seq: number;
+}
+
+/** What this phone tells the relay: its own admit, or taking it back. */
+export type RelayOwnMark =
+  { t: 'in'; ticketId: string; at: number } | { t: 'undo'; ticketId: string };
+
+/**
+ * ADR-058: a relay row against this phone's mark for the ticket. Returns the
+ * new mark, or null for no change. A claim the server has not confirmed is
+ * kept with `knownSince: null`, so no list download can drop it before the
+ * server knows (S1); the server's confirmation then sets it. This phone's
+ * own marks and the server's are never touched.
+ */
+export function markFromRelay(existing: Mark | undefined, row: RelayRow, now: number): Mark | null {
+  const at = Date.parse(row.at);
+  if (!Number.isFinite(at)) return null;
+  if (!existing) {
+    return {
+      at,
+      gate: row.gate ?? '?',
+      byThisPhone: false,
+      knownSince: row.confirmed ? now : null,
+      source: 'relay',
+    };
+  }
+  if (existing.source === 'relay' && (existing.knownSince === null || row.confirmed)) {
+    return {
+      ...existing,
+      at,
+      gate: row.gate ?? existing.gate,
+      knownSince: row.confirmed ? (existing.knownSince ?? now) : null,
+    };
+  }
+  return null;
+}
+
+/** Two clocks' "same moment": the server's ISO time against a phone's ms. */
+const SAME_CHECK_IN_MS = 1_000;
+/** A claim this much newer than an undone check-in is a re-admit (relay/src/room.ts). */
+export const UNDO_SLACK_MS = 5_000;
+
+/**
+ * ADR-058: does an undo heard through the relay remove this phone's mark?
+ * - This phone's own admit the server has not had yet: never.
+ * - A gate taking back its claim (`gate`; the room checked it is that
+ *   pass's own): only a mark that is still an unconfirmed relay claim —
+ *   never one the server or the ping vouched for (B1).
+ * - The server's undo names the check-in it undid by time: it removes that
+ *   check-in, or an unconfirmed claim from before it — never a re-admit or
+ *   a newer claim (S4, S-B).
+ */
+export function relayUndoRemoves(
+  mark: Mark | undefined,
+  undo: { by: 'gate' | 'server'; at: string },
+): boolean {
+  if (!mark) return false;
+  if (mark.source === 'own' && mark.knownSince === null) return false;
+  const unconfirmedClaim = mark.source === 'relay' && mark.knownSince === null;
+  if (undo.by === 'gate') return unconfirmedClaim;
+  const at = Date.parse(undo.at);
+  if (!Number.isFinite(at)) return false;
+  if (unconfirmedClaim) return mark.at <= at + UNDO_SLACK_MS;
+  return Math.abs(mark.at - at) < SAME_CHECK_IN_MS;
+}
+
+/**
+ * ADR-058: what this phone re-sends each time its relay link opens (S3): a
+ * message may have gone into a dead socket. Its own admits the server has
+ * not had, and its local undos still in the outbox. The room ignores
+ * repeats.
+ */
+export function unconfirmedOwnClaims(
+  marks: ReadonlyMap<string, Mark>,
+  outbox: readonly Pick<OutboxItem, 'verdict' | 'ticketId'>[],
+): RelayOwnMark[] {
+  const out: RelayOwnMark[] = [];
+  for (const [ticketId, m] of marks) {
+    if (m.source === 'own' && m.knownSince === null) out.push({ t: 'in', ticketId, at: m.at });
+  }
+  for (const item of outbox) {
+    if (item.verdict === 'undone' && item.ticketId && !marks.has(item.ticketId)) {
+      out.push({ t: 'undo', ticketId: item.ticketId });
+    }
+  }
+  return out;
+}

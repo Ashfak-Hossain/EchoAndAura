@@ -29,6 +29,10 @@ test('race both: early admit, server disagrees, gates share check-ins', async ({
   const gateB = await newGatePass(page, checkIn, 'Gate B');
 
   const contextA = await browser.newContext();
+  // Gate A has no relay (ADR-058) in this test: it learns of other gates
+  // only by the status ping, which step 2 cuts. door-relay.spec.ts covers
+  // the relay itself.
+  await contextA.routeWebSocket(/\/events\/[0-9a-f-]+\/ws/, (ws) => ws.close());
   const phoneA = await contextA.newPage();
   await phoneA.goto(`/door#code=${gateA}`);
   await expect(phoneA.locator('main[data-offline-list]')).toHaveAttribute('data-offline-list', '3');

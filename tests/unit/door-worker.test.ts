@@ -43,7 +43,10 @@ describe('routeOf (ADR-035)', () => {
     expect(routeOf(req('/door/sw.js', 'same-origin'), ORIGIN)).toBe('network');
     expect(routeOf(req('/admin', 'navigate'), ORIGIN)).toBe('network');
     expect(
-      routeOf({ method: 'GET', mode: 'cors', url: 'https://cdn.example/_next/static/a.js' }, ORIGIN),
+      routeOf(
+        { method: 'GET', mode: 'cors', url: 'https://cdn.example/_next/static/a.js' },
+        ORIGIN,
+      ),
     ).toBe('network');
   });
 });
@@ -130,7 +133,7 @@ function setup(options: { onLine?: boolean; wait?: Wait } = {}) {
     // Request() will not construct a navigation; the worker only reads these.
     const view = new Proxy(request, {
       get: (target, prop) =>
-        prop === 'mode' ? mode : Reflect.get(target, prop, target) as unknown,
+        prop === 'mode' ? mode : (Reflect.get(target, prop, target) as unknown),
     });
     let answer: Promise<Response> | null = null;
     const event: FetchEventLike = {
@@ -276,7 +279,9 @@ describe('the door worker: install and activate (ADR-035)', () => {
     await w.lifecycle('install');
     expect(w.scope.skipWaiting).toHaveBeenCalled();
     await w.lifecycle('activate');
-    expect((await w.caches.keys()).sort()).toEqual([FILES_CACHE, PAGE_CACHE, 'someone-else'].sort());
+    expect((await w.caches.keys()).sort()).toEqual(
+      [FILES_CACHE, PAGE_CACHE, 'someone-else'].sort(),
+    );
     expect(w.scope.clients.claim).toHaveBeenCalled();
   });
 });

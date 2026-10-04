@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { e2eAppDatabaseUrl, e2eDatabaseUrl } from './tests/e2e/prepare-db';
+import { RELAY_PORT, RELAY_SECRET, RELAY_URL } from './tests/e2e/relay-env';
 
 /**
  * E2E runs against a PRODUCTION build on its own port, not the dev server.
@@ -26,26 +27,37 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    // prepare-db runs as the owner (it migrates and wipes); the server runs
-    // as the app role, like production (ADR-044).
-    command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && DATABASE_URL='${e2eAppDatabaseUrl()}' pnpm start -p ${PORT}`,
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 240_000,
-    // The suite never sends real email, and the sign-in spec needs to follow
-    // the magic link. The exposure flag is gated on APP_ENV (never
-    // 'production' here), because `next start` forces NODE_ENV=production.
-    // BETTER_AUTH_URL is the origin auth redirects to (magic-link verify →
-    // callbackURL); the suite's server lives on this port. SITE_URL (canonical
-    // and OG URLs) is deliberately left as configured — the specs assert it.
-    env: {
-      ...process.env,
-      DATABASE_URL: e2eDatabaseUrl(),
-      MAILER: 'log',
-      E2E_EXPOSE_MAGIC_LINK: '1',
-      APP_ENV: 'test',
-      BETTER_AUTH_URL: baseURL,
+  webServer: [
+    {
+      command: `pnpm exec wrangler dev -c relay/wrangler.toml --port ${RELAY_PORT} --var RELAY_SECRET:${RELAY_SECRET} --var ALLOWED_ORIGINS:${baseURL}`,
+      url: `${RELAY_URL}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' },
     },
-  },
+    {
+      // prepare-db runs as the owner (it migrates and wipes); the server runs
+      // as the app role, like production (ADR-044).
+      command: `pnpm exec tsx tests/e2e/prepare-db.ts && pnpm build && DATABASE_URL='${e2eAppDatabaseUrl()}' pnpm start -p ${PORT}`,
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      // The suite never sends real email, and the sign-in spec needs to follow
+      // the magic link. The exposure flag is gated on APP_ENV (never
+      // 'production' here), because `next start` forces NODE_ENV=production.
+      // BETTER_AUTH_URL is the origin auth redirects to (magic-link verify →
+      // callbackURL); the suite's server lives on this port. SITE_URL (canonical
+      // and OG URLs) is deliberately left as configured — the specs assert it.
+      env: {
+        ...process.env,
+        DATABASE_URL: e2eDatabaseUrl(),
+        MAILER: 'log',
+        E2E_EXPOSE_MAGIC_LINK: '1',
+        APP_ENV: 'test',
+        BETTER_AUTH_URL: baseURL,
+        RELAY_URL,
+        RELAY_SECRET,
+      },
+    },
+  ],
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsp, newNonce, originFrom } from '@/lib/csp';
+import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
 
 function directives(csp: string): Map<string, string[]> {
   return new Map(
@@ -41,6 +41,18 @@ describe('buildCsp', () => {
     expect(directives(buildCsp({ ...base, door: true })).get('script-src')).toContain(
       "'wasm-unsafe-eval'",
     );
+  });
+
+  it('lets the door, and only the door, reach the gate relay (ADR-058)', () => {
+    const relayOrigin = wsOriginFrom('https://relay.echoandaura.com');
+    expect(relayOrigin).toBe('wss://relay.echoandaura.com');
+    expect(wsOriginFrom('http://localhost:8787')).toBe('ws://localhost:8787');
+    expect(wsOriginFrom(undefined)).toBeNull();
+    expect(directives(buildCsp({ ...base, door: true, relayOrigin })).get('connect-src')).toEqual([
+      "'self'",
+      'wss://relay.echoandaura.com',
+    ]);
+    expect(directives(buildCsp({ ...base, relayOrigin })).get('connect-src')).toEqual(["'self'"]);
   });
 
   it('adds eval in development only', () => {

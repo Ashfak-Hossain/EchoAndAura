@@ -1,0 +1,29 @@
+# ADR-058: the gate relay (relay.echoandaura.com). Deployed by hand:
+# `pnpm relay:deploy` (docs/infra/CLOUDFLARE.md § Gate relay). The shared
+# secret is set once with `pnpm exec wrangler secret put RELAY_SECRET -c relay/wrangler.toml`.
+name = "echoandaura-relay"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+account_id = "29e12ddd6bf5e719b145d6b6a69c7063"
+workers_dev = false
+routes = [{ pattern = "relay.echoandaura.com", custom_domain = true }]
+
+[vars]
+ALLOWED_ORIGINS = "https://echoandaura.com"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "EventRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["EventRoom"]
+
+[observability]
+enabled = true
+
+# The pass rides in a request header (Sec-WebSocket-Protocol). Invocation
+# logs record request details, so they are off: no pass in Cloudflare's
+# logs. The relay's own console errors are still kept.
+[observability.logs]
+invocation_logs = false

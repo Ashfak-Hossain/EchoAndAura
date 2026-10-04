@@ -221,7 +221,15 @@ export interface DoorRepository {
   ticketsCheckedInByPass(
     passId: string,
     tx: DbExecutor,
-  ): Promise<{ id: string; code: string; orderId: string; checkedInScanId: string }[]>;
+  ): Promise<
+    {
+      id: string;
+      code: string;
+      orderId: string;
+      checkedInScanId: string;
+      checkedInAt: Date | null;
+    }[]
+  >;
 }
 
 const PASS_CODE_UNIQUE = 'door_passes_code_unique';
@@ -515,6 +523,7 @@ export const doorRepository: DoorRepository = {
         code: tickets.code,
         orderId: tickets.orderId,
         checkedInScanId: doorScans.scanId,
+        checkedInAt: tickets.checkedInAt,
       })
       .from(tickets)
       .innerJoin(doorScans, eq(doorScans.scanId, tickets.checkedInScanId))

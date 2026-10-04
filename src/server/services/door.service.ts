@@ -44,6 +44,7 @@ import type {
 import type { EventRecord, EventsRepository } from '@/server/repositories/events.repository';
 import type { OrdersRepository } from '@/server/repositories/orders.repository';
 import type { TicketsRepository } from '@/server/repositories/tickets.repository';
+import type { DoorRelay } from '@/server/relay/relay';
 
 /**
  * ADR-030 — gate check-in. A gate pass (one event, one gate) lets a door
@@ -227,6 +228,11 @@ export interface DoorServiceDeps {
   passCode?: () => string;
   /** The offline list's salt (ADR-034); fresh per download. */
   listSalt?: () => string;
+  /**
+   * ADR-058: the gate relay — passes into an event's room, and the
+   * announcements after each commit. Absent: gates share by the ping alone.
+   */
+  relay?: DoorRelay | null;
 }
 
 /**
@@ -271,6 +277,7 @@ export function createDoorService({
   now = () => new Date(),
   passCode = generatePassCode,
   listSalt = () => randomBytes(16).toString('hex'),
+  relay = null,
 }: DoorServiceDeps) {
   const secondsSince = (at: Date) =>
     Math.max(0, Math.floor((now().getTime() - at.getTime()) / 1000));
@@ -436,7 +443,7 @@ export function createDoorService({
     // An offline admit happened when the phone says (corrected, clamped),
     // not when signal came back. An online one: the database clock.
     const by = { gate, scanId: item.scanId, at: offlineAt };
-    return runInTransaction(async (tx) => {
+    const result = await runInTransaction(async (tx) => {
       // Pass first, ticket second (the same order as revoke-and-undo): a
       // revoke waits for this scan, or this scan sees the revoke.
       if (!(await door.lockActivePass(ctx.pass.id, tx))) {
@@ -504,6 +511,16 @@ export function createDoorService({
         secondsAgo: latest.checkedInAt ? secondsSince(latest.checkedInAt) : undefined,
       };
     });
+    // Committed: every other gate hears of it now, not at its next ping.
+    if (result.result === 'admitted') {
+      relay?.announce(ctx.event.id, {
+        kind: 'in',
+        ticketId: ticket.id,
+        at: result.at ?? now(),
+        gate,
+      });
+    }
+    return result;
   }
 
   /** One scan, idempotent by `scanId`. */
@@ -520,6 +537,45 @@ export function createDoorService({
         if (stored) return replay(ctx, item, stored);
       }
       throw err;
+    }
+  }
+
+  /**
+   * ADR-058: tell the relay, with the last moment the pass's token could be
+   * used, so the room keeps the revocation at least that long.
+   */
+  async function announceRevoke(eventId: string, passId: string): Promise<void> {
+    if (!relay) return;
+    // After the commit: a failed read here must not lose the announcement
+    // (or, in revoke-and-undo, the undos after it) — two days is plenty.
+    let until = new Date(now().getTime() + 48 * 3_600_000);
+    try {
+      const event = await events.findById(eventId);
+      if (event) until = doorWindow(event).validUntil;
+    } catch (err: unknown) {
+      logger.warn(
+        { eventId, passId, err: err instanceof Error ? err.message : String(err) },
+        'relay: revoke window unknown, using 48 h',
+      );
+    }
+    relay.announce(eventId, { kind: 'revoke', passId, until });
+  }
+
+  async function relayTicketFor(ctx: DoorContext): Promise<{ url: string; pass: string } | null> {
+    if (!relay) return null;
+    try {
+      return await relay.ticket({
+        eventId: ctx.event.id,
+        passId: ctx.pass.id,
+        gate: ctx.pass.label,
+        until: ctx.window.validUntil,
+      });
+    } catch (err: unknown) {
+      logger.error(
+        { passId: ctx.pass.id, err: err instanceof Error ? err.message : String(err) },
+        'relay: could not sign a pass',
+      );
+      return null;
     }
   }
 
@@ -560,6 +616,7 @@ export function createDoorService({
       const pass = await door.findPassById(passId);
       if (!pass || pass.eventId !== eventId) throw new DoorPassNotFoundError(passId);
       await door.revokePass(passId);
+      await announceRevoke(eventId, passId);
       logger.info({ actor, passId }, 'gate pass revoked');
     },
 
@@ -576,6 +633,7 @@ export function createDoorService({
     ): Promise<number> {
       const pass = await door.findPassById(passId);
       if (!pass || pass.eventId !== eventId) throw new DoorPassNotFoundError(passId);
+      const undoneCheckIns: { ticketId: string; at: Date }[] = [];
       const undone = await runInTransaction(async (tx) => {
         await door.revokePass(passId, tx);
         const standing = await door.ticketsCheckedInByPass(passId, tx);
@@ -596,10 +654,13 @@ export function createDoorService({
             },
             tx,
           );
+          if (t.checkedInAt) undoneCheckIns.push({ ticketId: t.id, at: t.checkedInAt });
           n++;
         }
         return n;
       });
+      await announceRevoke(eventId, passId);
+      for (const c of undoneCheckIns) relay?.announce(eventId, { kind: 'undo', ...c });
       logger.info({ actor, passId, undone }, 'gate pass revoked and its check-ins undone');
       return undone;
     },
@@ -652,10 +713,12 @@ export function createDoorService({
         throw new CheckInUndoRefusedError('too_late');
       }
       const ticketId = scan.ticketId;
-      await runInTransaction(async (tx) => {
+      const undoneAt = await runInTransaction(async (tx) => {
         if (!(await door.lockActivePass(ctx.pass.id, tx))) {
           throw new DoorPassRevokedError(ctx.pass.id);
         }
+        // Which check-in this is, for the relay (ADR-058): it removes only that one.
+        const before = await door.findTicket({ id: ticketId }, tx);
         const undone = await tickets.undoCheckIn(ticketId, tx, scanId);
         if (!undone) throw new CheckInUndoRefusedError('not_checked_in');
         await orders.insertEvent(
@@ -669,7 +732,9 @@ export function createDoorService({
           },
           tx,
         );
+        return before?.checkedInAt ?? null;
       });
+      if (undoneAt) relay?.announce(ctx.event.id, { kind: 'undo', ticketId, at: undoneAt });
     },
 
     /**
@@ -688,7 +753,7 @@ export function createDoorService({
         actor,
       }: { orderId: string; expectedScanId: string; reason: string; actor: string },
     ): Promise<{ code: string }> {
-      return runInTransaction(async (tx) => {
+      const out = await runInTransaction(async (tx) => {
         const before = await door.findTicket({ id: ticketId }, tx);
         if (!before || before.orderId !== orderId) throw new TicketNotFoundError(ticketId);
         const undone = await tickets.undoCheckIn(ticketId, tx, expectedScanId);
@@ -708,8 +773,10 @@ export function createDoorService({
           },
           tx,
         );
-        return { code: undone.code };
+        return { code: undone.code, eventId: before.eventId, at: before.checkedInAt };
       });
+      if (out.at) relay?.announce(out.eventId, { kind: 'undo', ticketId, at: out.at });
+      return { code: out.code };
     },
 
     /** Name substring (2+ characters) or a ticket code, within the pass's event. */
@@ -786,6 +853,10 @@ export function createDoorService({
         validFrom: ctx.window.validFrom.toISOString(),
         validUntil: ctx.window.validUntil.toISOString(),
         entries,
+        // ADR-058: saved with the list, so a reload without the server can
+        // still join the room. Valid as long as the pass's window. A pass
+        // that cannot be signed costs the relay, never the list.
+        relay: await relayTicketFor(ctx),
       };
     },
 
