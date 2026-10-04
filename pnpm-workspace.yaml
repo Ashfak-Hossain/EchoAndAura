@@ -3,6 +3,9 @@ allowBuilds:
   msgpackr-extract: true
   sharp: false
   unrs-resolver: false
+  # wrangler's local runtime: its binary comes as an optional dependency, the
+  # install script only re-checks it (the relay runs locally without it).
+  workerd: false
 
 # vite@8.3.0 declares a dependency on lightningcss@^1.33.0, which is not yet
 # published (latest is 1.32.0), breaking installs. Pin to the real latest —

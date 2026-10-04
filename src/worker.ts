@@ -34,9 +34,12 @@ import {
   EXPIRE_HOLDS_JOB,
   HOLDS_QUEUE,
   ORDERS_QUEUE,
+  RELAY_ANNOUNCE_JOB,
+  RELAY_QUEUE,
   SIGN_IN_JOB,
   WORKER_PING_JOB,
 } from '@/server/queue/names';
+import { RelayRejectedError, createRelayAnnouncer, readRelayConfig } from '@/server/relay/relay';
 import { closeProducer } from '@/server/queue/producer';
 import { ordersRepository } from '@/server/repositories/orders.repository';
 import { ticketTypesRepository } from '@/server/repositories/ticket-types.repository';
@@ -46,6 +49,20 @@ import { FONT_DIR, missingFontFiles } from '@/server/pdf/ticket-pdf';
 // Redis contents are external input: parse, never cast.
 const emailJobData = z.object({ orderId: z.uuid() });
 const signInJobData = z.object({ to: z.email(), url: z.url() });
+// ADR-058: an announcement for the gate relay.
+const relayJobData = z.object({
+  eventId: z.uuid(),
+  message: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('in'),
+      ticketId: z.uuid(),
+      at: z.iso.datetime(),
+      gate: z.string().max(60).nullable(),
+    }),
+    z.object({ kind: z.literal('undo'), ticketId: z.uuid(), at: z.iso.datetime() }),
+    z.object({ kind: z.literal('revoke'), passId: z.uuid(), until: z.iso.datetime() }),
+  ]),
+});
 const accountEmailJobData = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('password-reset'), to: z.email(), url: z.url() }),
   z.object({ kind: z.literal('confirm-new-email'), to: z.email(), url: z.url() }),
@@ -111,6 +128,35 @@ async function main(): Promise<void> {
     },
     { connection, concurrency: 1 },
   );
+
+  // ADR-058: gate relay announcements — one at a time, so they arrive in
+  // the order they were committed; no limiter, nothing waits behind email.
+  // Without RELAY_URL/RELAY_SECRET nothing is queued and no worker runs.
+  const relayConfig = readRelayConfig();
+  const relayAnnouncer = relayConfig ? createRelayAnnouncer(relayConfig) : null;
+  const relayWorker = relayAnnouncer
+    ? new Worker(
+        RELAY_QUEUE,
+        async (job) => {
+          if (job.name !== RELAY_ANNOUNCE_JOB) throw new Error(`unknown job ${job.name}`);
+          const data = relayJobData.parse(job.data);
+          try {
+            await relayAnnouncer.send(data.eventId, data.message);
+          } catch (err: unknown) {
+            if (err instanceof RelayRejectedError) throw new UnrecoverableError(err.message);
+            throw err;
+          }
+        },
+        { connection, concurrency: 1 },
+      )
+    : null;
+  relayWorker?.on('failed', (job, err) =>
+    logger.warn(
+      { jobId: job?.id, attempt: job?.attemptsMade, err: err.message },
+      'relay: announcement failed',
+    ),
+  );
+  relayWorker?.on('error', (err) => logger.error({ err }, 'worker error'));
 
   const worker = new Worker(
     ORDERS_QUEUE,
@@ -238,12 +284,19 @@ async function main(): Promise<void> {
   holdsQueue.on('error', (err) => logger.error({ err }, 'queue error'));
   // At boot too, so /api/health is green within seconds of a deploy rather
   // than after the first scheduled run (the deploy smoke test waits for it).
-  await Promise.all([worker.waitUntilReady(), holdsWorker.waitUntilReady()]);
+  await Promise.all([
+    worker.waitUntilReady(),
+    holdsWorker.waitUntilReady(),
+    relayWorker?.waitUntilReady(),
+  ]);
   await Promise.all([
     recordWorkerHeartbeat(connection),
     recordWorkerHeartbeat(connection, Date.now(), ORDERS_WORKER_HEARTBEAT_KEY),
   ]);
-  logger.info({ queues: [ORDERS_QUEUE, HOLDS_QUEUE] }, 'worker started');
+  logger.info(
+    { queues: [ORDERS_QUEUE, HOLDS_QUEUE, ...(relayWorker ? [RELAY_QUEUE] : [])] },
+    'worker started',
+  );
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down');
@@ -252,7 +305,7 @@ async function main(): Promise<void> {
     const deadline = setTimeout(() => process.exit(1), 10_000);
     deadline.unref();
     try {
-      await Promise.all([worker.close(), holdsWorker.close()]);
+      await Promise.all([worker.close(), holdsWorker.close(), relayWorker?.close()]);
       await Promise.all([queue.close(), holdsQueue.close()]);
       await closeProducer(); // this process enqueues too (expiry → C4)
       await connection.quit();

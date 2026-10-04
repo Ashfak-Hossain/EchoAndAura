@@ -3,7 +3,15 @@ import { logger } from '@/server/lib/logger';
 import type { AccountEmail } from '@/server/auth/account-emails';
 import type { EmailKind } from '@/server/email/templates/render';
 import { createRedisConnection } from './connection';
-import { ACCOUNT_EMAIL_JOB, EMAIL_JOB_PREFIX, ORDERS_QUEUE, SIGN_IN_JOB } from './names';
+import type { RelayAnnouncementWire } from '@/server/relay/relay';
+import {
+  ACCOUNT_EMAIL_JOB,
+  EMAIL_JOB_PREFIX,
+  ORDERS_QUEUE,
+  RELAY_ANNOUNCE_JOB,
+  RELAY_QUEUE,
+  SIGN_IN_JOB,
+} from './names';
 
 /**
  * The app's side of the queue: hand the worker a job after a commit.
@@ -13,7 +21,7 @@ import { ACCOUNT_EMAIL_JOB, EMAIL_JOB_PREFIX, ORDERS_QUEUE, SIGN_IN_JOB } from '
  */
 // Cached on globalThis like db/client.ts: Next dev re-evaluates server
 // modules on every reload and would otherwise leak a connection each time.
-const g = globalThis as unknown as { __ordersProducerQueue?: Queue };
+const g = globalThis as unknown as { __ordersProducerQueue?: Queue; __relayProducerQueue?: Queue };
 function getQueue(): Queue {
   return (g.__ordersProducerQueue ??= new Queue(ORDERS_QUEUE, {
     connection: createRedisConnection(process.env, 'producer'),
@@ -144,6 +152,61 @@ export async function enqueueAccountEmail(
 }
 
 export async function closeProducer(): Promise<void> {
-  await g.__ordersProducerQueue?.close();
+  await Promise.all([g.__ordersProducerQueue?.close(), g.__relayProducerQueue?.close()]);
   g.__ordersProducerQueue = undefined;
+  g.__relayProducerQueue = undefined;
+}
+
+export interface RelayQueue {
+  add(name: string, data: RelayJob, opts: Record<string, unknown>): Promise<unknown>;
+}
+
+export interface RelayJob {
+  eventId: string;
+  message: RelayAnnouncementWire;
+}
+
+/**
+ * A revoke must reach the room even after a long relay outage (a leaked
+ * pass stays usable there until it does): 12 tries, ~2 hours in all.
+ */
+export const RELAY_REVOKE_JOB_OPTIONS = {
+  attempts: 12,
+  backoff: { type: 'exponential' as const, delay: 2_000 },
+  removeOnComplete: true,
+  removeOnFail: 200,
+};
+
+export const RELAY_JOB_OPTIONS = {
+  // Six tries over ~30 s (1, 2, 4, 8, 16 s): a relay blip passes; a revoke
+  // that never lands would leave a leaked pass in the room.
+  attempts: 6,
+  backoff: { type: 'exponential' as const, delay: 1_000 },
+  removeOnComplete: true,
+  removeOnFail: 200,
+};
+
+/** ADR-058: after a door commit. The caller logs a failure; it never undoes the check-in. */
+export async function enqueueRelayAnnounce(
+  job: RelayJob,
+  opts: { queue?: RelayQueue; timeoutMs?: number } = {},
+): Promise<void> {
+  const q =
+    opts.queue ??
+    (g.__relayProducerQueue ??= new Queue(RELAY_QUEUE, {
+      connection: createRedisConnection(process.env, 'producer'),
+    }));
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`enqueue relay ${job.message.kind} timed out`)),
+      opts.timeoutMs ?? ENQUEUE_TIMEOUT_MS,
+    );
+  });
+  try {
+    const options = job.message.kind === 'revoke' ? RELAY_REVOKE_JOB_OPTIONS : RELAY_JOB_OPTIONS;
+    await Promise.race([q.add(RELAY_ANNOUNCE_JOB, job, options), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

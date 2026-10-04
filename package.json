@@ -9,12 +9,14 @@
     "sw:build": "esbuild src/app/door/offline/sw.ts --bundle --format=iife --target=es2020 --minify --outfile=public/door/sw.js --log-level=warning",
     "worker:build": "esbuild src/worker.ts --bundle --platform=node --format=esm --packages=external --jsx=automatic --outfile=dist/worker.mjs --log-level=warning",
     "ops:build": "esbuild scripts/migrate.ts scripts/create-admin.ts scripts/promote-admin.ts scripts/admin-reset-2fa.ts --bundle --platform=node --format=esm --packages=external --outdir=dist/ops --out-extension:.js=.mjs --log-level=warning",
+    "relay:dev": "wrangler dev -c relay/wrangler.toml --port 8787",
+    "relay:deploy": "wrangler deploy -c relay/wrangler.toml",
     "worker": "pnpm worker:build && dotenv -e .env -- node dist/worker.mjs",
     "jobs:expire-holds": "dotenv -e .env -- tsx scripts/expire-holds.ts",
     "email:render": "dotenv -e .env -- tsx scripts/render-emails.ts",
     "email:test": "dotenv -e .env -- tsx scripts/send-test-email.ts",
     "infra:check": "dotenv -e .env -- tsx scripts/infra-check.ts",
-    "typecheck": "NEXT_DIST_DIR=.next-build next typegen && tsc --noEmit",
+    "typecheck": "NEXT_DIST_DIR=.next-build next typegen && tsc --noEmit && tsc --noEmit -p relay",
     "lint": "eslint",
     "format": "prettier --write .",
     "test": "vitest run --project unit",
@@ -74,6 +76,7 @@
     "zxing-wasm": "3.1.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261001.1",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "26.6.3",
@@ -96,7 +99,8 @@
     "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vite-tsconfig-paths": "6.1.1",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "wrangler": "4.147.0"
   },
   "packageManager": "pnpm@11.9.0"
 }

@@ -22,3 +22,11 @@ export const SIGN_IN_JOB = 'auth.sign-in';
 
 /** Admin account emails (ADR-038): payload `AccountEmail` (reset, confirm new address, change notice). */
 export const ACCOUNT_EMAIL_JOB = 'auth.account';
+
+/**
+ * ADR-058: announcements to the gate relay, after a door commit. A queue of
+ * its own, worked one job at a time (so they arrive in order) with no
+ * limiter: nothing may wait behind emails.
+ */
+export const RELAY_QUEUE = 'relay';
+export const RELAY_ANNOUNCE_JOB = 'relay.announce';

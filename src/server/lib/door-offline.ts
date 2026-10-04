@@ -48,6 +48,12 @@ export interface OfflineList {
   validFrom: string;
   validUntil: string;
   entries: OfflineEntry[];
+  /**
+   * ADR-058: this phone's way into the event's room on the gate relay (its
+   * WebSocket URL and signed pass); null when the relay is off. Optional:
+   * a list saved before the relay existed has none.
+   */
+  relay?: { url: string; pass: string } | null;
 }
 
 /**

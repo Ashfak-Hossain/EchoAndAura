@@ -270,7 +270,15 @@ export function fakeDoor(db: FakeDb, events: () => EventRecord[], clock: () => D
       const ids = new Set(scans.filter((s) => s.passId === passId).map((s) => s.scanId));
       return db.state.tickets.flatMap((t) =>
         t.checkedInScanId !== null && ids.has(t.checkedInScanId)
-          ? [{ id: t.id, code: t.code, orderId: t.orderId, checkedInScanId: t.checkedInScanId }]
+          ? [
+              {
+                id: t.id,
+                code: t.code,
+                orderId: t.orderId,
+                checkedInScanId: t.checkedInScanId,
+                checkedInAt: t.checkedInAt,
+              },
+            ]
           : [],
       );
     },

@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     'next-env.d.ts',
     // Personal working notes (git-ignored) may contain third-party exports.
     'notes/**',
+    // Wrangler's local state and bundles (the gate relay, ADR-058).
+    '**/.wrangler/**',
     // Build artifacts (the esbuild worker bundle, the door service worker)
     // and local email previews.
     'dist/**',

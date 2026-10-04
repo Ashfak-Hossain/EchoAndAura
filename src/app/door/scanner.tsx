@@ -60,6 +60,8 @@ import { isIos, subscribeNever } from './platform';
 import { AUTO_DISMISS_MS, type Overlay, ResultOverlay, viewOf } from './result-overlay';
 import { type CameraProblem, useCamera } from './use-camera';
 import { useFeedback } from './use-feedback';
+import { useRelay } from './use-relay';
+import type { RelayOwnMark } from './offline/rules';
 
 /**
  * The gate scanner (ADR-030). One submit path for the camera, a handheld
@@ -264,10 +266,22 @@ export function Scanner({
     },
     [onSessionOver],
   );
-  const offline = useOffline({ passId, gate: status.gate, onSignedOut });
+  // ADR-058: this phone's own admits go to the other gates through the relay.
+  const relaySend = useRef<(mark: RelayOwnMark) => void>(() => {});
+  const onOwnMark = useCallback((mark: RelayOwnMark) => relaySend.current(mark), []);
+  const offline = useOffline({ passId, gate: status.gate, onSignedOut, onOwnMark });
   useEffect(() => {
     offlineRef.current = offline;
   });
+  const relay = useRelay({
+    ticket: offline.relay,
+    onRows: offline.learnRelayRows,
+    onUndo: offline.learnRelayUndo,
+    ownClaims: offline.ownClaims,
+  });
+  useEffect(() => {
+    relaySend.current = relay.send;
+  }, [relay.send]);
   // The hook's functions are stable; the object around them is not. The
   // scan path must only depend on stable ones, or the handheld-scanner
   // listener would re-subscribe on every render and drop a code mid-read.
@@ -811,6 +825,26 @@ export function Scanner({
             <span className="shrink-0 font-bold text-white tabular" data-testid="door-count">
               {status.checkedIn} / {status.issued} in
             </span>
+            {offline.relay ? (
+              // ADR-058: other gates' check-ins reach this phone live.
+              <span
+                data-testid="door-relay"
+                data-state={relay.state}
+                className={cn(
+                  'flex shrink-0 items-center gap-1 text-[12px] font-semibold',
+                  relay.state === 'live' ? 'text-[#7ee2a8]' : 'text-white/45',
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    relay.state === 'live' ? 'bg-[#7ee2a8]' : 'bg-white/45',
+                  )}
+                />
+                {relay.state === 'live' ? 'Live' : relay.state === 'connecting' ? 'Linking' : 'Off'}
+              </span>
+            ) : null}
           </p>
         </div>
         <span
