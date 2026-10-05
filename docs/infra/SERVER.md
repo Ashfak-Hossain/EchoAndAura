@@ -805,18 +805,21 @@ explains the choices.
   about an outage about 4 minutes in. A Gmail filter on
   `from:(betterstack.com)` (never spam, always important) makes the email
   show up as a phone notification.
-- **Disk alert files** are in the repo under `ops/server/`: the script
-  plus its `.service` and `.timer`. They were installed with `scp` to
-  `/tmp`, `install` into `/usr/local/sbin` and `/etc/systemd/system`, then
-  `systemctl enable --now disk-alert.timer`. To change them, edit them in
-  the repo and install again. The script takes `DISK_ALERT_THRESHOLD`
+- **Disk alert files** are Ansible's since 2026-10-06 (role `disk_alert`,
+  `ops/ansible/roles/disk_alert/files/`: the script plus its `.service`
+  and `.timer`; [ANSIBLE.md](ANSIBLE.md)). First installed by hand with
+  `scp` + `install` + `systemctl enable --now disk-alert.timer`. To change
+  them: edit the role, `pnpm ansible check production`, then `apply`.
+  `alerts.env` is written from `.env` (`ALERTS_TELEGRAM_BOT_TOKEN`,
+  `ALERTS_TELEGRAM_CHAT_ID`), never shown in Ansible's output. The script takes `DISK_ALERT_THRESHOLD`
   for a test, so `DISK_ALERT_THRESHOLD=1 /usr/local/sbin/disk-alert` sends
   a message now.
 
 **Check:**
 
 - `systemctl list-timers disk-alert.timer` shows the next run.
-- `sha256sum /usr/local/sbin/disk-alert` matches `ops/server/disk-alert`.
+- `pnpm ansible check production` reports `changed=0` (the files match
+  the role).
 - The Better Stack monitors show Up.
 - Dokploy → Notifications → **Test** posts to the group.
 
@@ -930,7 +933,10 @@ the server stops answering anyone else):
 2. **Cloudflare → DNS:** `deploy` → **Proxied** (orange cloud). Check:
    the dashboard opens and signs in; `curl -s -o /dev/null -w '%{http_code}\n' https://deploy.echoandaura.com/api/compose.one`
    prints `401` (Dokploy's answer), not `403` (a Cloudflare challenge).
-3. **Install the lockdown** (from the laptop, in the repo):
+3. **Install the lockdown.** Today: Ansible role `origin_lockdown`
+   (`pnpm ansible apply production --tags origin_lockdown`; the files are in
+   `ops/ansible/roles/origin_lockdown/files/`). How it was first done, by
+   hand, from the laptop:
    ```sh
    scp ops/server/origin-lockdown ops/server/origin-lockdown.service echoandaura:/tmp/
    ```
@@ -1129,3 +1135,4 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 | 2026-10-04 | App role (§ 19): `app-role.sql` re-run after the deploy of migration 0025 (ADR-053) — `door_decisions` append-only; checked `has_table_privilege` UPDATE/DELETE → `f`/`f`. (A first run before the merge changed nothing: it read `main`'s older script.)                                                                                                                                                                   |
 | 2026-10-05 | Email (ADR-057): Dokploy → compose app → Environment: `MAILER=cloudflare`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL_API_TOKEN` (account token `echoandaura-worker-email`: Email Sending Edit only, IP-restricted to the VPS, no expiry; in Bitwarden) → redeployed; worker healthy. SES values left in place as the rollback (`MAILER=ses`)                                                                               |
 | 2026-10-05 | Gate relay (ADR-058): Dokploy Environment `RELAY_URL=https://relay.echoandaura.com`, `RELAY_SECRET` (Bitwarden "Gate relay secret") → deployed; worker runs queues orders, holds, relay; door CSP allows the relay                                                                                                                                                                                                          |
+| 2026-10-06 | Ansible (9.2 slice C): origin lockdown, disk alert and Traefik's in-flight file managed by roles; the scripts moved from `ops/server/` to `ops/ansible/roles/`. `traefik.yml` stays Dokploy's: Ansible only checks the § 13 trustedIPs and § 21 middleware are still there. Production check: changed=0                                                                                                                     |

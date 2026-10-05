@@ -11,3 +11,14 @@ swappiness: 10
 # from the laptop running Ansible, not stored in the repo, so whoever runs
 # it (the developer, Raj) can point it at their own key.
 ssh_public_key_file: "{{ lookup('ansible.builtin.env', 'ANSIBLE_SSH_PUBLIC_KEY') | default('~/.ssh/echoandaura_vps.pub', true) }}"
+
+# SERVER.md § 18: the disk alert's Telegram bot (Bitwarden: Telegram alert
+# bot). From .env, never the repo. The lab VM gets harmless placeholders so
+# it can be built without the real bot; production must have the real ones
+# (the disk_alert role refuses to write empty values).
+alerts_telegram_bot_token: >-
+  {{ lookup('ansible.builtin.env', 'ALERTS_TELEGRAM_BOT_TOKEN')
+     | default('lab-not-a-token' if (lab | default(false)) else '', true) }}
+alerts_telegram_chat_id: >-
+  {{ lookup('ansible.builtin.env', 'ALERTS_TELEGRAM_CHAT_ID')
+     | default('0' if (lab | default(false)) else '', true) }}

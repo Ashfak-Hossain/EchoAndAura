@@ -47,22 +47,35 @@ git-ignored and appear on the first run.
 
 ## What is managed
 
-| Role            | SERVER.md  | What                                                                                                                                                            | Since      |
-| --------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `base`          | § 4, § 5   | hostname, `/etc/hosts`, cloud-init keeps the name, UTC, automatic security updates                                                                              | 2026-10-06 |
-| `ssh`           | § 2        | your public key for root; keys only (`00-hardening.conf`, checked by `sshd -t` before saving)                                                                   | 2026-10-06 |
-| `swap`          | § 3        | 2 GB `/swapfile` (created only if missing), in fstab, swappiness 10                                                                                             | 2026-10-06 |
-| `firewall`      | § 6, 9, 20 | ufw: SSH allowed **first**, deny incoming/routed, allow outgoing, 80/443/3000 kept closed, logging low, on                                                      | 2026-10-06 |
-| `docker_config` | § 7        | `/etc/docker/daemon.json`: container logs capped at 3 × 10 MB. **Never restarts Docker** (that stops the site): it prints a reminder to restart at a quiet time | 2026-10-06 |
-| `sysctl`        | § 10       | `vm.overcommit_memory = 1`, so Redis can fork for its snapshots                                                                                                 | 2026-10-06 |
-| `apt_clean`     | § 17       | apt cache cleaned every 7 days (Docker images: Dokploy's daily cleanup, not here)                                                                               | 2026-10-06 |
+| Role              | SERVER.md  | What                                                                                                                                                                                                                                      | Since      |
+| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `base`            | § 4, § 5   | hostname, `/etc/hosts`, cloud-init keeps the name, UTC, automatic security updates                                                                                                                                                        | 2026-10-06 |
+| `ssh`             | § 2        | your public key for root; keys only (`00-hardening.conf`, checked by `sshd -t` before saving)                                                                                                                                             | 2026-10-06 |
+| `swap`            | § 3        | 2 GB `/swapfile` (created only if missing), in fstab, swappiness 10                                                                                                                                                                       | 2026-10-06 |
+| `firewall`        | § 6, 9, 20 | ufw: SSH allowed **first**, deny incoming/routed, allow outgoing, 80/443/3000 kept closed, logging low, on                                                                                                                                | 2026-10-06 |
+| `docker_config`   | § 7        | `/etc/docker/daemon.json`: container logs capped at 3 × 10 MB. **Never restarts Docker** (that stops the site): it prints a reminder to restart at a quiet time                                                                           | 2026-10-06 |
+| `sysctl`          | § 10       | `vm.overcommit_memory = 1`, so Redis can fork for its snapshots                                                                                                                                                                           | 2026-10-06 |
+| `apt_clean`       | § 17       | apt cache cleaned every 7 days (Docker images: Dokploy's daily cleanup, not here)                                                                                                                                                         | 2026-10-06 |
+| `origin_lockdown` | § 20       | the Cloudflare-only script + service (enabled everywhere; started where Docker exists). **Its Cloudflare list is the one source**: a unit test keeps it equal to `src/lib/client-ip.ts`, and the `traefik` role checks Traefik against it | 2026-10-06 |
+| `disk_alert`      | § 18       | hourly disk check → Telegram; `alerts.env` written from `.env` with `no_log` and no diff (the token never shows)                                                                                                                          | 2026-10-06 |
+| `traefik`         | § 13, § 21 | owns `dynamic/inflight.yml` (100 in flight). **Only checks** Dokploy's `traefik.yml`: both `trustedIPs` lists equal the Cloudflare ranges, and `inflight-cap@file` is on `websecure`. Never edits it                                      | 2026-10-06 |
 
 The web ports are closed in ufw, but ufw is **not** what keeps them
-Cloudflare-only: Docker's published ports bypass ufw. That is origin
-lockdown's job (§ 20, the `DOCKER-USER` chain), coming in slice C.
+Cloudflare-only: Docker's published ports bypass ufw. That is
+`origin_lockdown`'s job (§ 20, the `DOCKER-USER` chain).
 
-Coming in the next slices: the disk alert, origin lockdown, Traefik's
-in-flight cap, and the Dokploy install. **Never** in Ansible: Dokploy's own settings
+**`traefik.yml` belongs to Dokploy**, which rewrites it when its web
+server settings change. If a check fails with "traefik.yml lost a hand
+edit", put back what the message names (SERVER.md § 13 / § 21), restart
+Traefik, and check again.
+
+**The disk alert needs two values in `.env`** (Bitwarden: Telegram alert
+bot): `ALERTS_TELEGRAM_BOT_TOKEN` and `ALERTS_TELEGRAM_CHAT_ID`. Without
+them, a production run stops at the `disk_alert` role rather than write
+empty values; `--skip-tags alerts_secret` skips just that file. The lab
+gets placeholders.
+
+Coming in the next slice: the Dokploy install. **Never** in Ansible: Dokploy's own settings
 (projects, databases, the compose app, its environment, backup schedules
 live in Dokploy's database) and the app's database role (needs the DB
 password). SERVER.md keeps those as manual steps.
@@ -126,7 +139,8 @@ the role the same day; check mode shows `changed=0` once they match.
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                                                 |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-06 | Slice A: `ops/ansible/`, roles `base`, `ssh`, `swap`, lab VM scripts, CI `ansible` (lint). Production check mode: **ok=13 changed=0** on the first run. Lab VM (Multipass, from `fresh`): full run, then a second run changed nothing  |
-| 2026-10-06 | Slice B: roles `firewall`, `docker_config`, `sysctl`, `apt_clean`. Production check mode: **ok=25 changed=0**. Lab from `fresh`: changed=21, then the second run changed=0 (SSH still reachable with ufw on); 45 s including the reset |
+| Date       | Change                                                                                                                                                                                                                                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-06 | Slice A: `ops/ansible/`, roles `base`, `ssh`, `swap`, lab VM scripts, CI `ansible` (lint). Production check mode: **ok=13 changed=0** on the first run. Lab VM (Multipass, from `fresh`): full run, then a second run changed nothing                                                                                               |
+| 2026-10-06 | Slice B: roles `firewall`, `docker_config`, `sysctl`, `apt_clean`. Production check mode: **ok=25 changed=0**. Lab from `fresh`: changed=21, then the second run changed=0 (SSH still reachable with ufw on); 45 s including the reset                                                                                              |
+| 2026-10-06 | Slice C: roles `origin_lockdown`, `disk_alert`, `traefik` (scripts moved from `ops/server/`; unit test path updated). Production check (alerts secret skipped until `.env` has it): **ok=37 changed=0**. Traefik guard tested on broken copies: a missing range and a missing middleware both fail. Lab: changed=29, then changed=0 |

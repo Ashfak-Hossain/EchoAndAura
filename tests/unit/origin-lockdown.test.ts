@@ -4,16 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { CLOUDFLARE_RANGES } from '@/lib/client-ip';
 
 /**
- * ADR-045: the server's firewall script (ops/server/origin-lockdown) lets
+ * ADR-045: the server's firewall script (ops/ansible/roles/origin_lockdown/files/origin-lockdown) lets
  * only Cloudflare reach ports 80/443, and the app trusts only Cloudflare's
  * X-Forwarded-For hops (ADR-037). Two copies of one list: if they drift,
  * either real visitors are dropped at the firewall or the rate limiter
  * keys on a Cloudflare edge instead of the visitor.
  */
 function scriptRanges(): string[] {
-  const script = readFileSync('ops/server/origin-lockdown', 'utf8');
+  const script = readFileSync('ops/ansible/roles/origin_lockdown/files/origin-lockdown', 'utf8');
   const block = script.split('# BEGIN CLOUDFLARE RANGES')[1]?.split('# END CLOUDFLARE RANGES')[0];
-  if (!block) throw new Error('CLOUDFLARE RANGES markers not found in ops/server/origin-lockdown');
+  if (!block)
+    throw new Error(
+      'CLOUDFLARE RANGES markers not found in ops/ansible/roles/origin_lockdown/files/origin-lockdown',
+    );
   return block
     .split('\n')
     .map((l) => l.trim())
@@ -26,7 +29,7 @@ describe('origin-lockdown ranges', () => {
   });
 
   it('keeps IPv4 in V4 and IPv6 in V6', () => {
-    const script = readFileSync('ops/server/origin-lockdown', 'utf8');
+    const script = readFileSync('ops/ansible/roles/origin_lockdown/files/origin-lockdown', 'utf8');
     const list = (name: string) =>
       (script.match(new RegExp(`^${name}="([^"]*)"`, 'm'))?.[1] ?? '').split(/\s+/).filter(Boolean);
     const v4 = list('V4');

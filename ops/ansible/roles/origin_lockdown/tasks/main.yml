@@ -1,0 +1,40 @@
+# SERVER.md § 20, ADR-045: only Cloudflare may open connections to the web
+# ports. Docker publishes Traefik's ports around ufw, so the rules live in
+# the DOCKER-USER chain; the service applies them at boot and again
+# whenever Docker restarts (PartOf=docker.service).
+#
+# The Cloudflare ranges in files/origin-lockdown are the source of truth:
+# tests/unit/origin-lockdown.test.ts keeps them equal to src/lib/client-ip.ts,
+# and the traefik role checks traefik.yml against them.
+
+- name: Install the lockdown script
+  ansible.builtin.copy:
+    src: origin-lockdown
+    dest: /usr/local/sbin/origin-lockdown
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Re-apply origin lockdown
+
+- name: Install its service
+  ansible.builtin.copy:
+    src: origin-lockdown.service
+    dest: /etc/systemd/system/origin-lockdown.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Re-apply origin lockdown
+
+- name: Check whether Docker is installed
+  ansible.builtin.stat:
+    path: /usr/bin/docker
+  register: origin_lockdown_docker
+
+# Enabled everywhere, so it starts with Docker on a fresh server. Started
+# only where Docker exists: before that there is no DOCKER-USER chain.
+- name: Run it with Docker, at every boot
+  ansible.builtin.systemd_service:
+    name: origin-lockdown.service
+    enabled: true
+    daemon_reload: true
+    state: "{{ 'started' if origin_lockdown_docker.stat.exists else omit }}"

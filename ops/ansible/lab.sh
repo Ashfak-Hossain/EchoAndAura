@@ -29,6 +29,7 @@ all:
       ansible_host: $ip
       ansible_user: root
       ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      lab: true
 YAML
   echo "Lab VM at $ip (inventory/lab.yml)"
 }

@@ -1,0 +1,7 @@
+# SERVER.md section 21 / ADR-047: at most 100 requests in progress per
+# host; over that, 429 at once instead of queueing inside Node.
+http:
+  middlewares:
+    inflight-cap:
+      inFlightReq:
+        amount: 100
