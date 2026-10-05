@@ -137,6 +137,33 @@ would quietly undo it. In an emergency, change it in the dashboard, then
 copy the same change into the code the same day. Plan shows **No
 changes** once they match.
 
+## Provider updates (Dependabot)
+
+Every Sunday Dependabot checks the `aws` and `cloudflare` providers. Minor
+and patch updates arrive together as one PR labelled `infra`; a major
+version (e.g. cloudflare 5 → 6) comes alone, and needs its upgrade guide
+read first: majors rename and remove things.
+
+A provider is the translator between our code and the service, so a new
+one can read the same settings differently. CI can't catch that: it never
+talks to Cloudflare or AWS. So, for each such PR:
+
+1. CI green (`terraform (aws)`, `terraform (cloudflare)`). A red
+   `init` usually means the lock file lacks the Linux checksums: check
+   out the branch, run
+   `terraform providers lock -platform=darwin_arm64 -platform=linux_amd64`
+   in that folder, commit, push.
+2. Merge, then on `main`: `pnpm tf:<aws|cloudflare> init -upgrade`, then
+   `plan`. It should say **No changes**. If it wants changes nobody made,
+   the provider reads something differently: read the provider's
+   changelog for that resource and fix the code (or pin the old version
+   back) before anyone applies.
+3. A History row here: `aws 6.67.0 → 6.x.y, plan = No changes`.
+
+Terraform itself (`required_version` in both `versions.tf`, and
+`terraform_version` in `.github/workflows/ci.yml`) is not updated by
+Dependabot: upgrade all three together, by hand, in their own PR.
+
 ## When something goes wrong
 
 - **`Error acquiring the state lock`**: another plan/apply is running, or
@@ -162,3 +189,4 @@ changes** once they match.
 | 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                          |
 | 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                 |
 | 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                   |
+| 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                   |
