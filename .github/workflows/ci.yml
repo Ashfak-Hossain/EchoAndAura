@@ -13,7 +13,10 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: that label moves to Ubuntu 26 from
+    # 2026-10-19, and an OS change should be its own PR (DEVELOPMENT.md →
+    # Dependencies). Same pin in every workflow.
+    runs-on: ubuntu-24.04
 
     # Postgres + Redis are provisioned for the integration suite. The default
     # gate (`pnpm verify`) does not use them; the Postgres-only integration
@@ -76,7 +79,7 @@ jobs:
   # plan or change anything at Cloudflare or AWS. Plan and apply stay on a
   # person's laptop (docs/infra/TERRAFORM.md).
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:

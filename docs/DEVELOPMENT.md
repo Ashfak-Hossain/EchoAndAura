@@ -243,6 +243,14 @@ bump. It also opens security fixes as soon as an advisory lands. Treat them
 like any PR: CI must be green, and read the release notes of anything that
 touches money, auth, the queue or the database driver.
 
+**The CI runner's operating system is pinned** to `ubuntu-24.04` in every
+workflow (ci, deploy, release), not `ubuntu-latest`. GitHub moves
+`ubuntu-latest` to a new Ubuntu on its own schedule (Ubuntu 26 from
+2026-10-19), and Dependabot does not bump runner labels. Upgrade on
+purpose: one PR changing all of them, CI green, a deploy run through, and
+the Dockerfile's base image checked for the same move. Do it before GitHub
+announces the end of the 24.04 image (runner-images repository).
+
 **The door scanner's decoder is upgraded by hand** (ADR-030). `barcode-detector`
 pins an exact `zxing-wasm`, the scanner runs that copy, and its `.wasm` is
 served from `public/vendor/`. Dependabot ignores `zxing-wasm`. To upgrade:
