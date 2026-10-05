@@ -1,0 +1,7 @@
+# The production VPS (docs/infra/SERVER.md). `echoandaura` is the alias in
+# ~/.ssh/config (host, user root, key): Ansible uses it as is.
+all:
+  hosts:
+    echoandaura:
+      ansible_host: echoandaura
+      ansible_user: root

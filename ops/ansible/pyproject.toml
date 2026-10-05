@@ -1,0 +1,14 @@
+# Ansible for the production server (ADR-063, docs/infra/ANSIBLE.md).
+# Not a Python package: uv uses this to install exactly these tools into
+# ops/ansible/.venv. Versions pinned exactly; uv.lock pins the rest.
+[project]
+name = "echoandaura-ansible"
+version = "0"
+requires-python = ">=3.12"
+dependencies = [
+  "ansible-core==2.21.5",
+  "ansible-lint==26.9.0",
+]
+
+[tool.uv]
+package = false

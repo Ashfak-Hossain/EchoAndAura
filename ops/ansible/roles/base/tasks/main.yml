@@ -1,0 +1,43 @@
+# SERVER.md § 4 (automatic security updates) and § 5 (hostname, clock).
+
+- name: Set the hostname
+  ansible.builtin.hostname:
+    name: '{{ server_hostname }}'
+
+- name: Resolve the hostname locally (the image's name was "console")
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.0\.1\s+(?!localhost)'
+    line: '127.0.0.1 {{ server_hostname }}'
+    insertafter: '^127\.0\.0\.1\s+localhost'
+
+- name: Stop cloud-init renaming the server at the next boot
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-keep-hostname.cfg
+    content: "preserve_hostname: true\n"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Certificates, sessions, the 20-minute holds and gate scan times depend on
+# the clock. Ubuntu syncs it with systemd-timesyncd; the zone stays UTC.
+- name: Keep the clock in UTC
+  community.general.timezone:
+    name: Etc/UTC
+
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+# Security channels only (Ubuntu's stock 50unattended-upgrades, untouched).
+# It never reboots by itself: kernel fixes wait for a quiet time.
+- name: Switch automatic security updates on (the image had them off)
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: '0644'

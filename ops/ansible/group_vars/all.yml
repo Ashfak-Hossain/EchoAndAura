@@ -1,0 +1,13 @@
+# Values both the lab VM and production get. One place, so the lab is a
+# faithful copy of production.
+
+server_hostname: echoandaura
+
+# SERVER.md § 3. 2 GB on 4 GB of RAM; revisit with the 8 GB upgrade (9.5).
+swap_size_mb: 2048
+swappiness: 10
+
+# The public half of the key that logs in as root (SERVER.md § 2). Read
+# from the laptop running Ansible, not stored in the repo, so whoever runs
+# it (the developer, Raj) can point it at their own key.
+ssh_public_key_file: "{{ lookup('ansible.builtin.env', 'ANSIBLE_SSH_PUBLIC_KEY') | default('~/.ssh/echoandaura_vps.pub', true) }}"

@@ -108,3 +108,23 @@ jobs:
 
       # Built-in rules only (.tflint.hcl): nothing to download, no token.
       - run: tflint --config="$GITHUB_WORKSPACE/ops/terraform/.tflint.hcl" --format=compact
+
+  # Ansible (ADR-063): ansible-lint (production profile) and a syntax check.
+  # No inventory secrets and no SSH key: it never reaches the server.
+  # Check mode and applies stay on a person's laptop (docs/infra/ANSIBLE.md).
+  ansible:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Exact version: setup-uv publishes no moving major tag (no `v10`).
+      # Dependabot (github-actions) bumps it.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: ops/ansible/uv.lock
+
+      # The playbook reads the operator's public key; CI has none, and
+      # lint and syntax check never need its contents.
+      - run: ops/ansible/run.sh lint
