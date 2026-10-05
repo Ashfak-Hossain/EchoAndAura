@@ -1,0 +1,21 @@
+# SERVER.md § 7: Docker keeps every container's log forever by default;
+# on a 25 GB disk that fills slowly. At most 30 MB per container. Runs
+# BEFORE the Dokploy role installs Docker, so every container gets it
+# from the start.
+
+- name: Create Docker's settings folder
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Cap container logs at 3 x 10 MB
+  ansible.builtin.copy:
+    src: daemon.json
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Docker needs a restart
