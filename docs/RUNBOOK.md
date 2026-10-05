@@ -224,17 +224,25 @@ filling up, buyers saying the site won't load.
 
 1. **Look first:** Cloudflare → Security → Analytics / Events. Where does
    the traffic come from (country, a few addresses, one path)?
-2. **Mostly from abroad:** Security → WAF → Custom rules → switch
-   `emergency - outside Bangladesh` **on** (ADR-050). Visitors outside
-   Bangladesh get a Cloudflare check first; buyers at home don't notice.
+2. **Mostly from abroad:** switch `emergency - outside Bangladesh` **on**
+   (ADR-050). Visitors outside Bangladesh get a Cloudflare check first;
+   buyers at home don't notice. The rule is Terraform's (ADR-062): in
+   `ops/terraform/cloudflare/rules.tf` set its `enabled = true`, then
+   `pnpm tf:cloudflare apply`. No laptop or no AWS login to hand? Flip it
+   in Security → WAF → Custom rules instead; step 5 puts the code right.
 3. **From everywhere / not easing:** Overview → **Under Attack Mode** on.
    Every visitor gets a few-second check, including Bangladesh. Door
    phones that already loaded `/door` keep scanning offline (ADR-034).
 4. **One path hammered** (e.g. a single page): a temporary custom rule
    blocking or challenging that path. The free plan has 5 rules; we use 3.
+   Add it in `rules.tf` and apply; a rule added in the dashboard is
+   deleted by the next apply.
 5. **When it is over:** switch the emergency rule and Under Attack Mode
    **off** again (they cost diaspora buyers a check), and write what
-   happened in [infra/CLOUDFLARE.md](infra/CLOUDFLARE.md) History.
+   happened in [infra/CLOUDFLARE.md](infra/CLOUDFLARE.md) History. Then
+   `pnpm tf:cloudflare plan` must say **No changes**: if a rule was
+   flipped or added in the dashboard, the plan shows it; make the code
+   match (or apply to undo it).
 
 What already holds without you: Cloudflare's DDoS protection, the
 per-address rate limit (ADR-047), the in-flight cap that refuses instead

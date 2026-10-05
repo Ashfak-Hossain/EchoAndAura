@@ -64,16 +64,22 @@ changes. Bitwarden `Cloudflare Terraform token`; only in the laptop's
 here when a new area comes under Terraform. Editing a token's
 permissions keeps its value, so `.env` does not change.
 
-| Scope                              | Permission  | Needed for             |
-| ---------------------------------- | ----------- | ---------------------- |
-| Specified domain `echoandaura.com` | Zone → Read | everything in the zone |
-| Specified domain `echoandaura.com` | DNS → Edit  | `dns.tf`               |
+| Scope                              | Permission             | Needed for                             |
+| ---------------------------------- | ---------------------- | -------------------------------------- |
+| Specified domain `echoandaura.com` | Zone → Read            | everything in the zone                 |
+| Specified domain `echoandaura.com` | DNS → Edit             | `dns.tf`                               |
+| Specified domain `echoandaura.com` | Zone WAF → Edit        | `rules.tf`: `waf_custom`, `rate_limit` |
+| Specified domain `echoandaura.com` | Cache Rules → Edit     | `rules.tf`: `cache`                    |
+| Specified domain `echoandaura.com` | Single Redirect → Edit | `rules.tf`: `redirect`                 |
+| Specified domain `echoandaura.com` | Zone Settings → Edit   | `zone.tf`: email obfuscation, DNSSEC   |
 
 ## What is managed
 
-| Folder        | File     | Resources                                                                                           | Since      |
-| ------------- | -------- | --------------------------------------------------------------------------------------------------- | ---------- |
-| `cloudflare/` | `dns.tf` | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list)) | 2026-10-05 |
+| Folder        | File       | Resources                                                                                                             | Since      |
+| ------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `cloudflare/` | `dns.tf`   | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                   | 2026-10-05 |
+| `cloudflare/` | `rules.tf` | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list | 2026-10-05 |
+| `cloudflare/` | `zone.tf`  | email obfuscation (off), DNSSEC (on)                                                                                  | 2026-10-05 |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -116,7 +122,8 @@ changes** once they match.
 
 ## History
 
-| Date       | Change                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------- |
-| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet |
-| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes |
+| Date       | Change                                                                                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                          |
+| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                          |
+| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed |

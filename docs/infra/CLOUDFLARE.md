@@ -163,6 +163,8 @@ How uploads work end-to-end: [../systems/STORAGE.md](../systems/STORAGE.md)
 
 Security → WAF → Custom rules. Free plan: up to 5 rules.
 
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `waf_custom`. Terraform owns the whole list: a rule added only in the dashboard is deleted`. Change it there and apply; a change made in the dashboard is undone by the next apply.
+
 | Rule                         | Expression                                                                                | Action                                                                                     | Why                                                                                                                               |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy API - no challenges` | `(http.host eq "deploy.echoandaura.com" and starts_with(http.request.uri.path, "/api/"))` | Skip: remaining custom rules, Browser Integrity Check, Security Level, User Agent Blocking | GitHub's deploy call is a script, not a browser; a challenge would fail every deploy. Dokploy's API key still guards it (ADR-045) |
@@ -182,6 +184,8 @@ be skipped for a path, and it would challenge the deploy call.
 Security → WAF → Rate limiting rules. Free plan: **one** rule, matching
 on the URL path only (not the method or host), counted per IP over 10
 seconds, blocking for 10 seconds.
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `rate_limit``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 | Rule                   | Expression                                            | Rate                        | Action         | Why                                                                                                                                     |
 | ---------------------- | ----------------------------------------------------- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -285,17 +289,35 @@ Cloudflare account login, not Access.
 
 ## DNSSEC
 
+**Terraform** (ADR-062): `ops/terraform/cloudflare/zone.tf → `cloudflare_zone_dnssec.this`, with `prevent_destroy``. Change it there and apply; a change made in the dashboard is undone by the next apply.
+
 DNS → Settings → DNSSEC → **Enable**. The registrar is Cloudflare too, so
 the DS record is published for us; the status turns **Active** within
 about an hour (`dig +short DS echoandaura.com` then answers). It signs
 our DNS answers, so nobody can forge them on the way to a visitor (point
 the site or the mail records elsewhere).
 
+## Redirect rules
+
+Rules → Redirect Rules → `Redirect from WWW to root`: a request to
+`www.echoandaura.com/<path>` gets a **301** to `https://echoandaura.com/<path>`,
+query string kept. One address for the site: `SITE_URL` and canonical URLs
+use the bare domain. It only works while the `www` record stays **proxied**.
+Made 2026-09-27 from Cloudflare's template; it was missing from this page
+until Terraform found it (2026-10-05).
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `redirect``. Change it there and apply; a change made in the dashboard is undone by the next apply.
+
+**Check it:** `curl -sI https://www.echoandaura.com/faq?x=1 | grep -iE '^(HTTP|location)'`
+→ `301` and `location: https://echoandaura.com/faq?x=1`.
+
 ## Cache rules (ADR-056)
 
 Public pages are served from the Cloudflare edge for 30 seconds to
 visitors who are not signed in. Caching → Cache Rules →
-`public pages for anonymous visitors`:
+`public pages for anonymous visitors`.
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `cache``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 ```
 (http.host eq "echoandaura.com"
@@ -320,7 +342,7 @@ checks the cookie half). Never add `/register`, `/orders`, `/tickets`,
 twice: `MISS` (or `EXPIRED`) then `HIT`. With
 `-H 'Cookie: better-auth.x=1'`: `DYNAMIC`.
 
-**Switch it off:** toggle the rule off. Nothing in the app depends on it;
+**Switch it off:** `enabled = false` on the rule in `rules.tf`, then apply. Nothing in the app depends on it;
 pages go back to ~170 ms first byte.
 
 ## Gate relay (ADR-058)
@@ -367,6 +389,8 @@ deploy. The door works as before ADR-058, sharing by the ping alone. The
 Worker can stay, unused.
 
 ## Email Address Obfuscation: keep it off
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/zone.tf → `email_obfuscation`. A plan shows it if someone switches it back on`. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 Security → Settings → Email Address Obfuscation is **off** (2026-10-04).
 When on, Cloudflare rewrites addresses in the HTML and injects a decoder
@@ -524,3 +548,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-05 | Email Sending live: account API token `echoandaura-worker-email` (Email Sending Edit, IPs `160.25.226.166` + `2001:df3:ad40::/48`). First send (sign-in link to a never-SES-verified Gmail): delivered in 12 s, SPF/DKIM (`echoandaura.com`)/DMARC **PASS**; landed in spam (new sending reputation)                                                                                                                                                                               |
 | 2026-10-05 | Worker `echoandaura-relay` deployed (`pnpm relay:deploy`), custom domain `relay.echoandaura.com`, secret `RELAY_SECRET` set; `/health` ok, a connection without a pass refused (401)                                                                                                                                                                                                                                                                                               |
 | 2026-10-05 | DNS under Terraform (ADR-062): 11 records imported into `ops/terraform/cloudflare/dns.tf` with no change (plan: 11 imported, 0 changed); then `plan` = No changes. Table corrected: `@` A and `www` CNAME existed since Phase 6; `relay` AAAA and `cf2024-1._domainkey` added                                                                                                                                                                                                      |
+| 2026-10-05 | Rules and settings under Terraform (ADR-062): WAF custom rules, rate limit, cache rule, the www→root redirect (found undocumented, now in [Redirect rules](#redirect-rules)), email obfuscation, DNSSEC. Token gained Zone WAF, Cache Rules, Zone Settings, Single Redirect (Edit). 6 imported, 0 changed; plan = No changes                                                                                                                                                       |
