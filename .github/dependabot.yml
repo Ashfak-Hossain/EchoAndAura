@@ -42,3 +42,20 @@ updates:
       time: '04:00'
       timezone: Asia/Dhaka
     labels: [dependencies, infra]
+
+  # Terraform providers (ADR-062): moves the exact `version` pin in
+  # versions.tf and the lock file. Not Terraform itself (required_version,
+  # CI's terraform_version): that is a by-hand upgrade. CI only proves the
+  # code still validates; after merging, run `pnpm tf:<folder> plan` and
+  # expect No changes before trusting the new provider (TERRAFORM.md).
+  - package-ecosystem: terraform
+    directories: [/ops/terraform/aws, /ops/terraform/cloudflare]
+    schedule:
+      interval: weekly
+      day: sunday
+      time: '04:00'
+      timezone: Asia/Dhaka
+    labels: [dependencies, infra]
+    groups:
+      providers:
+        update-types: [minor, patch]
