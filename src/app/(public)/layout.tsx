@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { SiteShell } from '@/components/public/site-shell';
+import { LocaleProvider } from '@/i18n/locale-context';
+import { publicLocales } from '@/i18n/locales';
 import { FooterSponsors } from '@/components/public/sponsors/footer-sponsors';
 import { getPublicSession } from '@/lib/session';
 import { getSiteSettings } from '@/lib/settings';
@@ -27,22 +31,29 @@ export function generateMetadata(): Metadata {
 // are (events, orders and tickets are all live data). The featured event
 // and the sponsors are the same cached reads the home page makes.
 export default async function PublicLayout({ children }: { children: ReactNode }) {
-  const [session, cta, hasUpcoming, settings, sponsors] = await Promise.all([
+  const [locale, session, cta, hasUpcoming, settings, sponsors] = await Promise.all([
+    getLocale(),
     getPublicSession(),
     featuredCta(),
     hasUpcomingShows(),
     getSiteSettings(),
     getPublicSponsors(),
   ]);
+  // ADR-061: the page's language for links, and the text for client components.
   return (
-    <SiteShell
-      session={session?.role === 'buyer' ? session : null}
-      cta={cta}
-      hasUpcoming={hasUpcoming}
-      settings={settings}
-      sponsorRow={<FooterSponsors sponsors={sponsors} />}
-    >
-      {children}
-    </SiteShell>
+    <NextIntlClientProvider>
+      <LocaleProvider locale={locale}>
+        <SiteShell
+          session={session?.role === 'buyer' ? session : null}
+          cta={cta}
+          hasUpcoming={hasUpcoming}
+          settings={settings}
+          sponsorRow={<FooterSponsors sponsors={sponsors} />}
+          bangla={publicLocales(process.env.PUBLIC_LOCALES).includes('bn')}
+        >
+          {children}
+        </SiteShell>
+      </LocaleProvider>
+    </NextIntlClientProvider>
   );
 }

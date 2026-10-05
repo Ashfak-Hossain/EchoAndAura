@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { HOLD_MINUTES } from '@/content/site';
 import { cn } from '@/lib/utils';

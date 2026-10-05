@@ -1,4 +1,8 @@
 allowBuilds:
+  # next-intl's optional message extractor (unused): their binaries come as
+  # optional dependencies, the install scripts only re-check them.
+  '@parcel/watcher': false
+  '@swc/core': false
   esbuild: true
   msgpackr-extract: true
   sharp: false

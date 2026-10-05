@@ -90,8 +90,17 @@ describe('proxy — Cloudflare Access on /admin', () => {
     expect(res.status).toBe(200);
   });
 
-  it('matches admin prefetches too', async () => {
+  it('matches admin prefetches too (and /bn pages, ADR-061): no prefetch is skipped', async () => {
     const { config } = await import('@/proxy');
-    expect(config.matcher).toEqual(expect.arrayContaining(['/admin', '/admin/:path*']));
+    // Plain path patterns only: an object entry could carry a `missing`
+    // rule that skips prefetches, and a prefetch carries the page's render.
+    expect(config.matcher.every((m) => typeof m === 'string')).toBe(true);
+    const matches = (path: string) => config.matcher.some((m) => new RegExp(`^${m}$`).test(path));
+    for (const path of ['/admin', '/admin/orders', '/bn/events/x', '/events']) {
+      expect([path, matches(path)]).toEqual([path, true]);
+    }
+    for (const path of ['/api/health', '/door/api/scans', '/_next/static/x.js']) {
+      expect([path, matches(path)]).toEqual([path, false]);
+    }
   });
 });

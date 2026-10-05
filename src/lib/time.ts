@@ -1,4 +1,6 @@
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+import type { Locale } from '@/i18n/locales';
+import { toBanglaDigits } from '@/server/lib/digits';
 
 /**
  * Every wall-clock time the organizer types or reads is Dhaka time; storage is
@@ -33,13 +35,21 @@ export function toDhakaIso(date: Date): string {
   return formatInTimeZone(date, DHAKA_TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
-/** Human display, e.g. "1 Oct 2026, 7:00 PM" (12-hour, ADR-060). */
-export function formatDhaka(date: Date): string {
+/** Human display, e.g. "1 Oct 2026, 7:00 PM" (12-hour, ADR-060); Bangla "১ অক্টোবর ২০২৬, সন্ধ্যা ৭:০০". */
+export function formatDhaka(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.day} ${d.month} ${d.year}, ${d.time}`;
+  }
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy, h:mm a');
 }
 
-/** Display with weekday, e.g. "Thu 1 Oct 2026, 7:00 PM" (B3/B4 headers). */
-export function formatDhakaLong(date: Date): string {
+/** Display with weekday, e.g. "Thu 1 Oct 2026, 7:00 PM" (B3/B4 headers); Bangla "বৃহস্পতিবার, ১ অক্টোবর ২০২৬, সন্ধ্যা ৭:০০". */
+export function formatDhakaLong(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.weekday}বার, ${d.day} ${d.month} ${d.year}, ${d.time}`;
+  }
   return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM yyyy, h:mm a');
 }
 
@@ -57,12 +67,69 @@ export function formatRelative(date: Date, now: Date = new Date()): string {
   return formatInTimeZone(date, DHAKA_TZ, 'd MMM yyyy');
 }
 
-/** Just the Dhaka clock time, e.g. "8:51 PM" (the gate's "already in" answer). */
-export function formatDhakaClock(date: Date): string {
+/** Just the Dhaka clock time, e.g. "8:51 PM" (the gate's "already in" answer); Bangla "রাত ৮:৫১". */
+export function formatDhakaClock(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') return banglaParts(date).time;
   return formatInTimeZone(date, DHAKA_TZ, 'h:mm a');
 }
 
-/** Short weekday form for prose, e.g. "Thu 1 Oct, 7:00 PM" (B5 "dates in plain words"). */
-export function formatDhakaShort(date: Date): string {
+/** Short weekday form for prose, e.g. "Thu 1 Oct, 7:00 PM" (B5 "dates in plain words"); Bangla "বৃহস্পতি, ১ অক্টোবর, সন্ধ্যা ৭:০০". */
+export function formatDhakaShort(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.weekday}, ${d.day} ${d.month}, ${d.time}`;
+  }
   return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM, h:mm a');
+}
+
+/*
+ * ADR-061: Bangla dates and times, by hand — `Intl` prints `৭:৩০ PM` (Latin
+ * PM) and phones ship different data, so server and browser would differ.
+ * Gregorian months and weekdays in Bangla (not the Bangla calendar), and the
+ * time of day as people say it instead of AM/PM.
+ */
+const BN_MONTHS = [
+  'জানুয়ারি',
+  'ফেব্রুয়ারি',
+  'মার্চ',
+  'এপ্রিল',
+  'মে',
+  'জুন',
+  'জুলাই',
+  'আগস্ট',
+  'সেপ্টেম্বর',
+  'অক্টোবর',
+  'নভেম্বর',
+  'ডিসেম্বর',
+];
+/** ISO weekday 1 (Monday) … 7 (Sunday); "বার" is added for the long form. */
+const BN_WEEKDAYS = ['সোম', 'মঙ্গল', 'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি', 'রবি'];
+
+/**
+ * The part of the day for a Dhaka hour (0–23): ভোর 4–6, সকাল 6–12,
+ * দুপুর 12–3 PM, বিকেল 3–6 PM, সন্ধ্যা 6–8 PM, রাত 8 PM–4 AM.
+ */
+export function banglaDayPart(hour: number): string {
+  if (hour >= 4 && hour < 6) return 'ভোর';
+  if (hour >= 6 && hour < 12) return 'সকাল';
+  if (hour >= 12 && hour < 15) return 'দুপুর';
+  if (hour >= 15 && hour < 18) return 'বিকেল';
+  if (hour >= 18 && hour < 20) return 'সন্ধ্যা';
+  return 'রাত';
+}
+
+function banglaParts(date: Date) {
+  const [year, month, day, hour, minute, isoDay] = formatInTimeZone(
+    date,
+    DHAKA_TZ,
+    'yyyy M d H mm i',
+  ).split(' ');
+  const h = Number(hour);
+  return {
+    year: toBanglaDigits(year!),
+    month: BN_MONTHS[Number(month) - 1]!,
+    day: toBanglaDigits(day!),
+    weekday: BN_WEEKDAYS[Number(isoDay) - 1]!,
+    time: `${banglaDayPart(h)} ${toBanglaDigits(`${h % 12 || 12}:${minute}`)}`,
+  };
 }

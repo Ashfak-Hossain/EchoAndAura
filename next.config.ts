@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 import { coverImagesConfig } from './src/lib/image-config';
 
 const covers = coverImagesConfig();
@@ -91,4 +92,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// ADR-061: next-intl reads its per-request config (locale, messages) from here.
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+
+export default withNextIntl(nextConfig);

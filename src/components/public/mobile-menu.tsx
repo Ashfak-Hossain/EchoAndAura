@@ -1,9 +1,9 @@
 'use client';
 
 import { Dialog } from '@base-ui/react/dialog';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import {
   type AccountLink,
   type FeaturedCta,
@@ -29,6 +29,7 @@ export function MobileMenu({
   hasUpcoming = false,
   account,
   facebook,
+  languageSwitch,
 }: {
   cta: FeaturedCta | null;
   /**
@@ -39,6 +40,8 @@ export function MobileMenu({
   hasUpcoming?: boolean;
   account: AccountLink;
   facebook: string | null;
+  /** ADR-061: `English | বাংলা`, when Bangla is switched on. */
+  languageSwitch?: ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -119,6 +122,9 @@ export function MobileMenu({
               <PersonIcon size={20} />
               {account.label}
             </Link>
+            {languageSwitch ? (
+              <div className="flex min-h-16 items-center text-lg">{languageSwitch}</div>
+            ) : null}
           </nav>
 
           <div className="flex flex-none flex-col gap-3 border-t border-border bg-card px-4 pt-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">

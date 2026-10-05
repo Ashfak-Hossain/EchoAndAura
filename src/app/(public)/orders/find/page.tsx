@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { readTurnstileConfig } from '@/lib/turnstile-config';
 import { findOrderAction } from './actions';
 import { FindOrderForm } from './find-form';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import type { HomeEvent } from '@/server/services/events.service';
 import { EventCard } from '@/components/public/event-card';
 import { cn } from '@/lib/utils';

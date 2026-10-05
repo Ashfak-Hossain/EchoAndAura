@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { HELP_PAGES, POLICY_KEYS, type PolicyDoc, type PolicyKey } from '@/content/policies';
 import { cn } from '@/lib/utils';
 import { AnchorLink, PrintLink, TocSpy } from './client';

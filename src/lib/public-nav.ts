@@ -1,3 +1,5 @@
+import { localeFromPath } from '@/i18n/locales';
+
 /**
  * Public header navigation (Canvas 6, N1/N2). Shared by the desktop links
  * and the phone menu so both mark the same page current. Mirrors
@@ -17,8 +19,9 @@ export const PUBLIC_NAV: readonly PublicNavItem[] = [
   { label: 'Contact', href: '/contact' },
 ];
 
-/** No item matches '/': the home page is not "Events" (frame H1). */
-export function isPublicNavActive(item: PublicNavItem, pathname: string): boolean {
+/** No item matches '/': the home page is not "Events" (frame H1). `/bn/…` counts as its page (ADR-061). */
+export function isPublicNavActive(item: PublicNavItem, address: string): boolean {
+  const pathname = localeFromPath(address).path;
   if (item.prefix) return pathname === item.href || pathname.startsWith(`${item.href}/`);
   return pathname === item.href;
 }
@@ -27,7 +30,7 @@ export type HeaderTone = 'dark' | 'light';
 
 /** The charcoal header runs into the home page's dark hero; every other page is light. */
 export function headerTone(pathname: string): HeaderTone {
-  return pathname === '/' ? 'dark' : 'light';
+  return localeFromPath(pathname).path === '/' ? 'dark' : 'light';
 }
 
 /**

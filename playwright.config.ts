@@ -57,6 +57,8 @@ export default defineConfig({
         BETTER_AUTH_URL: baseURL,
         RELAY_URL,
         RELAY_SECRET,
+        // ADR-061: Bangla on, so its spec runs; English pages are unchanged by it.
+        PUBLIC_LOCALES: 'en,bn',
       },
     },
   ],

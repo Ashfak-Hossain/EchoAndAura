@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { redirect } from 'next/navigation';
 import { getPublicSession } from '@/lib/session';
 import { readTurnstileConfig } from '@/lib/turnstile-config';

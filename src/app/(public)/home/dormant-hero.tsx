@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import type { HomeEvent } from '@/server/services/events.service';
 import { BAND_COVER_SIZES, CoverPlaceholder, bandCover } from './cover-placeholder';
 import { FacebookIcon } from './icons';

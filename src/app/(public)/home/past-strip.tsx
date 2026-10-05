@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { venueCity } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';

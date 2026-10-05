@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { PUBLIC_NAV, headerTone, isPublicNavActive } from '@/lib/public-nav';
