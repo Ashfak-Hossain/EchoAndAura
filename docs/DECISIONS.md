@@ -3950,6 +3950,16 @@ reviewed before it happens. Only the off-site bucket was code
 file is already in the repo), the gate relay Worker (`wrangler` deploys
 it, ADR-058), root and `ash-admin`.
 
+**Scope addendum (2026-10-05): R2 and Email Routing stay hand-managed.**
+Managing R2 needs _Workers R2 Storage → Edit_ on the whole account; it
+can't be narrowed to one bucket. The Terraform token could then read or
+delete the database backups (every buyer's details), for two buckets and
+one CORS rule that were set once. Email Routing is one rule that never
+changes, and its permission would let a leaked token forward `hello@`
+anywhere. Both stay as CLOUDFLARE.md records them, watched by
+`pnpm infra:check`. This narrows the first bullet above: in Cloudflare,
+Terraform owns DNS, the zone rules, zone settings and Access.
+
 **Consequences:**
 
 - A change is a diff in a pull request, then `plan`, then `apply`. Drift

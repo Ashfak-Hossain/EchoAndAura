@@ -9,3 +9,19 @@ variable "cloudflare_zone_id" {
   description = "Zone id of echoandaura.com (dashboard → the domain → Overview, right column)."
   type        = string
 }
+
+# Who may pass Cloudflare Access (ADR-050). Real addresses: kept out of the
+# public repo, set in .env as JSON lists, e.g.
+#   TF_VAR_access_admin_emails='["dev@example.com","raj@example.com"]'
+# Order matters only to keep the plan quiet: Cloudflare stores the list as given.
+variable "access_admin_emails" {
+  description = "May pass the Admin gate (echoandaura.com/admin): the developer and Raj."
+  type        = list(string)
+  sensitive   = true
+}
+
+variable "access_developer_emails" {
+  description = "May pass the Dokploy gate (deploy.echoandaura.com): the developer only."
+  type        = list(string)
+  sensitive   = true
+}

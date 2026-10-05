@@ -264,17 +264,29 @@ In this order, so nothing locks out:
 
 ### Change it later
 
-- **Add or remove an admin's email:** Access → Applications → `Admin` →
-  Policies → `admins` → edit the Emails list → Save. Effective at once
-  for new logins; to cut someone off immediately, also Zero Trust → My
-  Team → Users → the user → **Revoke session**. Remember the admin
-  account itself (`admin:create`, or removing the role) is separate.
-- **Change who reaches Dokploy:** the same, on the `Dokploy` app's
-  `developer` policy.
-- **Session length:** Access → Applications → the app → Overview →
-  Session Duration. Shorter = more email codes.
-- **Rotate the service token:** Access → Service auth → `github-deploy` →
+**Terraform** (ADR-062, since 2026-10-05): both apps and the three
+policies are in `ops/terraform/cloudflare/access.tf`. The email lists are
+not in the repo (it is public): they come from `.env` as
+`TF_VAR_access_admin_emails` and `TF_VAR_access_developer_emails`, JSON
+lists, kept in Bitwarden `Cloudflare Access` too. A plan shows them as
+`(sensitive value)`. Change these in code or `.env`, then
+`pnpm tf:cloudflare apply`; a dashboard edit is undone by the next apply.
+
+- **Add or remove an admin's email:** edit `TF_VAR_access_admin_emails`
+  in `.env` (and Bitwarden) → `pnpm tf:cloudflare plan` shows `admins`
+  changing → apply. Effective at once for new logins; to cut someone off
+  immediately, also Zero Trust → My Team → Users → the user → **Revoke
+  session** (not Terraform's). Remember the admin account itself
+  (`admin:create`, or removing the role) is separate.
+- **Change who reaches Dokploy:** the same, with
+  `TF_VAR_access_developer_emails` (the `developer` policy).
+- **Session length:** `session_duration` in `access.tf` (on the app and
+  its policy). Shorter = more email codes.
+- **Rotate the service token** (hand-made, not Terraform's: its secret
+  must stay out of state): Access → Service auth → `github-deploy` →
   Refresh → update both GitHub secrets + Bitwarden → Run workflow once.
+  Refresh keeps the token's id. If you ever make a new token instead, put
+  its id in `access.tf` (`github_deploy_service_token_id`) and apply.
 - **Raj's or the developer's email changes:** add the new address
   first, sign in once, then remove the old one.
 
@@ -286,6 +298,12 @@ check off), then fix or delete the `Admin` app in Zero Trust. Locked out
 of Dokploy by its own Access app: Zero Trust → Access → Applications →
 `Dokploy` → delete (or add your new email) — that page is behind the
 Cloudflare account login, not Access.
+
+The dashboard is the right tool in an emergency. Afterwards, make the
+code match before anyone applies: a plan will want to put back what was
+deleted or changed. If an app was deleted, the next apply recreates it
+with a **new AUD tag**; for `Admin`, copy that into `CF_ACCESS_AUD` in
+Dokploy and deploy, or the web refuses every admin.
 
 ## DNSSEC
 
@@ -549,3 +567,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-05 | Worker `echoandaura-relay` deployed (`pnpm relay:deploy`), custom domain `relay.echoandaura.com`, secret `RELAY_SECRET` set; `/health` ok, a connection without a pass refused (401)                                                                                                                                                                                                                                                                                               |
 | 2026-10-05 | DNS under Terraform (ADR-062): 11 records imported into `ops/terraform/cloudflare/dns.tf` with no change (plan: 11 imported, 0 changed); then `plan` = No changes. Table corrected: `@` A and `www` CNAME existed since Phase 6; `relay` AAAA and `cf2024-1._domainkey` added                                                                                                                                                                                                      |
 | 2026-10-05 | Rules and settings under Terraform (ADR-062): WAF custom rules, rate limit, cache rule, the www→root redirect (found undocumented, now in [Redirect rules](#redirect-rules)), email obfuscation, DNSSEC. Token gained Zone WAF, Cache Rules, Zone Settings, Single Redirect (Edit). 6 imported, 0 changed; plan = No changes                                                                                                                                                       |
+| 2026-10-05 | Access under Terraform (ADR-062): apps `Admin`, `Dokploy` and policies `admins`, `developer`, `github deploy` imported (`access.tf`); emails from `.env`, sensitive. Only change: Terraform marking the email lists sensitive, values unchanged. Plan = No changes. Checked: `/admin` and `deploy` (incl. `/api/*`) 302 to the Access login from outside; Admin gate passed in a private window. Token gained Access: Edit (account)                                               |

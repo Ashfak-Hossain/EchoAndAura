@@ -9,7 +9,9 @@ the real thing match them. This page is how to use it day to day. It is
 written for someone who has never used Terraform.
 
 What it manages, and what it deliberately does not, is in ADR-062. In
-short: DNS, rules, buckets, Access, SES, IAM, budgets. **Never** anything
+short: DNS, zone rules and settings, Access, SES, IAM, budgets. Not R2 or
+Email Routing (the token would need rights over the backups; ADR-062
+addendum). **Never** anything
 whose creation produces a secret (access keys, API tokens, the Turnstile
 widget). Those stay hand-made and listed in [SECRETS.md](SECRETS.md).
 
@@ -52,6 +54,12 @@ checksums. `.terraform/` is a local download cache and is git-ignored.
 3. Cloudflare: in `.env`, `CLOUDFLARE_API_TOKEN`,
    `TF_VAR_cloudflare_account_id`, `TF_VAR_cloudflare_zone_id`. The token
    is Bitwarden `Cloudflare Terraform token` ([SECRETS.md](SECRETS.md)).
+   And the Access email lists, as JSON, in this order (Bitwarden
+   `Cloudflare Access`):
+   ```
+   TF_VAR_access_admin_emails='["<developer>","<Raj>"]'
+   TF_VAR_access_developer_emails='["<developer>"]'
+   ```
 4. `pnpm tf:aws init` and `pnpm tf:cloudflare init`: downloads the
    providers and connects to the state. Run again after a version change.
 
@@ -64,22 +72,24 @@ changes. Bitwarden `Cloudflare Terraform token`; only in the laptop's
 here when a new area comes under Terraform. Editing a token's
 permissions keeps its value, so `.env` does not change.
 
-| Scope                              | Permission             | Needed for                             |
-| ---------------------------------- | ---------------------- | -------------------------------------- |
-| Specified domain `echoandaura.com` | Zone → Read            | everything in the zone                 |
-| Specified domain `echoandaura.com` | DNS → Edit             | `dns.tf`                               |
-| Specified domain `echoandaura.com` | Zone WAF → Edit        | `rules.tf`: `waf_custom`, `rate_limit` |
-| Specified domain `echoandaura.com` | Cache Rules → Edit     | `rules.tf`: `cache`                    |
-| Specified domain `echoandaura.com` | Single Redirect → Edit | `rules.tf`: `redirect`                 |
-| Specified domain `echoandaura.com` | Zone Settings → Edit   | `zone.tf`: email obfuscation, DNSSEC   |
+| Scope                              | Permission                                  | Needed for                             |
+| ---------------------------------- | ------------------------------------------- | -------------------------------------- |
+| Specified domain `echoandaura.com` | Zone → Read                                 | everything in the zone                 |
+| Specified domain `echoandaura.com` | DNS → Edit                                  | `dns.tf`                               |
+| Specified domain `echoandaura.com` | Zone WAF → Edit                             | `rules.tf`: `waf_custom`, `rate_limit` |
+| Specified domain `echoandaura.com` | Cache Rules → Edit                          | `rules.tf`: `cache`                    |
+| Specified domain `echoandaura.com` | Single Redirect → Edit                      | `rules.tf`: `redirect`                 |
+| Specified domain `echoandaura.com` | Zone Settings → Edit                        | `zone.tf`: email obfuscation, DNSSEC   |
+| Entire account                     | Access (Cloudflare One / Zero Trust) → Edit | `access.tf`: apps and policies         |
 
 ## What is managed
 
-| Folder        | File       | Resources                                                                                                             | Since      |
-| ------------- | ---------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `cloudflare/` | `dns.tf`   | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                   | 2026-10-05 |
-| `cloudflare/` | `rules.tf` | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list | 2026-10-05 |
-| `cloudflare/` | `zone.tf`  | email obfuscation (off), DNSSEC (on)                                                                                  | 2026-10-05 |
+| Folder        | File        | Resources                                                                                                             | Since      |
+| ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `cloudflare/` | `dns.tf`    | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                   | 2026-10-05 |
+| `cloudflare/` | `rules.tf`  | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list | 2026-10-05 |
+| `cloudflare/` | `zone.tf`   | email obfuscation (off), DNSSEC (on)                                                                                  | 2026-10-05 |
+| `cloudflare/` | `access.tf` | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)       | 2026-10-05 |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -122,8 +132,9 @@ changes** once they match.
 
 ## History
 
-| Date       | Change                                                                                                                                                                 |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                          |
-| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                          |
-| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed |
+| Date       | Change                                                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                                                      |
+| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                                                      |
+| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                             |
+| 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed |
