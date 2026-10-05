@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Terraform state for echoandaura (ADR-062). The one piece of infrastructure
+  Terraform can't create for itself: the bucket its own state lives in.
+  Everything else in AWS and Cloudflare is in ops/terraform/.
+
+# Deploy (ap-south-1, from the repo root, signed in as ash-admin):
+#   aws cloudformation deploy --profile echoandaura --region ap-south-1 \
+#     --stack-name echoandaura-terraform-state \
+#     --template-file ops/aws/terraform-state.yaml
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
+Resources:
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          Terraform's record of what it manages. Lose it and Terraform no
+          longer knows the resources exist; every one would need re-importing.
+        must:
+          - Never public, never in the repo (the repo is public). State can hold resource ids and account details.
+          - Versioning stays on; an old version is how a broken apply is undone.
+    Properties:
+      BucketName: !Ref AWS::StackName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          # Every apply writes a new version; keep a year of history, not forever.
+          - Id: expire-old-state-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  StateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt StateBucket.Arn
+              - !Sub '${StateBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+Outputs:
+  BucketName:
+    Value: !Ref StateBucket
+  Region:
+    Value: !Ref AWS::Region

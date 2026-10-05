@@ -1,6 +1,6 @@
 # Cloudflare
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-05
 
 Cloudflare holds the **domain** (registrar + authoritative DNS), receives
 mail for `hello@` (**Email Routing**), holds event cover images
@@ -27,6 +27,12 @@ log shows who changed what. Both logins have 2FA.
 
 ## DNS — the authoritative record list
 
+**Terraform owns the records marked _TF_** (`ops/terraform/cloudflare/dns.tf`,
+ADR-062, since 2026-10-05). Change those in code, never in the dashboard;
+see [TERRAFORM.md](TERRAFORM.md). The rest are read-only in Cloudflare:
+another Cloudflare product made them and edits them (Email Routing, Email
+Service, R2, the relay Worker).
+
 All mail records are **DNS only** (grey cloud). Proxying a DKIM CNAME or
 an MX host breaks it silently. The app's own `A`/`AAAA` records arrive
 with deployment (Phase 6) and are proxied, like `media` (R2).
@@ -37,23 +43,26 @@ Cloudflare's challenges off `deploy`'s `/api/*`, where GitHub's deploy
 call goes ([SERVER.md § 20](SERVER.md)). Traefik still renews its Let's
 Encrypt certificate: the HTTP challenge arrives through Cloudflare.
 
-| Type   | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                            |
-| ------ | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| CNAME  | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                               |
-| CNAME  | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (2 of 3)                                                                                                                     |
-| CNAME  | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (3 of 3)                                                                                                                     |
-| TXT    | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`     | —        | SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                               |
-| TXT    | `@`                                           | `google-site-verification=S3DYisjK96_Pj68G62eYa0CZZ3q8k8pM1_e4FaRmDWU` | —        | Google Search Console owns the domain property (ADR-042). Bing imported the site from it. **Deleting it drops Search Console access**      |
-| TXT    | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`                   | —        | DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                              |
-| MX     | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Routing — inbound mail                                                                                                    |
-| MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | SES custom MAIL FROM — bounces return to SES                                                                                               |
-| TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                          |
-| MX     | `cf-bounce`                                   | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Service bounces (ADR-057); added by Onboard Domain                                                                        |
-| TXT    | `cf-bounce`                                   | `v=spf1 include:_spf.mx.cloudflare.net ~all`                           | —        | SPF for Cloudflare's envelope sender (aligns with the From domain)                                                                         |
-| TXT    | `cf-bounce._domainkey`                        | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…` (2048-bit key)            | —        | Cloudflare Email Service DKIM — signs outgoing mail as `echoandaura.com`                                                                   |
-| A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                    | Proxied  | the app                                                                                                                                    |
-| A      | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                      |
-| R2     | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27 |
+| Type  | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                               |
+| ----- | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| CNAME | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                          |
+| CNAME | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (2 of 3)                                                                                                                |
+| CNAME | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (3 of 3)                                                                                                                |
+| TXT   | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`     | —        | **TF**. SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                          |
+| TXT   | `@`                                           | `google-site-verification=S3DYisjK96_Pj68G62eYa0CZZ3q8k8pM1_e4FaRmDWU` | —        | **TF**. Google Search Console owns the domain property (ADR-042). Bing imported the site from it. **Deleting it drops Search Console access** |
+| TXT   | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`                   | —        | **TF**. DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                         |
+| MX    | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Routing — inbound mail                                                                                                       |
+| MX    | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | **TF**. SES custom MAIL FROM — bounces return to SES                                                                                          |
+| TXT   | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | **TF**. SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                     |
+| MX    | `cf-bounce`                                   | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Service bounces (ADR-057); added by Onboard Domain                                                                           |
+| TXT   | `cf-bounce`                                   | `v=spf1 include:_spf.mx.cloudflare.net ~all`                           | —        | SPF for Cloudflare's envelope sender (aligns with the From domain)                                                                            |
+| TXT   | `cf-bounce._domainkey`                        | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…` (2048-bit key)            | —        | Cloudflare Email Service DKIM — signs outgoing mail as `echoandaura.com`                                                                      |
+| TXT   | `cf2024-1._domainkey`                         | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…`                           | —        | Cloudflare's own DKIM key for mail it sends or forwards as `echoandaura.com`; read-only, Cloudflare owns it                                   |
+| A     | `@`                                           | `160.25.226.166`                                                       | Proxied  | **TF**. The site. Proxied: the origin answers Cloudflare only (ADR-045)                                                                       |
+| CNAME | `www`                                         | `echoandaura.com`                                                      | Proxied  | **TF**. `www` reaches the same site                                                                                                           |
+| A     | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | **TF**. the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                 |
+| R2    | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27    |
+| AAAA  | `relay`                                       | `100::` (a Worker route)                                               | Proxied  | the gate relay Worker (ADR-058). Created by `wrangler`'s custom domain; read-only here                                                        |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
 leave it.
@@ -154,6 +163,8 @@ How uploads work end-to-end: [../systems/STORAGE.md](../systems/STORAGE.md)
 
 Security → WAF → Custom rules. Free plan: up to 5 rules.
 
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `waf_custom`. Terraform owns the whole list: a rule added only in the dashboard is deleted`. Change it there and apply; a change made in the dashboard is undone by the next apply.
+
 | Rule                         | Expression                                                                                | Action                                                                                     | Why                                                                                                                               |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy API - no challenges` | `(http.host eq "deploy.echoandaura.com" and starts_with(http.request.uri.path, "/api/"))` | Skip: remaining custom rules, Browser Integrity Check, Security Level, User Agent Blocking | GitHub's deploy call is a script, not a browser; a challenge would fail every deploy. Dokploy's API key still guards it (ADR-045) |
@@ -173,6 +184,8 @@ be skipped for a path, and it would challenge the deploy call.
 Security → WAF → Rate limiting rules. Free plan: **one** rule, matching
 on the URL path only (not the method or host), counted per IP over 10
 seconds, blocking for 10 seconds.
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `rate_limit``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 | Rule                   | Expression                                            | Rate                        | Action         | Why                                                                                                                                     |
 | ---------------------- | ----------------------------------------------------- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -251,17 +264,29 @@ In this order, so nothing locks out:
 
 ### Change it later
 
-- **Add or remove an admin's email:** Access → Applications → `Admin` →
-  Policies → `admins` → edit the Emails list → Save. Effective at once
-  for new logins; to cut someone off immediately, also Zero Trust → My
-  Team → Users → the user → **Revoke session**. Remember the admin
-  account itself (`admin:create`, or removing the role) is separate.
-- **Change who reaches Dokploy:** the same, on the `Dokploy` app's
-  `developer` policy.
-- **Session length:** Access → Applications → the app → Overview →
-  Session Duration. Shorter = more email codes.
-- **Rotate the service token:** Access → Service auth → `github-deploy` →
+**Terraform** (ADR-062, since 2026-10-05): both apps and the three
+policies are in `ops/terraform/cloudflare/access.tf`. The email lists are
+not in the repo (it is public): they come from `.env` as
+`TF_VAR_access_admin_emails` and `TF_VAR_access_developer_emails`, JSON
+lists, kept in Bitwarden `Cloudflare Access` too. A plan shows them as
+`(sensitive value)`. Change these in code or `.env`, then
+`pnpm tf:cloudflare apply`; a dashboard edit is undone by the next apply.
+
+- **Add or remove an admin's email:** edit `TF_VAR_access_admin_emails`
+  in `.env` (and Bitwarden) → `pnpm tf:cloudflare plan` shows `admins`
+  changing → apply. Effective at once for new logins; to cut someone off
+  immediately, also Zero Trust → My Team → Users → the user → **Revoke
+  session** (not Terraform's). Remember the admin account itself
+  (`admin:create`, or removing the role) is separate.
+- **Change who reaches Dokploy:** the same, with
+  `TF_VAR_access_developer_emails` (the `developer` policy).
+- **Session length:** `session_duration` in `access.tf` (on the app and
+  its policy). Shorter = more email codes.
+- **Rotate the service token** (hand-made, not Terraform's: its secret
+  must stay out of state): Access → Service auth → `github-deploy` →
   Refresh → update both GitHub secrets + Bitwarden → Run workflow once.
+  Refresh keeps the token's id. If you ever make a new token instead, put
+  its id in `access.tf` (`github_deploy_service_token_id`) and apply.
 - **Raj's or the developer's email changes:** add the new address
   first, sign in once, then remove the old one.
 
@@ -274,7 +299,15 @@ of Dokploy by its own Access app: Zero Trust → Access → Applications →
 `Dokploy` → delete (or add your new email) — that page is behind the
 Cloudflare account login, not Access.
 
+The dashboard is the right tool in an emergency. Afterwards, make the
+code match before anyone applies: a plan will want to put back what was
+deleted or changed. If an app was deleted, the next apply recreates it
+with a **new AUD tag**; for `Admin`, copy that into `CF_ACCESS_AUD` in
+Dokploy and deploy, or the web refuses every admin.
+
 ## DNSSEC
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/zone.tf → `cloudflare_zone_dnssec.this`, with `prevent_destroy``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 DNS → Settings → DNSSEC → **Enable**. The registrar is Cloudflare too, so
 the DS record is published for us; the status turns **Active** within
@@ -282,11 +315,27 @@ about an hour (`dig +short DS echoandaura.com` then answers). It signs
 our DNS answers, so nobody can forge them on the way to a visitor (point
 the site or the mail records elsewhere).
 
+## Redirect rules
+
+Rules → Redirect Rules → `Redirect from WWW to root`: a request to
+`www.echoandaura.com/<path>` gets a **301** to `https://echoandaura.com/<path>`,
+query string kept. One address for the site: `SITE_URL` and canonical URLs
+use the bare domain. It only works while the `www` record stays **proxied**.
+Made 2026-09-27 from Cloudflare's template; it was missing from this page
+until Terraform found it (2026-10-05).
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `redirect``. Change it there and apply; a change made in the dashboard is undone by the next apply.
+
+**Check it:** `curl -sI https://www.echoandaura.com/faq?x=1 | grep -iE '^(HTTP|location)'`
+→ `301` and `location: https://echoandaura.com/faq?x=1`.
+
 ## Cache rules (ADR-056)
 
 Public pages are served from the Cloudflare edge for 30 seconds to
 visitors who are not signed in. Caching → Cache Rules →
-`public pages for anonymous visitors`:
+`public pages for anonymous visitors`.
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `cache``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 ```
 (http.host eq "echoandaura.com"
@@ -311,7 +360,7 @@ checks the cookie half). Never add `/register`, `/orders`, `/tickets`,
 twice: `MISS` (or `EXPIRED`) then `HIT`. With
 `-H 'Cookie: better-auth.x=1'`: `DYNAMIC`.
 
-**Switch it off:** toggle the rule off. Nothing in the app depends on it;
+**Switch it off:** `enabled = false` on the rule in `rules.tf`, then apply. Nothing in the app depends on it;
 pages go back to ~170 ms first byte.
 
 ## Gate relay (ADR-058)
@@ -358,6 +407,8 @@ deploy. The door works as before ADR-058, sharing by the ping alone. The
 Worker can stay, unused.
 
 ## Email Address Obfuscation: keep it off
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/zone.tf → `email_obfuscation`. A plan shows it if someone switches it back on`. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
 Security → Settings → Email Address Obfuscation is **off** (2026-10-04).
 When on, Cloudflare rewrites addresses in the HTML and injects a decoder
@@ -514,3 +565,6 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-04 | Email Sending: Onboard Domain `echoandaura.com` (top level, no subdomain): `cf-bounce` MX ×3, SPF, DKIM added; the proposed `_dmarc` `p=reject` did **not** replace ours (`p=none` + `rua` kept, checked on the authoritative NS). Reputation Healthy, sending Enabled (ADR-057)                                                                                                                                                                                                   |
 | 2026-10-05 | Email Sending live: account API token `echoandaura-worker-email` (Email Sending Edit, IPs `160.25.226.166` + `2001:df3:ad40::/48`). First send (sign-in link to a never-SES-verified Gmail): delivered in 12 s, SPF/DKIM (`echoandaura.com`)/DMARC **PASS**; landed in spam (new sending reputation)                                                                                                                                                                               |
 | 2026-10-05 | Worker `echoandaura-relay` deployed (`pnpm relay:deploy`), custom domain `relay.echoandaura.com`, secret `RELAY_SECRET` set; `/health` ok, a connection without a pass refused (401)                                                                                                                                                                                                                                                                                               |
+| 2026-10-05 | DNS under Terraform (ADR-062): 11 records imported into `ops/terraform/cloudflare/dns.tf` with no change (plan: 11 imported, 0 changed); then `plan` = No changes. Table corrected: `@` A and `www` CNAME existed since Phase 6; `relay` AAAA and `cf2024-1._domainkey` added                                                                                                                                                                                                      |
+| 2026-10-05 | Rules and settings under Terraform (ADR-062): WAF custom rules, rate limit, cache rule, the www→root redirect (found undocumented, now in [Redirect rules](#redirect-rules)), email obfuscation, DNSSEC. Token gained Zone WAF, Cache Rules, Zone Settings, Single Redirect (Edit). 6 imported, 0 changed; plan = No changes                                                                                                                                                       |
+| 2026-10-05 | Access under Terraform (ADR-062): apps `Admin`, `Dokploy` and policies `admins`, `developer`, `github deploy` imported (`access.tf`); emails from `.env`, sensitive. Only change: Terraform marking the email lists sensitive, values unchanged. Plan = No changes. Checked: `/admin` and `deploy` (incl. `/api/*`) 302 to the Access login from outside; Admin gate passed in a private window. Token gained Access: Edit (account)                                               |
