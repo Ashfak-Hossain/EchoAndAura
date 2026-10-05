@@ -1,0 +1,56 @@
+# SERVER.md § 3: a swap file as a last resort, so a memory spike slows the
+# server down instead of the kernel killing Postgres or the web.
+
+- name: Check for the swap file
+  ansible.builtin.stat:
+    path: /swapfile
+  register: swap_file
+
+# Only on a server without one. Changing the size later is a manual step
+# (swapoff, delete, run again): resizing live swap is not worth automating.
+- name: Create the swap file
+  when: not swap_file.stat.exists
+  block:
+    - name: Allocate it
+      ansible.builtin.command: fallocate -l {{ swap_size_mb }}M /swapfile
+      args:
+        creates: /swapfile
+
+    - name: Make it readable by root only (swap can hold anything that was in memory)
+      ansible.builtin.file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Format it as swap
+      ansible.builtin.command: mkswap /swapfile
+      changed_when: true
+
+    - name: Turn it on
+      ansible.builtin.command: swapon /swapfile
+      changed_when: true
+
+- name: Keep the swap file root-only
+  ansible.builtin.file:
+    path: /swapfile
+    owner: root
+    group: root
+    mode: '0600'
+  when: swap_file.stat.exists
+
+- name: Turn it on at every boot
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^/swapfile\s'
+    line: /swapfile swap swap defaults 0 0
+
+# 10: swap only when memory is really short (the default, 60, swaps early).
+- name: Use swap as a last resort
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-swappiness.conf
+    content: "vm.swappiness={{ swappiness }}\n"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Apply sysctl

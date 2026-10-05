@@ -67,3 +67,9 @@ dist/
 *.tfstate.*
 *.tfplan
 crash.log
+
+# Ansible (ADR-063): the pinned tools and collections are installed per
+# machine; the lab inventory holds a throwaway VM's address.
+ops/ansible/.venv/
+ops/ansible/collections/
+ops/ansible/inventory/lab.yml

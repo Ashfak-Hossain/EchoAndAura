@@ -1,0 +1,7 @@
+# Ansible collections, pinned exactly (installed into ./collections by
+# ops/ansible/run.sh; git-ignored).
+collections:
+  - name: ansible.posix
+    version: 2.2.2
+  - name: community.general
+    version: 13.5.0

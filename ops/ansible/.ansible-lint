@@ -1,0 +1,6 @@
+# The strictest built-in profile: what Ansible's own guide calls production
+# ready (FQCN module names, named tasks, no risky shell).
+profile: production
+exclude_paths:
+  - .venv/
+  - collections/

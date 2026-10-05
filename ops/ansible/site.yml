@@ -1,0 +1,12 @@
+# The production server, as code (ADR-063). One role per SERVER.md section;
+# each role's tasks say which. Run through ops/ansible/run.sh.
+- name: Echo & Aura server
+  hosts: all
+  become: false
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh
+      tags: [ssh]
+    - role: swap
+      tags: [swap]

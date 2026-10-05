@@ -1,0 +1,21 @@
+# SERVER.md § 2: keys only. Bots try passwords on every public server.
+
+# The key goes in BEFORE passwords go off, so a fresh server can never be
+# left with no way in.
+- name: Let the operator's key log in as root
+  ansible.posix.authorized_key:
+    user: root
+    key: "{{ lookup('ansible.builtin.file', ssh_public_key_file) }}"
+    state: present
+
+# validate: sshd checks the whole config with this file in place before it
+# is saved. A typo is refused instead of locking everyone out.
+- name: Keys only, no passwords
+  ansible.builtin.copy:
+    src: 00-hardening.conf
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload ssh
