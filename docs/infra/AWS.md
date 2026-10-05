@@ -13,9 +13,9 @@ The SES side was set up by hand and is now **Terraform**
 (`ops/terraform/aws/`, ADR-062, since 2026-10-05): change it in code,
 never in the console ([TERRAFORM.md](TERRAFORM.md)). Account-level SES
 settings stay manual (see [SES](#ses)) and `pnpm infra:check` guards
-them. The S3 side is still CloudFormation, `ops/aws/offsite-backups.yaml`,
-until it moves into Terraform too. Terraform's state lives in one more
-bucket, [Terraform state](#terraform-state).
+them. The off-site bucket is Terraform too (moved from CloudFormation on
+2026-10-06). The one CloudFormation stack left is the bucket Terraform's
+own state lives in, [Terraform state](#terraform-state).
 
 How email flows through SES, and what to do when a message does not
 arrive, is in [../systems/EMAIL.md](../systems/EMAIL.md). DNS records that
@@ -73,12 +73,12 @@ flowchart LR
 | root                                  | root     | everything                                                                     | password + MFA; **0 access keys**    | account-level settings only         |
 | `ash-admin`                           | IAM user | `AdministratorAccess`, `IAMUserChangePassword` (managed)                       | password + MFA; **0 access keys**    | console and `aws login` for humans  |
 | `echoandaura-worker`                  | IAM user | inline `ses-send-only` (below)                                                 | 1 access key → `AWS_SES_*` in `.env` | the worker process sends email      |
-| `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (CloudFormation)                                          | 1 access key → Dokploy `aws-offsite` | Dokploy uploads the off-site backup |
+| `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (Terraform)                                               | 1 access key → Dokploy `aws-offsite` | Dokploy uploads the off-site backup |
 | `BudgetsActionsRole`                  | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com` | —                                    | lets the hard-stop budget act       |
 
 **Terraform** (`iam.tf`): `echoandaura-worker` and `ses-send-only`. Not
 its access key (made by hand, so the secret never reaches state), and not
-root, `ash-admin` or the offsite user (CloudFormation, for now).
+root or `ash-admin`. The offsite user is in `offsite_backups.tf`.
 
 ### `ses-send-only` (inline policy on `echoandaura-worker`)
 
@@ -105,18 +105,21 @@ resource; we deliberately run without configuration sets (see SES below).
 
 ## S3 off-site backups
 
-Stack `echoandaura-offsite-backups` (`ap-south-1`), from
-`ops/aws/offsite-backups.yaml`. Change it by editing the template and
-running the deploy command at its top; never in the console.
+**Terraform**: `ops/terraform/aws/offsite_backups.tf` (bucket, its
+settings and policy, the upload-only user). Change it there and apply;
+never in the console. Until 2026-10-06 it was the CloudFormation stack
+`echoandaura-offsite-backups`: every resource was marked Retain, the
+stack deleted (all three `DELETE_SKIPPED`), then imported with no change.
+The template is in git history (`ops/aws/offsite-backups.yaml`).
 
-| Item       | Value                                                                                                                                                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bucket     | `echoandaura-offsite-backups`: private (all four public-access blocks), SSE-S3, versioning on, HTTPS only, kept if the stack is deleted                  |
-| Lifecycle  | files and old versions expire after **35 days**; unfinished uploads after 1 day                                                                          |
-| Writer     | IAM user `echoandaura-offsite-backups-dokploy`: `ListBucket`, `PutObject`, `GetObject`, multipart; **delete and bucket config denied**                   |
-| Key        | made by hand (IAM → the user → Security credentials), never through CloudFormation. Bitwarden `AWS offsite backups key (Dokploy)`; Dokploy `aws-offsite` |
-| Written by | Dokploy, daily 03:30 Dhaka ([SERVER.md § 16](SERVER.md))                                                                                                 |
-| Cost       | $0.025 / GB-month; about 15 kB per dump today, so well under a cent                                                                                      |
+| Item       | Value                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bucket     | `echoandaura-offsite-backups`: private (all four public-access blocks), SSE-S3, versioning on, HTTPS only, kept if the stack is deleted                               |
+| Lifecycle  | files and old versions expire after **35 days**; unfinished uploads after 1 day                                                                                       |
+| Writer     | IAM user `echoandaura-offsite-backups-dokploy`: `ListBucket`, `PutObject`, `GetObject`, multipart; **delete and bucket config denied**                                |
+| Key        | made by hand (IAM → the user → Security credentials), never through Terraform or CloudFormation. Bitwarden `AWS offsite backups key (Dokploy)`; Dokploy `aws-offsite` |
+| Written by | Dokploy, daily 03:30 Dhaka ([SERVER.md § 16](SERVER.md))                                                                                                              |
+| Cost       | $0.025 / GB-month; about 15 kB per dump today, so well under a cent                                                                                                   |
 
 Why read is allowed: rclone (inside Dokploy) checks every upload with a
 HEAD request, and without `GetObject` the file lands but the backup
@@ -455,14 +458,15 @@ pnpm email:test <verified address>                            # "SES accepted th
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                                                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested                                                                                                                                                                          |
-| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities                                                                                                                                                                             |
-| 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above                                                                                                                                                               |
-| 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site                                                                                                     |
-| 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both |
-| 2026-10-05 | Terraform state (ADR-062): stack `echoandaura-terraform-state` from `ops/aws/terraform-state.yaml`. Checked: CREATE_COMPLETE, versioning Enabled, 4 public-access blocks on, SSE AES256, HTTPS-only policy, `ap-south-1`                                                                                  |
-| 2026-10-05 | SES, SNS feedback and the worker user under Terraform (ADR-062, `ses.tf`, `iam.tf`): 10 imported; only change was Terraform-side (subscription address marked sensitive, value unchanged; two Terraform-only defaults). Plan = No changes. Account SES settings and the Gmail identities stay manual      |
-| 2026-10-05 | Budgets under Terraform (ADR-062, `budgets.tf`): 3 budgets, hard-stop action, `BudgetsActionsRole` + attachment, anomaly monitor + subscription; 8 imported, 0 changed. The monthly budget's third alert (100 % actual) recorded                                                                          |
-| 2026-10-06 | Limits raised: zero-spend alert > $0.25, monthly $5, hard stop $10 (see Budgets and cost). AWS Budgets email verification: both alert addresses verified. Action status Standby                                                                                                                           |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-20 | Account created; root MFA; `ash-admin`; budgets; SES domain verified (DKIM, MAIL FROM); worker user; production access requested                                                                                                                                                                                                                                         |
+| 2026-09-20 | Worker policy widened to `identity/*` (sandbox recipient check); wizard configuration set deleted and cleared from identities                                                                                                                                                                                                                                            |
+| 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above                                                                                                                                                                                                                              |
+| 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site                                                                                                                                                                    |
+| 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both                                                                |
+| 2026-10-05 | Terraform state (ADR-062): stack `echoandaura-terraform-state` from `ops/aws/terraform-state.yaml`. Checked: CREATE_COMPLETE, versioning Enabled, 4 public-access blocks on, SSE AES256, HTTPS-only policy, `ap-south-1`                                                                                                                                                 |
+| 2026-10-05 | SES, SNS feedback and the worker user under Terraform (ADR-062, `ses.tf`, `iam.tf`): 10 imported; only change was Terraform-side (subscription address marked sensitive, value unchanged; two Terraform-only defaults). Plan = No changes. Account SES settings and the Gmail identities stay manual                                                                     |
+| 2026-10-05 | Budgets under Terraform (ADR-062, `budgets.tf`): 3 budgets, hard-stop action, `BudgetsActionsRole` + attachment, anomaly monitor + subscription; 8 imported, 0 changed. The monthly budget's third alert (100 % actual) recorded                                                                                                                                         |
+| 2026-10-06 | Limits raised: zero-spend alert > $0.25, monthly $5, hard stop $10 (see Budgets and cost). AWS Budgets email verification: both alert addresses verified. Action status Standby                                                                                                                                                                                          |
+| 2026-10-06 | Off-site backups moved from CloudFormation to Terraform (ADR-062): Retain on the bucket policy and user, stack updated, then deleted (bucket, policy, user `DELETE_SKIPPED`); before/after snapshots identical apart from CloudFormation's own `aws:cloudformation:*` bucket tags, which it removed. 9 imported, 0 changed; plan = No changes. Key and Dokploy untouched |

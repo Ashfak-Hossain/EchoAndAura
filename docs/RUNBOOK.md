@@ -379,7 +379,7 @@ message names the destination: `r2-backups` or `aws-offsite`.
      delete, so a value there fails every run (S3 expires old files
      itself, after 35 days).
    - `AccessDenied` on `aws-offsite` after a template change: the key
-     needs list, upload and read (`ops/aws/offsite-backups.yaml`).
+     needs list, upload and read (`ops/terraform/aws/offsite_backups.tf`).
 4. When fixed, **Run** it by hand and confirm a new file appears.
 
 ## Disk above 80 %

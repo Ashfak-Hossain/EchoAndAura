@@ -1,6 +1,6 @@
 # Terraform
 
-Status: IN PROGRESS · Owner: Evan · Last updated: 2026-10-05
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-05
 
 Terraform keeps the Cloudflare and AWS set-up as code in
 `ops/terraform/` (ADR-062). Before Terraform, every setting was a click in
@@ -90,15 +90,16 @@ permissions keeps its value, so `.env` does not change.
 
 ## What is managed
 
-| Folder        | File         | Resources                                                                                                                            | Since      |
-| ------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `cloudflare/` | `dns.tf`     | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                  | 2026-10-05 |
-| `cloudflare/` | `rules.tf`   | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                | 2026-10-05 |
-| `cloudflare/` | `zone.tf`    | email obfuscation (off), DNSSEC (on)                                                                                                 | 2026-10-05 |
-| `cloudflare/` | `access.tf`  | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                      | 2026-10-05 |
-| `aws/`        | `ses.tf`     | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription | 2026-10-05 |
-| `aws/`        | `iam.tf`     | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                             | 2026-10-05 |
-| `aws/`        | `budgets.tf` | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                  | 2026-10-05 |
+| Folder        | File                 | Resources                                                                                                                                  | Since      |
+| ------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `cloudflare/` | `dns.tf`             | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                        | 2026-10-05 |
+| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                      | 2026-10-05 |
+| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                       | 2026-10-05 |
+| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                            | 2026-10-05 |
+| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription       | 2026-10-05 |
+| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                   | 2026-10-05 |
+| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                        | 2026-10-05 |
+| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation | 2026-10-06 |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -150,3 +151,4 @@ changes** once they match.
 | 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                           |
 | 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                          |
 | 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                 |
+| 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                   |

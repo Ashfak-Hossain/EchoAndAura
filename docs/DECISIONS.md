@@ -3184,7 +3184,8 @@ sale those hours are the busiest.
   pass `--s3-no-head`: without it, the file landed but the backup reported
   failure (seen 2026-10-03).
 - **Infrastructure as code:** `ops/aws/offsite-backups.yaml`
-  (CloudFormation, stack `echoandaura-offsite-backups`). The access key is
+  (CloudFormation, stack `echoandaura-offsite-backups`). _Superseded
+  2026-10-06 by ADR-062: now `ops/terraform/aws/offsite_backups.tf`._ The access key is
   made by hand in the console, so the secret never passes through
   CloudFormation.
 - **An hourly R2 schedule for the sales window**, `postgres-hourly/`,
@@ -3976,3 +3977,10 @@ secrets were in state, and they aren't); HCP Terraform (another account
 to secure for one person's state); keeping CloudFormation for the
 off-site bucket (two IaC tools for one small AWS account); Pulumi / CDK
 (a program where a declaration is enough).
+
+**Migration done (2026-10-06).** Terraform manages 49 resources: 22 in
+Cloudflare, 27 in AWS, each imported with no change at the provider (the
+only diffs were Terraform marking values sensitive). The off-site bucket
+left CloudFormation by Retain-then-delete. The first real change made
+through Terraform was the budget limits ($0.25 alert, $5 monthly, $10
+hard stop). CloudFormation remains for one stack only, the state bucket.
