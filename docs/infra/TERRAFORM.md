@@ -35,7 +35,8 @@ widget). Those stay hand-made and listed in [SECRETS.md](SECRETS.md).
 ```
 ops/aws/terraform-state.yaml     the S3 bucket for the state (CloudFormation, made once)
 ops/terraform/aws/               AWS: SES, SNS, IAM, budgets, the off-site bucket
-ops/terraform/cloudflare/        Cloudflare: DNS, rules, R2, Access, Email Routing
+ops/terraform/cloudflare/        Cloudflare: DNS, zone rules and settings, Access
+ops/terraform/.tflint.hcl        lint rules for both folders
 ```
 
 Two folders, two state files. A Cloudflare apply can never change AWS.
@@ -43,7 +44,16 @@ Two folders, two state files. A Cloudflare apply can never change AWS.
 Each folder has `versions.tf` (exact versions and where the state lives),
 `providers.tf` (how to sign in), and one file per area once resources
 arrive. `.terraform.lock.hcl` is committed: it pins the providers'
-checksums. `.terraform/` is a local download cache and is git-ignored.
+checksums (macOS and Linux; after a provider upgrade run
+`terraform providers lock -platform=darwin_arm64 -platform=linux_amd64`
+in the folder). `.terraform/` is a local download cache and is git-ignored.
+
+**CI** (`.github/workflows/ci.yml`, job `terraform`) checks every pull
+request, for both folders: `terraform fmt -check`, `init -backend=false`
+from the lock file, `validate`, and `tflint`. It has no credentials and
+never touches the state, so it can't plan or change anything. A red
+`terraform` check usually means: run `terraform fmt -recursive
+ops/terraform` and commit. Plan and apply stay on a laptop.
 
 ## Before you start (once per laptop)
 

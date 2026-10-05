@@ -70,3 +70,41 @@ jobs:
       # with the gate check-in race tests (ADR-030) — both need only Postgres.
       - run: pnpm db:migrate
       - run: pnpm test:integration:db
+
+  # Terraform (ADR-062): format, validity and lint for both root modules.
+  # No credentials and no backend: it reads the code only, so it can never
+  # plan or change anything at Cloudflare or AWS. Plan and apply stay on a
+  # person's laptop (docs/infra/TERRAFORM.md).
+  terraform:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        module: [aws, cloudflare]
+
+    defaults:
+      run:
+        working-directory: ops/terraform/${{ matrix.module }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.6
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+
+      - run: terraform fmt -check -diff
+
+      # -backend=false: never touch the S3 state. Providers come from the
+      # committed lock file (linux_amd64 checksums included).
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+
+      - run: terraform validate
+
+      # Built-in rules only (.tflint.hcl): nothing to download, no token.
+      - run: tflint --config="$GITHUB_WORKSPACE/ops/terraform/.tflint.hcl" --format=compact
