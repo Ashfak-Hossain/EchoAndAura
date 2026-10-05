@@ -1,0 +1,13 @@
+# SERVER.md § 10. Redis saves its snapshot by forking a copy of itself;
+# without overcommit the kernel can refuse that copy when memory looks
+# tight, and the save fails. Redis asks for this on every Redis host.
+# (Swappiness is § 3, in the swap role.)
+
+- name: Let Redis fork for its snapshots
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-redis.conf
+    content: "vm.overcommit_memory = 1\n"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Apply kernel settings

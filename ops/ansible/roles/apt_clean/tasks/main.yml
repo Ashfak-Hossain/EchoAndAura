@@ -1,0 +1,12 @@
+# SERVER.md § 17: the disk is 25 GB. Downloaded .deb files pile up after
+# upgrades (1.1 GB once); the existing apt-daily timer cleans them weekly.
+# Docker images are pruned by Dokploy's Daily Docker Cleanup (a Dokploy
+# setting, not here). Never prune volumes: the databases live there.
+
+- name: Clean the apt cache every 7 days
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52echoandaura-clean
+    content: "APT::Periodic::CleanInterval \"7\";\n"
+    owner: root
+    group: root
+    mode: '0644'

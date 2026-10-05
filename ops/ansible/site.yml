@@ -10,3 +10,11 @@
       tags: [ssh]
     - role: swap
       tags: [swap]
+    - role: firewall
+      tags: [firewall]
+    - role: docker_config
+      tags: [docker]
+    - role: sysctl
+      tags: [sysctl]
+    - role: apt_clean
+      tags: [apt]

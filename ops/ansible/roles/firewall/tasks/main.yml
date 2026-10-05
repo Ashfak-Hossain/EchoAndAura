@@ -1,0 +1,49 @@
+# SERVER.md § 6 (ufw), § 9 (port 3000 closed) and § 20 (80/443 closed to
+# the internet). Only SSH is open in ufw. The web ports are reached by
+# Cloudflare only, and that is enforced by origin lockdown (§ 20, the
+# DOCKER-USER chain), not by ufw: Docker's published ports bypass ufw.
+
+- name: Install ufw (from apt, not the snap)
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+# FIRST, before any default or enable: on a fresh server, enabling ufw
+# without this rule locks everyone out.
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Deny incoming by default
+  community.general.ufw:
+    default: deny
+    direction: incoming
+
+- name: Allow outgoing by default (apt, image pulls, backups, email)
+  community.general.ufw:
+    default: allow
+    direction: outgoing
+
+- name: Deny routed by default
+  community.general.ufw:
+    default: deny
+    direction: routed
+
+# Removed on 2026-09-27 (3000: the Dokploy dashboard has a domain) and
+# 2026-09-30 (80/443: Cloudflare only). Listed so they can't come back.
+- name: Keep the old ports closed in ufw
+  community.general.ufw:
+    rule: allow
+    port: '{{ item }}'
+    proto: tcp
+    delete: true
+  loop: ['80', '443', '3000']
+
+- name: Log refused connections (low)
+  community.general.ufw:
+    logging: low
+
+- name: Turn the firewall on
+  community.general.ufw:
+    state: enabled

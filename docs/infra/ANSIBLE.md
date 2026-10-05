@@ -47,15 +47,22 @@ git-ignored and appear on the first run.
 
 ## What is managed
 
-| Role   | SERVER.md | What                                                                                          | Since      |
-| ------ | --------- | --------------------------------------------------------------------------------------------- | ---------- |
-| `base` | § 4, § 5  | hostname, `/etc/hosts`, cloud-init keeps the name, UTC, automatic security updates            | 2026-10-06 |
-| `ssh`  | § 2       | your public key for root; keys only (`00-hardening.conf`, checked by `sshd -t` before saving) | 2026-10-06 |
-| `swap` | § 3       | 2 GB `/swapfile` (created only if missing), in fstab, swappiness 10                           | 2026-10-06 |
+| Role            | SERVER.md  | What                                                                                                                                                            | Since      |
+| --------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `base`          | § 4, § 5   | hostname, `/etc/hosts`, cloud-init keeps the name, UTC, automatic security updates                                                                              | 2026-10-06 |
+| `ssh`           | § 2        | your public key for root; keys only (`00-hardening.conf`, checked by `sshd -t` before saving)                                                                   | 2026-10-06 |
+| `swap`          | § 3        | 2 GB `/swapfile` (created only if missing), in fstab, swappiness 10                                                                                             | 2026-10-06 |
+| `firewall`      | § 6, 9, 20 | ufw: SSH allowed **first**, deny incoming/routed, allow outgoing, 80/443/3000 kept closed, logging low, on                                                      | 2026-10-06 |
+| `docker_config` | § 7        | `/etc/docker/daemon.json`: container logs capped at 3 × 10 MB. **Never restarts Docker** (that stops the site): it prints a reminder to restart at a quiet time | 2026-10-06 |
+| `sysctl`        | § 10       | `vm.overcommit_memory = 1`, so Redis can fork for its snapshots                                                                                                 | 2026-10-06 |
+| `apt_clean`     | § 17       | apt cache cleaned every 7 days (Docker images: Dokploy's daily cleanup, not here)                                                                               | 2026-10-06 |
 
-Coming in the next slices: firewall, Docker log limits, kernel settings,
-apt cleaning, the disk alert, origin lockdown, Traefik's in-flight cap,
-and the Dokploy install. **Never** in Ansible: Dokploy's own settings
+The web ports are closed in ufw, but ufw is **not** what keeps them
+Cloudflare-only: Docker's published ports bypass ufw. That is origin
+lockdown's job (§ 20, the `DOCKER-USER` chain), coming in slice C.
+
+Coming in the next slices: the disk alert, origin lockdown, Traefik's
+in-flight cap, and the Dokploy install. **Never** in Ansible: Dokploy's own settings
 (projects, databases, the compose app, its environment, backup schedules
 live in Dokploy's database) and the app's database role (needs the DB
 password). SERVER.md keeps those as manual steps.
@@ -119,6 +126,7 @@ the role the same day; check mode shows `changed=0` once they match.
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-06 | Slice A: `ops/ansible/`, roles `base`, `ssh`, `swap`, lab VM scripts, CI `ansible` (lint). Production check mode: **ok=13 changed=0** on the first run. Lab VM (Multipass, from `fresh`): full run, then a second run changed nothing |
+| Date       | Change                                                                                                                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-06 | Slice A: `ops/ansible/`, roles `base`, `ssh`, `swap`, lab VM scripts, CI `ansible` (lint). Production check mode: **ok=13 changed=0** on the first run. Lab VM (Multipass, from `fresh`): full run, then a second run changed nothing  |
+| 2026-10-06 | Slice B: roles `firewall`, `docker_config`, `sysctl`, `apt_clean`. Production check mode: **ok=25 changed=0**. Lab from `fresh`: changed=21, then the second run changed=0 (SSH still reachable with ufw on); 45 s including the reset |

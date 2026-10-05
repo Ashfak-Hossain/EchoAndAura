@@ -1,0 +1,9 @@
+# Never restarted automatically: restarting Docker stops the site, the
+# database and Redis. Applies to existing containers only after a restart
+# at a quiet time (never during a sale); new containers get it at once.
+- name: Docker needs a restart
+  ansible.builtin.debug:
+    msg: >-
+      daemon.json changed. Restart Docker at a quiet time to apply it to
+      running containers: systemctl restart docker (the site goes down for
+      about a minute).
