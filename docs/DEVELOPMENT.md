@@ -214,6 +214,17 @@ call a service → map the result).
 - Commit at each green slice, not at end of day — small commits bisect well.
 - Merge commits only (no squash or rebase), and GitHub deletes the branch
   after the merge. The PR template's checklist is the review.
+- **One PR at a time, each branched from a fresh `origin/main`.** No
+  stacked PRs (a branch built on another open branch): they retarget,
+  re-run CI and leave confusing leftovers.
+- **Local tidying is automatic.** `scripts/git-tidy.sh` runs at the start
+  of every Claude Code session (`.claude/settings.json`, SessionStart) and
+  by hand with `pnpm git:tidy`. It forgets branches GitHub deleted,
+  fast-forwards `main`, steps off a finished branch when nothing is
+  uncommitted, and deletes a local branch only when GitHub deleted it and
+  `main` contains every commit. It never commits, pushes, resets or
+  stashes; anything doubtful is reported under "Needs you".
+  `tests/unit/git-tidy.test.ts` proves each case on a throwaway repo.
 
 ## Releases
 

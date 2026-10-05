@@ -16,6 +16,7 @@
     "email:render": "dotenv -e .env -- tsx scripts/render-emails.ts",
     "email:test": "dotenv -e .env -- tsx scripts/send-test-email.ts",
     "infra:check": "dotenv -e .env -- tsx scripts/infra-check.ts",
+    "git:tidy": "scripts/git-tidy.sh",
     "ansible": "dotenv -e .env -- ops/ansible/run.sh",
     "ansible:lab": "ops/ansible/lab.sh",
     "tf:aws": "dotenv -e .env -- terraform -chdir=ops/terraform/aws",
