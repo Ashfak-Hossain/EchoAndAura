@@ -1,7 +1,8 @@
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
 import { formatBDT } from '@/server/lib/money';
-import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
+import { publicVenue } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { formatDhakaLong } from '@/lib/time';
@@ -59,6 +60,9 @@ export function EventCard({
   const Title = headingLevel === 2 ? 'h2' : 'h3';
   // The event came through forPublic: a private venue is already gone.
   const venue = publicVenue(event);
+  const locale = useLocale();
+  const hero = useTranslations('hero');
+  const venueText = useTranslations('venue');
 
   return (
     <Link
@@ -107,18 +111,20 @@ export function EventCard({
           {event.title}
         </Title>
         <div className="flex flex-col gap-1 text-sm leading-normal text-muted-foreground">
-          <span className="tabular">{formatDhakaLong(event.startsAt)} (Dhaka)</span>
+          <span className="tabular">
+            {hero('inDhaka', { when: formatDhakaLong(event.startsAt, locale) })}
+          </span>
           {venue.text ? <span>{venue.text}</span> : null}
           {venue.isPrivate ? (
             <span className="inline-flex items-center gap-1.5">
               <LockIcon />
-              {VENUE_PRIVATE_NOTE}
+              {venueText('privateNote')}
             </span>
           ) : null}
         </div>
         {offer.fromPricePaisa !== null ? (
           <span className="text-base font-semibold tabular">
-            From {formatBDT(offer.fromPricePaisa)}
+            {hero('from', { price: formatBDT(offer.fromPricePaisa, locale) })}
           </span>
         ) : null}
       </div>

@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { PublicSponsor } from '@/server/services/sponsors.service';
 import { SPONSOR_LOGO_BOXES } from '@/lib/sponsor-fit';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ const TILE_TONE = {
  * because the name is already text. Without a website it is a plain card.
  */
 export function PresentedBy({ sponsor }: { sponsor: PublicSponsor }) {
+  const t = useTranslations('sponsors');
   const box = SPONSOR_LOGO_BOXES.presentedBy;
   const url = sponsor.websiteUrl;
   const frame =
@@ -45,7 +47,7 @@ export function PresentedBy({ sponsor }: { sponsor: PublicSponsor }) {
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-xs font-medium tracking-[0.14em] text-[#a8a29a] uppercase">
-          Presented by
+          {t('presentedBy')}
         </span>{' '}
         {/* The space keeps "Presented by" and the name apart in the link's name. */}
         <span className="text-base leading-snug font-semibold wrap-anywhere">
@@ -55,7 +57,7 @@ export function PresentedBy({ sponsor }: { sponsor: PublicSponsor }) {
               <span aria-hidden="true" className="font-normal text-[#a8a29a]">
                 &nbsp;↗
               </span>
-              <span className="sr-only"> (opens in a new tab)</span>
+              <span className="sr-only">{t('newTab')}</span>
             </>
           ) : null}
         </span>

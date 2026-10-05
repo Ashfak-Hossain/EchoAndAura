@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
 import type { PublicSponsor } from '@/server/services/sponsors.service';
 import { SPONSOR_GROUP_LABELS } from '@/lib/sponsor-levels';
@@ -18,6 +19,7 @@ const GROUPS = [
  * section never hints at an empty slot. Full-colour logos (N10 "colour").
  */
 export function SupportedBy({ sponsors }: { sponsors: PublicSponsor[] }) {
+  const t = useTranslations('sponsors');
   if (sponsors.length === 0) return null;
   // The schema allows one presenting partner (a partial unique index).
   const presenting = sponsors.find((s) => s.level === 'presenting');
@@ -30,13 +32,13 @@ export function SupportedBy({ sponsors }: { sponsors: PublicSponsor[] }) {
             id="supported-by-heading"
             className="text-[24px] leading-[1.15] font-bold tracking-[-0.02em] lg:text-[36px]"
           >
-            Supported by
+            {t('supportedBy')}
           </h2>
           <Link
             href="/contact"
             className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
           >
-            Want to sponsor a night? Get in touch →
+            {t('sponsorCta')}
           </Link>
         </div>
 
@@ -82,6 +84,7 @@ function siteDomain(url: string): string {
  * — a screen reader hears the level too — and the logo's alt stays empty.
  */
 function PresentingCard({ sponsor }: { sponsor: PublicSponsor }) {
+  const t = useTranslations('sponsors');
   const boxes = SPONSOR_LOGO_BOXES.presenting;
   const url = sponsor.websiteUrl;
   const frame =
@@ -91,14 +94,14 @@ function PresentingCard({ sponsor }: { sponsor: PublicSponsor }) {
     <>
       <div className="order-1 flex flex-col gap-2 p-6 lg:order-0">
         <span className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
-          Presenting partner
+          {t('presentingPartner')}
         </span>
         <span className="font-heading text-[24px] leading-[1.2] font-semibold">{sponsor.name}</span>
         {url ? (
           <span className="font-mono text-sm wrap-anywhere text-muted-foreground">
             {siteDomain(url)}
             <span aria-hidden="true">&nbsp;↗</span>
-            <span className="sr-only"> (opens in a new tab)</span>
+            <span className="sr-only">{t('newTab')}</span>
           </span>
         ) : null}
       </div>

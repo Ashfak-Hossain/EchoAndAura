@@ -24,6 +24,8 @@ export default defineConfig({
           name: 'unit',
           include: ['tests/unit/**/*.test.ts'],
           environment: 'node',
+          // ADR-061: next-intl backed by the real catalogue, no request needed.
+          setupFiles: ['tests/unit/setup/intl.ts'],
         },
       },
       {

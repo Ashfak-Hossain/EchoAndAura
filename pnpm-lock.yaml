@@ -131,6 +131,9 @@ importers:
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
+      use-intl:
+        specifier: 4.14.9
+        version: 4.14.9(@types/react@19.3.0)(react@19.3.0)
       zod:
         specifier: 4.6.5
         version: 4.6.5

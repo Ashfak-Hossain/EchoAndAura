@@ -1,4 +1,8 @@
+import { useLocale, useTranslations } from 'next-intl';
+import { groupDigits, plainDigits } from '@/server/lib/digits';
 import type { EventPhase } from '@/server/lib/event-phase';
+import { REGISTRATION_OPENS_DAYS_BEFORE } from '@/server/lib/registration-window';
+import { REGISTRATION_CLOSES_DAYS_BEFORE } from '@/content/site';
 import { formatDhakaLong } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +19,10 @@ interface Props {
  * need no explanation up top.
  */
 export function PhaseNotice({ phase, registrationOpensAt, registrationClosesAt, now }: Props) {
+  const t = useTranslations('notice');
+  const hero = useTranslations('hero');
+  const locale = useLocale();
+  const inDhaka = (date: Date) => hero('inDhaka', { when: formatDhakaLong(date, locale) });
   const box = (tone: string, bar: string, title: React.ReactNode, body: string) => (
     <div className={cn('flex gap-3 rounded-xl border px-4 py-3.5', tone)} role="status">
       <div className={cn('w-1.25 shrink-0 self-stretch rounded-[3px]', bar)} />
@@ -30,10 +38,8 @@ export function PhaseNotice({ phase, registrationOpensAt, registrationClosesAt, 
       return box(
         'border-[#c3d6ec] bg-info-tint text-[#123456]',
         'bg-info',
-        registrationOpensAt
-          ? `Registration opens ${formatDhakaLong(registrationOpensAt)} (Dhaka)`
-          : 'Registration opens soon',
-        'That is 20 days before the show — the same for every event we run.',
+        registrationOpensAt ? t('opens', { when: inDhaka(registrationOpensAt) }) : t('opensSoon'),
+        t('opensBody', { days: groupDigits(REGISTRATION_OPENS_DAYS_BEFORE, locale) }),
       );
     case 'closing_soon': {
       const ms = registrationClosesAt ? registrationClosesAt.getTime() - now.getTime() : 0;
@@ -43,29 +49,31 @@ export function PhaseNotice({ phase, registrationOpensAt, registrationClosesAt, 
         'border-[#e8c48a] bg-warning-tint text-[#7a4600]',
         'bg-warning',
         <>
-          Registration closes in{' '}
+          {t('closesIn')}{' '}
           <span className="font-mono font-medium tabular">
-            {h}h {m}m
+            {t('hoursMinutes', { h: plainDigits(h, locale), m: plainDigits(m, locale) })}
           </span>
         </>,
-        `${registrationClosesAt ? formatDhakaLong(registrationClosesAt) : ''} (Dhaka). Payments must be checked before then, so leave a few hours.`,
+        t('closesBody', {
+          when: hero('inDhaka', {
+            when: registrationClosesAt ? formatDhakaLong(registrationClosesAt, locale) : '',
+          }),
+        }),
       );
     }
     case 'sold_out':
       return box(
         'border-[#ddd8ce] bg-secondary text-foreground',
         'bg-[#a8a29a]',
-        'Sold out',
-        'Every ticket type has gone. There is no waitlist — if a hold expires, tickets quietly come back on sale here.',
+        t('soldOut'),
+        t('soldOutBody'),
       );
     case 'closed':
       return box(
         'border-[#ddd8ce] bg-secondary text-foreground',
         'bg-[#a8a29a]',
-        registrationClosesAt
-          ? `Registration closed ${formatDhakaLong(registrationClosesAt)} (Dhaka)`
-          : 'Registration closed',
-        'Registration always closes 5 days before the show so the door list can be printed. Nothing can be bought or changed now. Coming on the day? Have your ticket code ready at the door — the printed list is the backup.',
+        registrationClosesAt ? t('closedAt', { when: inDhaka(registrationClosesAt) }) : t('closed'),
+        t('closedBody', { days: groupDigits(REGISTRATION_CLOSES_DAYS_BEFORE, locale) }),
       );
     default:
       return null;

@@ -40,3 +40,8 @@ export function groupDigits(whole: number, locale: 'en' | 'bn' = 'en'): string {
   const rest = s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
   return sign + toBanglaDigits(rest ? `${rest},${last}` : last);
 }
+
+/** A number as typed, no grouping (`1439`), in Bangla digits on Bangla pages. */
+export function plainDigits(n: number, locale: 'en' | 'bn' = 'en'): string {
+  return locale === 'bn' ? toBanglaDigits(String(n)) : String(n);
+}

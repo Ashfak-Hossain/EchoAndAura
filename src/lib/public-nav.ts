@@ -6,6 +6,8 @@ import { localeFromPath } from '@/i18n/locales';
  * `isNavItemActive` in src/components/admin/nav-items.ts.
  */
 export interface PublicNavItem {
+  /** The catalogue key under `nav` (ADR-061). */
+  key: 'events' | 'archive' | 'faq' | 'contact';
   label: string;
   href: string;
   /** Match child routes too: "Events" stays current on /events/<slug>. */
@@ -13,10 +15,10 @@ export interface PublicNavItem {
 }
 
 export const PUBLIC_NAV: readonly PublicNavItem[] = [
-  { label: 'Events', href: '/events', prefix: true },
-  { label: 'Past events', href: '/archive' },
-  { label: 'FAQ', href: '/faq' },
-  { label: 'Contact', href: '/contact' },
+  { key: 'events', label: 'Events', href: '/events', prefix: true },
+  { key: 'archive', label: 'Past events', href: '/archive' },
+  { key: 'faq', label: 'FAQ', href: '/faq' },
+  { key: 'contact', label: 'Contact', href: '/contact' },
 ];
 
 /** No item matches '/': the home page is not "Events" (frame H1). `/bn/…` counts as its page (ADR-061). */
@@ -46,6 +48,8 @@ export interface FeaturedCta {
 
 export interface AccountLink {
   href: string;
+  /** The catalogue key under `shell` (ADR-061). */
+  key: 'myOrders' | 'signIn';
   label: string;
   signedIn: boolean;
 }
@@ -53,6 +57,6 @@ export interface AccountLink {
 /** Header, phone menu and footer all offer the same account link (N1). */
 export function accountLink(signedIn: boolean): AccountLink {
   return signedIn
-    ? { href: '/account', label: 'My orders', signedIn }
-    : { href: '/account/sign-in', label: 'Sign in', signedIn };
+    ? { href: '/account', key: 'myOrders', label: 'My orders', signedIn }
+    : { href: '/account/sign-in', key: 'signIn', label: 'Sign in', signedIn };
 }

@@ -1,5 +1,7 @@
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
+import { plainDigits, toBanglaDigits } from '@/server/lib/digits';
 import { formatInTimeZone } from 'date-fns-tz';
 import { publicVenue } from '@/server/lib/venue';
 import type { ArchiveEvent } from '@/server/services/events.service';
@@ -12,6 +14,8 @@ import { DHAKA_TZ, formatDhakaLong } from '@/lib/time';
  * Cards link to the event page, which stays live after archiving (ADR-009).
  */
 export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
+  const t = useTranslations('archive');
+  const locale = useLocale();
   const byYear = new Map<string, ArchiveEvent[]>();
   for (const item of events) {
     const year = formatInTimeZone(item.event.startsAt, DHAKA_TZ, 'yyyy');
@@ -34,10 +38,10 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
                 id={`year-${year}`}
                 className="font-heading text-[24px] leading-tight font-semibold tracking-[-0.01em] lg:text-[30px]"
               >
-                {year}
+                {locale === 'bn' ? toBanglaDigits(year) : year}
               </h2>
               <span className="text-sm text-muted-foreground tabular">
-                {items.length} {items.length === 1 ? 'show' : 'shows'}
+                {t('yearCount', { count: items.length, n: plainDigits(items.length, locale) })}
               </span>
             </div>
           ) : null}
@@ -65,7 +69,7 @@ export function ArchiveGrid({ events }: { events: ArchiveEvent[] }) {
                     {event.title}
                   </span>
                   <span className="text-[12px] leading-snug text-muted-foreground tabular lg:text-[13px]">
-                    {formatDhakaLong(event.startsAt)}
+                    {formatDhakaLong(event.startsAt, locale)}
                     {/* Past: the area alone — "sent with your tickets" is over. */}
                     {publicVenue(event).text ? (
                       <span className="block">{publicVenue(event).text}</span>

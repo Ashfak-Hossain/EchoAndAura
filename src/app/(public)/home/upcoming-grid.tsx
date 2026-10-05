@@ -1,4 +1,6 @@
+import { useLocale, useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
+import { plainDigits } from '@/server/lib/digits';
 import type { HomeEvent } from '@/server/services/events.service';
 import { EventCard } from '@/components/public/event-card';
 import { cn } from '@/lib/utils';
@@ -21,6 +23,8 @@ export function UpcomingGrid({
   /** Every upcoming show, the hero's included — what /events will list. */
   upcomingTotal: number;
 }) {
+  const t = useTranslations('home');
+  const locale = useLocale();
   const shown = events.slice(0, HOME_UPCOMING_CARDS);
   if (shown.length === 0) return null;
   // The hero's show plus these cards; anything beyond is only on /events.
@@ -34,12 +38,12 @@ export function UpcomingGrid({
           aside={
             more ? (
               <Link href="/events" className={sectionLink}>
-                All upcoming events ({upcomingTotal}) →
+                {t('allUpcoming', { count: plainDigits(upcomingTotal, locale) })}
               </Link>
             ) : null
           }
         >
-          Also upcoming
+          {t('upcomingTitle')}
         </SectionHeading>
         <ul
           data-testid="also-upcoming"

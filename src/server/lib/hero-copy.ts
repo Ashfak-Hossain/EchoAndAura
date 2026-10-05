@@ -1,3 +1,8 @@
+import { createTranslator } from 'use-intl/core';
+import { catalogue } from '@/i18n/catalogue';
+import type { Locale } from '@/i18n/locales';
+import en from '@/messages/en';
+import { groupDigits } from '@/server/lib/digits';
 import type { OfferSummary } from '@/server/lib/event-offer';
 import type { EventPhase } from '@/server/lib/event-phase';
 import { formatBDT } from '@/server/lib/money';
@@ -6,15 +11,16 @@ import { dhakaDay, formatDhakaShort } from '@/lib/time';
 /**
  * The home page hero's words (Canvas 6, N7), from the same `eventPhase`
  * value as the event page. Pure, so every phase's copy is unit-tested at a
- * fixed instant. Wording is the signed-off list in the Canvas 6 plan; times
- * stay 24-hour Dhaka like the rest of the site.
+ * fixed instant. Wording is the signed-off list in the Canvas 6 plan, in
+ * the catalogue (`hero`, ADR-061); times are Dhaka's.
  */
 
-export const HERO_EYEBROW = 'Next show';
+/** English labels, for callers that only need the text (tests, defaults). */
+export const HERO_EYEBROW = en.hero.eyebrow;
 
 export const COUNTDOWN_LABELS = {
-  close: 'Registration closes in',
-  open: 'Tickets go on sale in',
+  close: en.hero.countdownClose,
+  open: en.hero.countdownOpen,
 } as const;
 
 export interface HeroCopyInput {
@@ -30,6 +36,8 @@ export interface HeroCopyInput {
   /** Sum of (total − sold − reserved) across ticket types. */
   availableTotal: number;
   now: Date;
+  /** ADR-061: the page's language (English by default). */
+  locale?: Locale;
 }
 
 export interface HeroCopy {
@@ -46,13 +54,6 @@ export interface HeroCopy {
   canBuy: boolean;
 }
 
-const SOLD_OUT_SENTENCE =
-  'Every ticket for this show has been sold or is held. If a hold expires, tickets come back on sale here.';
-
-function inDhaka(date: Date): string {
-  return `${formatDhakaShort(date)} (Dhaka)`;
-}
-
 /** Whole Dhaka calendar days from `from` to `to` (Sat 23:59 → Thu 19:00 is 5). */
 function dhakaDaysBetween(from: Date, to: Date): number {
   const dayStart = (d: Date) => {
@@ -62,24 +63,30 @@ function dhakaDaysBetween(from: Date, to: Date): number {
   return Math.round((dayStart(to) - dayStart(from)) / 86_400_000);
 }
 
-function groupThousands(n: number): string {
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-function fromPriceLabel(offer: HeroCopyInput['offer']): string | null {
-  if (offer.fromPricePaisa === null) return null;
-  const price = `From ${formatBDT(offer.fromPricePaisa)}`;
-  return offer.fromIsEarlyBird && offer.fromTypeName ? `${price} · ${offer.fromTypeName}` : price;
-}
-
-export function heroCopy({ phase, event, offer, availableTotal, now }: HeroCopyInput): HeroCopy {
+export function heroCopy({
+  phase,
+  event,
+  offer,
+  availableTotal,
+  now,
+  locale = 'en',
+}: HeroCopyInput): HeroCopy {
+  const t = createTranslator({ locale, messages: catalogue(locale), namespace: 'hero' });
+  const inDhaka = (date: Date) => t('inDhaka', { when: formatDhakaShort(date, locale) });
+  const fromPriceLabel = (): string | null => {
+    if (offer.fromPricePaisa === null) return null;
+    const price = formatBDT(offer.fromPricePaisa, locale);
+    return offer.fromIsEarlyBird && offer.fromTypeName
+      ? t('fromEarlyBird', { price, name: offer.fromTypeName })
+      : t('from', { price });
+  };
   const canBuy = phase === 'open' || phase === 'closing_soon';
   // Before sales open the price is still worth showing (it is what the
   // countdown is for); once nothing can be bought it is noise.
-  const priceLabel = canBuy || phase === 'not_open' ? fromPriceLabel(offer) : null;
+  const priceLabel = canBuy || phase === 'not_open' ? fromPriceLabel() : null;
   const leftLabel =
     canBuy && availableTotal > 0 && !event.hideAvailability
-      ? `${groupThousands(availableTotal)} ${availableTotal === 1 ? 'ticket' : 'tickets'} left`
+      ? t('left', { count: availableTotal, n: groupDigits(availableTotal, locale) })
       : null;
   const common = { priceLabel, leftLabel, canBuy };
   // A target already behind us would count up from zero; drop it instead.
@@ -92,61 +99,69 @@ export function heroCopy({ phase, event, offer, availableTotal, now }: HeroCopyI
     case 'open':
       return {
         ...common,
-        phaseWord: 'On sale.',
-        sentence: close ? `Registration is open until ${inDhaka(close)}.` : 'Registration is open.',
-        countdown: countdown(COUNTDOWN_LABELS.close, close),
+        phaseWord: t('openWord'),
+        sentence: close ? t('openUntil', { when: inDhaka(close) }) : t('openNoDate'),
+        countdown: countdown(t('countdownClose'), close),
       };
     case 'closing_soon': {
       // Computed, not written in: the gap is set per event (usually 5 days).
       const days = close ? dhakaDaysBetween(close, event.startsAt) : 0;
-      const before = days >= 1 ? `, ${days} ${days === 1 ? 'day' : 'days'} before the show` : '';
+      const sentence = !close
+        ? t('closesSoon')
+        : days >= 1
+          ? t('closesBefore', { when: inDhaka(close), days, n: groupDigits(days, locale) })
+          : t('closes', { when: inDhaka(close) });
       return {
         ...common,
-        phaseWord: 'Closing soon.',
-        sentence: close
-          ? `Registration closes ${inDhaka(close)}${before}.`
-          : 'Registration closes soon.',
-        countdown: countdown(COUNTDOWN_LABELS.close, close),
+        phaseWord: t('closingSoonWord'),
+        sentence,
+        countdown: countdown(t('countdownClose'), close),
       };
     }
     case 'not_open': {
       if (!opens) {
         return {
           ...common,
-          phaseWord: 'Not on sale yet.',
-          sentence: 'Sale dates have not been announced yet.',
+          phaseWord: t('notOpenWord'),
+          sentence: t('noDates'),
           countdown: null,
         };
       }
       const eb = offer.earlyBird;
       // The first sentence already says "(Dhaka)"; the second shares it.
+      const goesOnSale = t('goesOnSale', { when: inDhaka(opens) });
       const earlyBird =
         eb && eb.salesEndsAt.getTime() > opens.getTime()
-          ? ` ${eb.name} runs until ${formatDhakaShort(eb.salesEndsAt)}.`
-          : '';
+          ? t('earlyBird', { name: eb.name, until: formatDhakaShort(eb.salesEndsAt, locale) })
+          : null;
       return {
         ...common,
-        phaseWord: 'Not on sale yet.',
-        sentence: `Tickets go on sale ${inDhaka(opens)}.${earlyBird}`,
-        countdown: countdown(COUNTDOWN_LABELS.open, opens),
+        phaseWord: t('notOpenWord'),
+        sentence: earlyBird ? `${goesOnSale} ${earlyBird}` : goesOnSale,
+        countdown: countdown(t('countdownOpen'), opens),
       };
     }
     case 'sold_out':
       // "or is held": sold out includes unpaid holds, which can expire.
-      return { ...common, phaseWord: 'Sold out.', sentence: SOLD_OUT_SENTENCE, countdown: null };
+      return {
+        ...common,
+        phaseWord: t('soldOutWord'),
+        sentence: t('soldOut'),
+        countdown: null,
+      };
     case 'closed':
       return {
         ...common,
-        phaseWord: 'Closed.',
-        sentence: `Registration for this show has closed. It starts ${inDhaka(event.startsAt)}.`,
+        phaseWord: t('closedWord'),
+        sentence: t('closed', { when: inDhaka(event.startsAt) }),
         countdown: null,
       };
     case 'past':
       // The hero never features a past show; this keeps the function total.
       return {
         ...common,
-        phaseWord: 'Past.',
-        sentence: `This show was on ${inDhaka(event.startsAt)}.`,
+        phaseWord: t('pastWord'),
+        sentence: t('past', { when: inDhaka(event.startsAt) }),
         countdown: null,
       };
   }

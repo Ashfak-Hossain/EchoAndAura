@@ -2,8 +2,10 @@ import Link from '@/i18n/link';
 import { LanguageSwitch } from './language-switch';
 import type { ReactNode } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
+import { useLocale, useTranslations } from 'next-intl';
 import { type AccountLink, type FeaturedCta, accountLink } from '@/lib/public-nav';
 import { DHAKA_TZ } from '@/lib/time';
+import { toBanglaDigits } from '@/server/lib/digits';
 import { cn } from '@/lib/utils';
 import type { SiteSettings } from '@/server/services/settings.service';
 import { BrandMark } from './brand-mark';
@@ -76,13 +78,14 @@ export function SiteHeader({
   facebook: string | null;
   bangla?: boolean;
 }) {
+  const t = useTranslations('shell');
   const register = cta ? `/events/${cta.slug}/register` : null;
   return (
     <HeaderFrame className="site-chrome group sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur data-[tone=dark]:border-[#33302a] data-[tone=dark]:bg-[#1c1a17] print:hidden">
       <div className="mx-auto flex h-15 max-w-360 items-center justify-between gap-4 px-4 lg:h-18 lg:px-16">
         <Link
           href="/"
-          aria-label="echoandaura, home"
+          aria-label={t('home')}
           className="flex min-h-11 items-center gap-2.5 font-heading text-[19px] font-bold tracking-[-0.02em] text-foreground group-data-[tone=dark]:text-[#fbfaf8] lg:text-[22px]"
         >
           {/* On charcoal the tile turns marigold with a charcoal glyph, as in the footer.
@@ -91,7 +94,7 @@ export function SiteHeader({
           echoandaura
         </Link>
 
-        <nav aria-label="Site" className="hidden items-center gap-1 lg:flex">
+        <nav aria-label={t('site')} className="hidden items-center gap-1 lg:flex">
           <SiteNavLinks />
           <span
             aria-hidden="true"
@@ -102,11 +105,11 @@ export function SiteHeader({
             className="inline-flex h-11 items-center gap-2 rounded-[8px] px-3 text-base text-muted-foreground group-data-[tone=dark]:text-[#c9c3b7] hover:bg-wash"
           >
             {account.signedIn ? <PersonIcon /> : null}
-            {account.label}
+            {t(account.key)}
           </Link>
           {register ? (
             <Link href={register} className={cn(getTickets, 'ml-2 px-5')}>
-              Get tickets
+              {t('getTickets')}
             </Link>
           ) : null}
         </nav>
@@ -114,7 +117,7 @@ export function SiteHeader({
         <div className="flex items-center gap-1 lg:hidden">
           {register ? (
             <Link href={register} className={cn(getTickets, 'px-4 text-sm')}>
-              Get tickets
+              {t('getTickets')}
             </Link>
           ) : null}
           <MobileMenu
@@ -149,8 +152,12 @@ export function SiteFooter({
   sponsorRow?: ReactNode;
   bangla?: boolean;
 }) {
+  const t = useTranslations('footer');
+  const shell = useTranslations('shell');
+  const locale = useLocale();
   const facebook = settings.facebookPageUrl;
   const supportEmail = settings.supportEmail;
+  const year = formatInTimeZone(new Date(), DHAKA_TZ, 'yyyy');
   return (
     <footer className="site-chrome bg-foreground text-[#c9c3b7] print:hidden">
       <div className="mx-auto flex max-w-360 flex-col gap-8 px-4 pt-12 pb-6 lg:gap-10 lg:px-16 lg:pt-16">
@@ -160,52 +167,47 @@ export function SiteFooter({
               <BrandMark inverted />
               echoandaura
             </span>
-            <p className="max-w-90 text-base leading-[1.6]">
-              Small rooms, real sound. A handful of live shows a year in Dhaka and Chattogram, run
-              by one person who is also at the door.
-            </p>
-            <p className="text-sm text-[#a8a29a]">
-              Payments by bKash · verified by a person · no refunds through the app
-            </p>
+            <p className="max-w-90 text-base leading-[1.6]">{t('blurb')}</p>
+            <p className="text-sm text-[#a8a29a]">{t('trust')}</p>
           </div>
 
-          <FooterNav title="Tickets">
+          <FooterNav id="footer-tickets" title={t('tickets')}>
             <Link href="/events" className={footerLink}>
-              Upcoming events
+              {t('upcoming')}
             </Link>
             <Link href="/archive" className={footerLink}>
-              Past events
+              {t('past')}
             </Link>
             <Link href="/orders/find" className={footerLink}>
-              Find my order
+              {t('findOrder')}
             </Link>
             <Link href={account.href} className={footerLink}>
-              {account.label}
+              {shell(account.key)}
             </Link>
           </FooterNav>
 
-          <FooterNav title="About">
+          <FooterNav id="footer-about" title={t('about')}>
             <Link href="/about" className={footerLink}>
-              About
+              {t('aboutLink')}
             </Link>
             <Link href="/contact" className={footerLink}>
-              Contact
+              {t('contact')}
             </Link>
             {facebook ? (
               <a href={facebook} target="_blank" rel="noreferrer" className={footerLink}>
                 Facebook<span aria-hidden="true">&nbsp;↗</span>
-                <span className="sr-only"> (opens in a new tab)</span>
+                <span className="sr-only">{t('newTab')}</span>
               </a>
             ) : null}
           </FooterNav>
 
           {/* Alone on its row on phones: the full width keeps an email address unbroken. */}
-          <FooterNav title="Help" className="col-span-2 lg:col-span-1">
+          <FooterNav id="footer-help" title={t('help')} className="col-span-2 lg:col-span-1">
             <Link href="/faq" className={footerLink}>
-              FAQ
+              {t('faq')}
             </Link>
             <Link href="/refund" className={footerLink}>
-              Refund policy
+              {t('refund')}
             </Link>
             {supportEmail ? (
               <a href={`mailto:${supportEmail}`} className={cn(footerLink, 'wrap-anywhere')}>
@@ -218,13 +220,11 @@ export function SiteFooter({
         {sponsorRow}
 
         <div className="flex flex-col items-start justify-between gap-x-6 gap-y-2 border-t border-[#33302a] pt-5 text-sm text-[#a8a29a] lg:flex-row lg:items-center">
-          <span>
-            © {formatInTimeZone(new Date(), DHAKA_TZ, 'yyyy')} echoandaura · Dhaka, Bangladesh
-          </span>
-          <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-1">
-            <LegalLink href="/terms">Terms of sale</LegalLink>
-            <LegalLink href="/privacy">Privacy policy</LegalLink>
-            <LegalLink href="/refund">Refund policy</LegalLink>
+          <span>{t('copyright', { year: locale === 'bn' ? toBanglaDigits(year) : year })}</span>
+          <nav aria-label={t('legal')} className="flex flex-wrap gap-x-5 gap-y-1">
+            <LegalLink href="/terms">{t('terms')}</LegalLink>
+            <LegalLink href="/privacy">{t('privacy')}</LegalLink>
+            <LegalLink href="/refund">{t('refund')}</LegalLink>
           </nav>
           {bangla ? <LanguageSwitch className="text-[#e6e1d6]" /> : null}
         </div>
@@ -238,15 +238,17 @@ export function SiteFooter({
  * announced once, not as both label and heading), then 44px link rows.
  */
 function FooterNav({
+  id,
   title,
   className,
   children,
 }: {
+  /** Fixed, not from the title: the title is translated. */
+  id: string;
   title: string;
   className?: string;
   children: ReactNode;
 }) {
-  const id = `footer-${title.toLowerCase()}`;
   return (
     <nav aria-labelledby={id} className={cn('flex flex-col', className)}>
       {/* font-sans: the base layer sets every h2 in Archivo; this is an overline. */}

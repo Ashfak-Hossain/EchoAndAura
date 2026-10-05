@@ -2,6 +2,7 @@
 
 import Link from '@/i18n/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { PUBLIC_NAV, headerTone, isPublicNavActive } from '@/lib/public-nav';
 
@@ -29,6 +30,7 @@ export function HeaderFrame({ className, children }: { className?: string; child
  */
 export function SiteNavLinks() {
   const pathname = usePathname();
+  const t = useTranslations('nav');
   return PUBLIC_NAV.map((item) => (
     <Link
       key={item.href}
@@ -36,7 +38,7 @@ export function SiteNavLinks() {
       aria-current={isPublicNavActive(item, pathname) ? 'page' : undefined}
       className="relative inline-flex h-11 items-center rounded-[8px] px-3 text-base text-foreground group-data-[tone=dark]:text-[#e6e1d6] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] hover:bg-wash aria-[current=page]:font-semibold group-data-[tone=dark]:aria-[current=page]:text-[#fbfaf8] aria-[current=page]:after:shadow-[inset_0_-2px_0_var(--color-foreground)] group-data-[tone=dark]:aria-[current=page]:after:shadow-[inset_0_-2px_0_var(--color-marigold)]"
     >
-      {item.label}
+      {t(item.key)}
     </Link>
   ));
 }

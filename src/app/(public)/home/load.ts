@@ -1,7 +1,7 @@
 import { cache } from 'react';
-import { formatInTimeZone } from 'date-fns-tz';
+import { getLocale } from 'next-intl/server';
 import type { FeaturedCta } from '@/lib/public-nav';
-import { DHAKA_TZ } from '@/lib/time';
+import { formatDhakaDate } from '@/lib/time';
 import { eventsService } from '@/server/container';
 
 /**
@@ -17,7 +17,7 @@ export const loadHome = cache(() => eventsService.getHomePage());
  * omits the button rather than disabling it.
  */
 export async function featuredCta(): Promise<FeaturedCta | null> {
-  const { featured } = await loadHome();
+  const [{ featured }, locale] = await Promise.all([loadHome(), getLocale()]);
   if (!featured) return null;
   const open = featured.phase === 'open' || featured.phase === 'closing_soon';
   if (!open) return null;
@@ -26,7 +26,7 @@ export async function featuredCta(): Promise<FeaturedCta | null> {
     title: featured.event.title,
     // Formatted here, not in the menu: the menu is a client component and
     // must not depend on the browser's time zone.
-    dateLabel: formatInTimeZone(featured.event.startsAt, DHAKA_TZ, 'EEE d MMM yyyy'),
+    dateLabel: formatDhakaDate(featured.event.startsAt, locale),
   };
 }
 

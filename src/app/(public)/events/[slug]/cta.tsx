@@ -1,4 +1,7 @@
 import { differenceInCalendarDays } from 'date-fns';
+import { useLocale, useTranslations } from 'next-intl';
+import { localisedPath } from '@/i18n/locales';
+import { plainDigits } from '@/server/lib/digits';
 import type { EventPhase } from '@/server/lib/event-phase';
 import { ButtonLink } from '@/components/button-link';
 import { formatDhakaLong } from '@/lib/time';
@@ -33,6 +36,10 @@ export function EventCta({
   facebookUrl,
   now,
 }: Props) {
+  const t = useTranslations('cta');
+  const hero = useTranslations('hero');
+  const locale = useLocale();
+  const inDhaka = (date: Date) => hero('inDhaka', { when: formatDhakaLong(date, locale) });
   const note = (text: string) => (
     <p className="text-center text-[13px] leading-snug text-muted-foreground tabular lg:text-left">
       {text}
@@ -40,7 +47,7 @@ export function EventCta({
   );
   const secondary = (href: string, label: string, external = false) => (
     <ButtonLink
-      href={href}
+      href={external ? href : localisedPath(href, locale)}
       variant="secondary"
       className="w-full border-foreground"
       {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
@@ -54,18 +61,26 @@ export function EventCta({
     case 'closing_soon':
       return (
         <>
-          <ButtonLink href={`/events/${slug}/register`} variant="cta" size="lg" className="w-full">
+          <ButtonLink
+            href={localisedPath(`/events/${slug}/register`, locale)}
+            variant="cta"
+            size="lg"
+            className="w-full"
+          >
             {phase !== 'closing_soon'
-              ? 'Register'
+              ? t('register')
               : hideAvailability
-                ? 'Register — closing soon'
-                : `Register — ${availableTotal} tickets left`}
+                ? t('registerClosingSoon')
+                : t('registerLeft', {
+                    count: availableTotal,
+                    n: plainDigits(availableTotal, locale),
+                  })}
           </ButtonLink>
           {registrationClosesAt
             ? note(
                 phase === 'closing_soon'
-                  ? `Closes ${formatDhakaLong(registrationClosesAt)} (Dhaka)`
-                  : `Registration closes ${formatDhakaLong(registrationClosesAt)} (Dhaka). Pay by bKash; a person checks every payment.`,
+                  ? t('closesShort', { when: inDhaka(registrationClosesAt) })
+                  : t('closesLong', { when: inDhaka(registrationClosesAt) }),
               )
             : null}
         </>
@@ -76,12 +91,12 @@ export function EventCta({
         <>
           <div className={disabled} aria-disabled="true">
             {days === null
-              ? 'Registration date to be announced'
+              ? t('dateTba')
               : days <= 0
-                ? 'Opens today'
-                : `Opens in ${days} ${days === 1 ? 'day' : 'days'}`}
+                ? t('opensToday')
+                : t('opensIn', { count: days, n: plainDigits(days, locale) })}
           </div>
-          {facebookUrl ? secondary(facebookUrl, 'Remind me on Facebook', true) : null}
+          {facebookUrl ? secondary(facebookUrl, t('remindFacebook'), true) : null}
         </>
       );
     }
@@ -89,18 +104,18 @@ export function EventCta({
       return (
         <>
           <div className={disabled} aria-disabled="true">
-            Sold out
+            {t('soldOut')}
           </div>
-          {facebookUrl ? secondary(facebookUrl, 'Tell me about the next show', true) : null}
+          {facebookUrl ? secondary(facebookUrl, t('nextShow'), true) : null}
         </>
       );
     case 'closed':
       return (
         <div className={disabled} aria-disabled="true">
-          Registration closed
+          {t('closed')}
         </div>
       );
     case 'past':
-      return secondary('/', 'See upcoming events');
+      return secondary('/', t('seeUpcoming'));
   }
 }

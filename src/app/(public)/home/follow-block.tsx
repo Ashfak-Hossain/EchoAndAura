@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { FacebookIcon } from './icons';
 import { homeColumn, homeSection, sectionTitle } from './section-heading';
@@ -8,6 +9,7 @@ import { homeColumn, homeSection, sectionTitle } from './section-heading';
  * already leads with "Follow on Facebook".
  */
 export function FollowBlock({ facebookUrl }: { facebookUrl: string }) {
+  const t = useTranslations('home');
   return (
     <section aria-labelledby="follow-heading" className={homeSection}>
       <div
@@ -18,11 +20,10 @@ export function FollowBlock({ facebookUrl }: { facebookUrl: string }) {
       >
         <div className="flex max-w-160 flex-col gap-2">
           <h2 id="follow-heading" className={sectionTitle}>
-            Follow for new shows
+            {t('followTitle')}
           </h2>
           <p className="text-base leading-[1.6] text-pretty text-muted-foreground lg:text-lg">
-            New nights are posted on the echoandaura Facebook page. There is no mailing list to
-            join.
+            {t('followBody')}
           </p>
         </div>
         <a
@@ -32,8 +33,8 @@ export function FollowBlock({ facebookUrl }: { facebookUrl: string }) {
           className="inline-flex h-13 shrink-0 items-center justify-center gap-2 rounded-[8px] border border-foreground bg-foreground px-6 text-base font-semibold text-background hover:bg-[#33302a]"
         >
           <FacebookIcon />
-          Follow on Facebook
-          <span className="sr-only"> (opens in a new tab)</span>
+          {t('followFacebook')}
+          <span className="sr-only">{t('newTab')}</span>
         </a>
       </div>
     </section>
