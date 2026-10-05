@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { groupDigits } from '@/server/lib/digits';
 import Image from 'next/image';
 import Link from '@/i18n/link';
 import { notFound } from 'next/navigation';
@@ -8,7 +10,7 @@ import { offerSummary } from '@/server/lib/event-offer';
 import { eventPhase } from '@/server/lib/event-phase';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { formatBDT } from '@/server/lib/money';
-import { VENUE_PRIVATE_NOTE, publicVenue, publicVenueLine } from '@/server/lib/venue';
+import { publicVenue, publicVenueLine } from '@/server/lib/venue';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { PresentedBy } from '@/components/public/sponsors/presented-by';
 import { JsonLd } from '@/components/json-ld';
@@ -42,8 +44,9 @@ async function load(slug: string) {
 /** Open Graph from the server HTML — this is what Facebook reads. */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const { event, ticketTypes } = await load(slug);
+  const [{ event, ticketTypes }, locale] = await Promise.all([load(slug), getLocale()]);
   return buildEventMetadata({
+    locale,
     event,
     coverUrl: eventsService.coverImageUrl(event),
     // Same from-price rule as the page and the home cards (ADR-032): a share
@@ -68,7 +71,14 @@ export default async function PublicEventPage({ params }: Props) {
   const phase = eventPhase({ event, availableTotal, now });
   const coverUrl = eventsService.coverImageUrl(event);
   const pageUrl = `${siteUrl()}/events/${event.slug}`;
-  const [settings, sponsors] = await Promise.all([getSiteSettings(), getPublicSponsors()]);
+  const [settings, sponsors, locale, t, hero, venueText] = await Promise.all([
+    getSiteSettings(),
+    getPublicSponsors(),
+    getLocale(),
+    getTranslations('event'),
+    getTranslations('hero'),
+    getTranslations('venue'),
+  ]);
   const facebook = settings.facebookPageUrl;
   // Looked up in the active list the footer already loaded (React-cached, no
   // extra query): a hidden presenter shows nothing; a deleted one is already
@@ -78,7 +88,7 @@ export default async function PublicEventPage({ params }: Props) {
     : null;
   const past = phase === 'past';
 
-  const dateLine = `${formatDhakaLong(event.startsAt)} (Dhaka)`;
+  const dateLine = hero('inDhaka', { when: formatDhakaLong(event.startsAt, locale) });
   // The event came through forPublic: a private venue is already gone.
   const venue = publicVenue(event);
   const venueLine = publicVenueLine(event);
@@ -114,10 +124,10 @@ export default async function PublicEventPage({ params }: Props) {
     >
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="tickets-heading" className="font-heading text-[20px] font-semibold lg:text-[24px]">
-          {phase === 'not_open' ? 'Prices' : 'Tickets'}
+          {phase === 'not_open' ? t('prices') : t('tickets')}
         </h2>
         <span className="text-[13px] text-muted-foreground">
-          One type per order · max {MAX_TICKETS_PER_ORDER}
+          {t('perOrder', { max: groupDigits(MAX_TICKETS_PER_ORDER, locale) })}
         </span>
       </div>
       <TicketList
@@ -130,9 +140,9 @@ export default async function PublicEventPage({ params }: Props) {
       />
       {withCta ? <div className="flex flex-col gap-2">{cta}</div> : null}
       <p className="flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-border pt-3 text-center text-[12px] text-muted-foreground">
-        <span>✓ Named tickets</span>
-        <span>✓ bKash</span>
-        <span>✓ Checked by a person</span>
+        <span>{t('namedTickets')}</span>
+        <span>{t('bkash')}</span>
+        <span>{t('checkedByPerson')}</span>
       </p>
     </section>
   );
@@ -187,7 +197,7 @@ export default async function PublicEventPage({ params }: Props) {
             href={past ? '/archive' : '/events'}
             className="text-sm text-[#a8a29a] hover:text-background"
           >
-            {past ? '← Past events' : '← All events'}
+            {past ? t('backPast') : t('backAll')}
           </Link>
           <div className="flex flex-wrap items-center gap-3">
             <PhaseChip
@@ -199,7 +209,7 @@ export default async function PublicEventPage({ params }: Props) {
             />
             {selling && event.registrationClosesAt ? (
               <span className="text-[12px] tracking-[0.08em] text-[#c9c3b7] uppercase tabular">
-                closes {formatDhakaShort(event.registrationClosesAt)}
+                {t('closesAt', { when: formatDhakaShort(event.registrationClosesAt, locale) })}
               </span>
             ) : null}
           </div>
@@ -209,7 +219,7 @@ export default async function PublicEventPage({ params }: Props) {
           <div className="flex flex-col gap-1.5 text-[15px] text-[#e6e1d6] lg:flex-row lg:flex-wrap lg:gap-7 lg:text-[17px]">
             <p className="flex items-center gap-2 tabular">
               <CalendarIcon className="shrink-0" />
-              {past ? `Happened ${dateLine}` : dateLine}
+              {past ? t('happened', { when: dateLine }) : dateLine}
             </p>
             {venueLine ? (
               <p className="flex items-center gap-2" data-testid="event-venue-line">
@@ -236,30 +246,30 @@ export default async function PublicEventPage({ params }: Props) {
           <dl className="grid grid-cols-3 gap-2 lg:gap-4">
             <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3 lg:gap-1.5 lg:p-5">
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
-                {past ? 'Was' : 'When'}
+                {past ? t('was') : t('when')}
               </dt>
               <dd className="font-heading text-[15px] font-semibold tabular lg:text-[20px]">
-                {formatDhakaShort(event.startsAt)}
+                {formatDhakaShort(event.startsAt, locale)}
               </dd>
               {event.endsAt ? (
                 <dd className="hidden text-[13px] text-muted-foreground tabular lg:block">
-                  ends ~{formatDhakaShort(event.endsAt)}
+                  {t('endsAround', { when: formatDhakaShort(event.endsAt, locale) })}
                 </dd>
               ) : null}
             </div>
             <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3 lg:gap-1.5 lg:p-5">
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
-                Venue
+                {t('venue')}
               </dt>
               <dd
                 className="line-clamp-2 font-heading text-[15px] font-semibold text-pretty lg:text-[20px]"
                 data-testid="event-venue"
               >
-                {venue.text ?? (venue.isPrivate ? 'Private' : 'To be announced')}
+                {venue.text ?? (venue.isPrivate ? t('venuePrivate') : t('venueTba'))}
               </dd>
               {venue.isPrivate ? (
                 <dd className="text-[13px] text-muted-foreground" data-testid="event-venue-note">
-                  {VENUE_PRIVATE_NOTE}
+                  {venueText('privateNote')}
                 </dd>
               ) : null}
               {mapsHref ? (
@@ -270,19 +280,21 @@ export default async function PublicEventPage({ params }: Props) {
                     rel="noreferrer"
                     className="text-accent-ink underline underline-offset-2"
                   >
-                    <span className="lg:hidden">Maps ↗</span>
-                    <span className="hidden lg:inline">Open in Maps ↗</span>
+                    <span className="lg:hidden">{t('maps')}</span>
+                    <span className="hidden lg:inline">{t('openInMaps')}</span>
                   </a>
                 </dd>
               ) : null}
             </div>
             <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3 lg:gap-1.5 lg:p-5">
               <dt className="text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:text-xs">
-                Entry
+                {t('entry')}
               </dt>
-              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">QR ticket</dd>
+              <dd className="font-heading text-[15px] font-semibold lg:text-[20px]">
+                {t('qrTicket')}
+              </dd>
               <dd className="hidden text-[13px] text-muted-foreground lg:block">
-                Scanned at the door · name + code works too
+                {t('entryNote')}
               </dd>
             </div>
           </dl>
@@ -293,7 +305,7 @@ export default async function PublicEventPage({ params }: Props) {
           {event.description ? (
             <section className="flex flex-col gap-3 lg:gap-4">
               <h2 className="font-heading text-[24px] font-semibold tracking-[-0.01em] lg:text-[30px]">
-                About the night
+                {t('aboutNight')}
               </h2>
               <RichText
                 description={event.description}
@@ -305,18 +317,14 @@ export default async function PublicEventPage({ params }: Props) {
           {!past ? (
             <section className="flex flex-col gap-2.5 rounded-xl bg-secondary p-4.5 lg:p-6">
               <h2 className="font-heading text-[17px] font-semibold lg:text-[20px]">
-                Good to know
+                {t('goodToKnow')}
               </h2>
               <ul className="list-disc space-y-1 pl-5 text-[14px] leading-relaxed text-[#4a4640] lg:text-[15px]">
                 <li>
-                  Tickets are named. You can change the name on a ticket until registration closes,{' '}
-                  {REGISTRATION_CLOSES_DAYS_BEFORE} days before the show.
+                  {t('namedRule', { days: groupDigits(REGISTRATION_CLOSES_DAYS_BEFORE, locale) })}
                 </li>
-                <li>
-                  Pay by bKash after registering; a person checks it, {settings.verificationPromise}
-                  .
-                </li>
-                <li>No refunds through the app — see the refund policy for cancellations.</li>
+                <li>{t('payRule', { promise: settings.verificationPromise })}</li>
+                <li>{t('refundRule')}</li>
               </ul>
             </section>
           ) : null}
@@ -339,11 +347,11 @@ export default async function PublicEventPage({ params }: Props) {
         {offer.fromPricePaisa !== null && phase === 'open' ? (
           <div className="flex shrink-0 flex-col">
             <span className="text-[15px] font-bold tabular">
-              from {formatBDT(offer.fromPricePaisa)}
+              {t('fromLower', { price: formatBDT(offer.fromPricePaisa, locale) })}
             </span>
             {event.registrationClosesAt ? (
               <span className="text-[12px] text-muted-foreground tabular">
-                closes {formatDhakaShort(event.registrationClosesAt)}
+                {t('closesAt', { when: formatDhakaShort(event.registrationClosesAt, locale) })}
               </span>
             ) : null}
           </div>

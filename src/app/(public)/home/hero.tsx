@@ -1,7 +1,8 @@
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
-import { HERO_EYEBROW, heroCopy } from '@/server/lib/hero-copy';
-import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
+import { heroCopy } from '@/server/lib/hero-copy';
+import { publicVenue } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
 import { PhaseChip } from '@/components/public/phase-chip';
 import { formatDhakaLong } from '@/lib/time';
@@ -26,7 +27,11 @@ const bandButton =
  */
 export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
   const { event, phase, offer, availableTotal, coverUrl } = featured;
-  const copy = heroCopy({ phase, event, offer, availableTotal, now });
+  const locale = useLocale();
+  const t = useTranslations('hero');
+  const shell = useTranslations('shell');
+  const venueText = useTranslations('venue');
+  const copy = heroCopy({ phase, event, offer, availableTotal, now, locale });
   // The event came through forPublic: a private venue is already gone.
   const venue = publicVenue(event);
   const href = `/events/${event.slug}`;
@@ -43,7 +48,7 @@ export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <p className="font-mono text-xs font-medium tracking-[0.14em] text-[#a8a29a] uppercase">
-                {HERO_EYEBROW}
+                {t('eyebrow')}
               </p>
               <PhaseChip
                 phase={phase}
@@ -60,17 +65,19 @@ export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
               {event.title}
             </h1>
             <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-base leading-[1.45] lg:text-lg">
-              <dt className="text-[#a8a29a]">When</dt>
-              <dd className="text-[#fbfaf8] tabular">{formatDhakaLong(event.startsAt)} (Dhaka)</dd>
+              <dt className="text-[#a8a29a]">{t('when')}</dt>
+              <dd className="text-[#fbfaf8] tabular">
+                {t('inDhaka', { when: formatDhakaLong(event.startsAt, locale) })}
+              </dd>
               {venue.text || venue.isPrivate ? (
                 <>
-                  <dt className="text-[#a8a29a]">Where</dt>
+                  <dt className="text-[#a8a29a]">{t('where')}</dt>
                   <dd className="flex flex-col gap-1 text-[#fbfaf8]">
                     {venue.text ? <span>{venue.text}</span> : null}
                     {venue.isPrivate ? (
                       <span className="inline-flex items-center gap-2 text-sm text-[#e6e1d6]">
                         <LockIcon className="shrink-0" />
-                        {VENUE_PRIVATE_NOTE}
+                        {venueText('privateNote')}
                       </span>
                     ) : null}
                   </dd>
@@ -110,10 +117,10 @@ export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
                   href={`${href}/register`}
                   className={`${bandButton} flex-auto border border-foreground bg-marigold px-7 text-foreground hover:bg-[#e2962c] lg:flex-none`}
                 >
-                  Get tickets
+                  {shell('getTickets')}
                 </Link>
                 <Link href={href} className={`${bandButton} px-4 text-[#fbfaf8] hover:bg-wash`}>
-                  Event details →
+                  {t('detailsArrow')}
                 </Link>
               </>
             ) : (
@@ -121,7 +128,7 @@ export function Hero({ featured, now }: { featured: HomeEvent; now: Date }) {
                 href={href}
                 className={`${bandButton} flex-auto border border-[#6b6558] px-7 text-[#fbfaf8] hover:border-[#e6e1d6] lg:flex-none`}
               >
-                Event details
+                {t('details')}
               </Link>
             )}
           </div>

@@ -1,3 +1,5 @@
+import { useLocale, useTranslations } from 'next-intl';
+import { plainDigits } from '@/server/lib/digits';
 import { type EventPhase, ticketAvailability } from '@/server/lib/event-phase';
 import type { TicketTypeRecord } from '@/server/repositories/ticket-types.repository';
 import { Money } from '@/components/money';
@@ -31,11 +33,13 @@ export function TicketList({
   highlightId,
   hideCounts = false,
 }: Props) {
+  const tr = useTranslations('ticketList');
+  const locale = useLocale();
   const showQuantities = phase === 'open' || phase === 'closing_soon' || phase === 'sold_out';
   const scarce = phase === 'closing_soon';
 
   if (ticketTypes.length === 0) {
-    return <p className="text-sm text-muted-foreground">Ticket details are coming soon.</p>;
+    return <p className="text-sm text-muted-foreground">{tr('comingSoon')}</p>;
   }
 
   return (
@@ -46,9 +50,9 @@ export function TicketList({
           showQuantities && (availability.kind === 'sold_out' || availability.kind === 'closed');
         const subtitle =
           availability.kind === 'closed' && t.salesEndsAt
-            ? `Sales ended ${formatDhakaLong(t.salesEndsAt)}`
+            ? tr('salesEnded', { when: formatDhakaLong(t.salesEndsAt, locale) })
             : availability.kind === 'not_started' && t.salesStartsAt
-              ? `On sale from ${formatDhakaLong(t.salesStartsAt)}`
+              ? tr('onSaleFrom', { when: formatDhakaLong(t.salesStartsAt, locale) })
               : null;
 
         return (
@@ -84,36 +88,37 @@ export function TicketList({
                     scarce || t.id === highlightId ? 'text-accent-ink' : 'text-[#17603b]',
                   )}
                 >
-                  {availability.count} left
+                  {tr('left', { n: plainDigits(availability.count, locale) })}
                 </div>
               ) : null}
               {compact && showQuantities && availability.kind === 'sold_out' ? (
-                <div className="mt-0.5 text-[13px] text-muted-foreground">Sold out</div>
+                <div className="mt-0.5 text-[13px] text-muted-foreground">{tr('soldOut')}</div>
               ) : null}
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
               <Money
                 paisa={t.pricePaisa}
+                locale={locale}
                 className={cn('font-heading font-bold', compact ? 'text-[18px]' : 'text-[17px]')}
               />
               {!compact && showQuantities ? (
                 availability.kind === 'left' ? (
                   hideCounts ? null : (
                     <Chip size="sm" tone={scarce ? 'warning' : 'success'}>
-                      {availability.count} left
+                      {tr('left', { n: plainDigits(availability.count, locale) })}
                     </Chip>
                   )
                 ) : availability.kind === 'sold_out' ? (
                   <Chip size="sm" tone="neutralStrong">
-                    Sold out
+                    {tr('soldOut')}
                   </Chip>
                 ) : availability.kind === 'closed' ? (
                   <Chip size="sm" tone="neutralStrong">
-                    Closed
+                    {tr('closed')}
                   </Chip>
                 ) : (
                   <Chip size="sm" tone="info">
-                    Not yet
+                    {tr('notYet')}
                   </Chip>
                 )
               ) : null}

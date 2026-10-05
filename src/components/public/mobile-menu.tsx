@@ -3,6 +3,7 @@
 import { Dialog } from '@base-ui/react/dialog';
 import Link from '@/i18n/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { type ReactNode, useEffect, useState } from 'react';
 import {
   type AccountLink,
@@ -44,6 +45,9 @@ export function MobileMenu({
   languageSwitch?: ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useTranslations('menu');
+  const shell = useTranslations('shell');
+  const nav = useTranslations('nav');
   const [open, setOpen] = useState(false);
 
   // Close on any navigation, including back/forward while the menu is open.
@@ -72,7 +76,7 @@ export function MobileMenu({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
-        aria-label="Open menu"
+        aria-label={t('open')}
         className={cn(
           button,
           'text-foreground group-data-[tone=dark]:text-[#fbfaf8] hover:bg-wash',
@@ -83,23 +87,26 @@ export function MobileMenu({
       <Dialog.Portal>
         {/* Portalled out of the header, so it repeats the chrome's focus-ring scope. */}
         <Dialog.Popup className="site-chrome fixed inset-0 z-50 flex h-dvh flex-col bg-background text-foreground print:hidden">
-          <Dialog.Title className="sr-only">Menu</Dialog.Title>
+          <Dialog.Title className="sr-only">{t('title')}</Dialog.Title>
           <div className="flex h-15 flex-none items-center justify-between border-b border-border px-4">
             <Link
               href="/"
               onClick={close}
-              aria-label="echoandaura, home"
+              aria-label={shell('home')}
               className="flex min-h-11 items-center gap-2.5 font-heading text-[19px] font-bold tracking-[-0.02em]"
             >
               <BrandMark />
               echoandaura
             </Link>
-            <Dialog.Close aria-label="Close menu" className={cn(button, 'hover:bg-secondary')}>
+            <Dialog.Close aria-label={t('close')} className={cn(button, 'hover:bg-secondary')}>
               <CloseIcon />
             </Dialog.Close>
           </div>
 
-          <nav aria-label="Site" className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
+          <nav
+            aria-label={shell('site')}
+            className="flex flex-1 flex-col overflow-y-auto px-4 py-2"
+          >
             {PUBLIC_NAV.map((item) => (
               <Link
                 key={item.href}
@@ -108,7 +115,7 @@ export function MobileMenu({
                 aria-current={isPublicNavActive(item, pathname) ? 'page' : undefined}
                 className="flex min-h-16 items-center justify-between gap-4 border-b border-border font-heading text-2xl font-semibold tracking-[-0.01em]"
               >
-                {item.label}
+                {nav(item.key)}
                 <span aria-hidden="true" className="text-xl text-muted-foreground">
                   →
                 </span>
@@ -120,7 +127,7 @@ export function MobileMenu({
               className="flex min-h-16 items-center gap-3 text-lg text-muted-foreground"
             >
               <PersonIcon size={20} />
-              {account.label}
+              {shell(account.key)}
             </Link>
             {languageSwitch ? (
               <div className="flex min-h-16 items-center text-lg">{languageSwitch}</div>
@@ -138,25 +145,23 @@ export function MobileMenu({
                   onClick={close}
                   className="flex h-13 items-center justify-center rounded-[8px] border border-foreground bg-marigold text-base font-semibold text-foreground hover:bg-[#e2962c]"
                 >
-                  Get tickets
+                  {shell('getTickets')}
                 </Link>
               </>
             ) : hasUpcoming ? (
               <>
-                <p className="text-sm text-muted-foreground">
-                  Tickets for the next show are not on sale.
-                </p>
+                <p className="text-sm text-muted-foreground">{t('notOnSale')}</p>
                 <Link
                   href="/events"
                   onClick={close}
                   className="flex h-13 items-center justify-center rounded-[8px] border border-border-strong bg-card text-base font-semibold hover:bg-secondary"
                 >
-                  See upcoming events
+                  {t('seeUpcoming')}
                 </Link>
               </>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">Nothing is on sale right now.</p>
+                <p className="text-sm text-muted-foreground">{t('nothingOnSale')}</p>
                 {facebook ? (
                   <a
                     href={facebook}
@@ -164,8 +169,8 @@ export function MobileMenu({
                     rel="noreferrer"
                     className="flex h-13 items-center justify-center rounded-[8px] border border-border-strong bg-card text-base font-semibold hover:bg-secondary"
                   >
-                    Follow on Facebook
-                    <span className="sr-only"> (opens in a new tab)</span>
+                    {t('followFacebook')}
+                    <span className="sr-only">{t('newTab')}</span>
                   </a>
                 ) : (
                   <Link
@@ -173,7 +178,7 @@ export function MobileMenu({
                     onClick={close}
                     className="flex h-13 items-center justify-center rounded-[8px] border border-border-strong bg-card text-base font-semibold hover:bg-secondary"
                   >
-                    See past events
+                    {t('seePast')}
                   </Link>
                 )}
               </>

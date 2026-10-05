@@ -1,7 +1,9 @@
-import { formatInTimeZone } from 'date-fns-tz';
+import { createTranslator } from 'use-intl/core';
+import { catalogue } from '@/i18n/catalogue';
+import type { Locale } from '@/i18n/locales';
 import type { EventPhase } from '@/server/lib/event-phase';
 import type { ChipTone } from '@/lib/status-labels';
-import { DHAKA_TZ } from '@/lib/time';
+import { formatDhakaDayMonth } from '@/lib/time';
 
 /**
  * One chip vocabulary for an event's sale phase (Canvas 6, N5), sitewide:
@@ -25,35 +27,38 @@ export interface PhaseChipOptions {
   /** From `offerSummary`: registration is open and the Early Bird is selling now. */
   earlyBirdOnSale: boolean;
   variant: 'hero' | 'card';
+  /** ADR-061: the page's language (English by default). */
+  locale?: Locale;
 }
 
 export function phaseChipLabel(
   phase: EventPhase,
-  { registrationOpensAt, earlyBirdOnSale, variant }: PhaseChipOptions,
+  { registrationOpensAt, earlyBirdOnSale, variant, locale = 'en' }: PhaseChipOptions,
 ): PhaseChipLabel {
+  const t = createTranslator({ locale, messages: catalogue(locale), namespace: 'chips' });
   switch (phase) {
     case 'open':
       return {
         tone: 'success',
-        label: earlyBirdOnSale ? 'Early Bird on sale' : 'On sale',
+        label: earlyBirdOnSale ? t('earlyBirdOnSale') : t('onSale'),
         dot: true,
       };
     case 'closing_soon':
-      return { tone: 'warning', label: 'Closing soon', dot: true };
+      return { tone: 'warning', label: t('closingSoon'), dot: true };
     case 'not_open':
       return {
         tone: 'info',
         label:
           variant === 'card' && registrationOpensAt
-            ? `On sale ${formatInTimeZone(registrationOpensAt, DHAKA_TZ, 'd MMM')}`
-            : 'Not on sale yet',
+            ? t('onSaleFrom', { date: formatDhakaDayMonth(registrationOpensAt, locale) })
+            : t('notOpen'),
         dot: false,
       };
     case 'sold_out':
-      return { tone: 'neutral', label: 'Sold out', dot: false };
+      return { tone: 'neutral', label: t('soldOut'), dot: false };
     case 'closed':
-      return { tone: 'neutral', label: 'Registration closed', dot: false };
+      return { tone: 'neutral', label: t('closed'), dot: false };
     case 'past':
-      return { tone: 'neutralStrong', label: 'Past', dot: false };
+      return { tone: 'neutralStrong', label: t('past'), dot: false };
   }
 }

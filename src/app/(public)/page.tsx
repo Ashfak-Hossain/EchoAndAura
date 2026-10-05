@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getLocale } from 'next-intl/server';
 import { publicVenue } from '@/server/lib/venue';
 import { SupportedBy } from '@/components/public/sponsors/supported-by';
 import { getSiteSettings } from '@/lib/settings';
@@ -20,8 +21,9 @@ import { UpcomingGrid } from './home/upcoming-grid';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { featured } = await loadHome();
+  const [{ featured }, locale] = await Promise.all([loadHome(), getLocale()]);
   return buildHomeMetadata({
+    locale,
     featured: featured
       ? {
           title: featured.event.title,

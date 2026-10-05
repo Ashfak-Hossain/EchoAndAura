@@ -82,6 +82,33 @@ export function formatDhakaShort(date: Date, locale: Locale = 'en'): string {
   return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM, h:mm a');
 }
 
+/** A Dhaka date without the time, e.g. "Sat 10 Oct 2026"; Bangla "শনিবার, ১০ অক্টোবর ২০২৬". */
+export function formatDhakaDate(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.weekday}বার, ${d.day} ${d.month} ${d.year}`;
+  }
+  return formatInTimeZone(date, DHAKA_TZ, 'EEE d MMM yyyy');
+}
+
+/** Day and month, e.g. "10 Oct"; Bangla "১০ অক্টোবর" (the "On sale 10 Oct" chip). */
+export function formatDhakaDayMonth(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.day} ${d.month}`;
+  }
+  return formatInTimeZone(date, DHAKA_TZ, 'd MMM');
+}
+
+/** Month and year, e.g. "Oct 2026"; Bangla "অক্টোবর ২০২৬" (past shows). */
+export function formatDhakaMonth(date: Date, locale: Locale = 'en'): string {
+  if (locale === 'bn') {
+    const d = banglaParts(date);
+    return `${d.month} ${d.year}`;
+  }
+  return formatInTimeZone(date, DHAKA_TZ, 'MMM yyyy');
+}
+
 /*
  * ADR-061: Bangla dates and times, by hand — `Intl` prints `৭:৩০ PM` (Latin
  * PM) and phones ship different data, so server and browser would differ.

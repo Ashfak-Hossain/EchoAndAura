@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 
 // A2 share row: Facebook, WhatsApp, Copy link — 44px secondary buttons.
 export function ShareRow({ url, title }: Props) {
+  const t = useTranslations('share');
   const [copied, setCopied] = useState(false);
   const encoded = encodeURIComponent(url);
   const btn =
@@ -25,15 +27,15 @@ export function ShareRow({ url, title }: Props) {
   }
 
   return (
-    <div className="flex gap-2 lg:gap-2.5" aria-label="Share">
+    <div className="flex gap-2 lg:gap-2.5" aria-label={t('label')}>
       <a
         href={`https://www.facebook.com/sharer/sharer.php?u=${encoded}`}
         target="_blank"
         rel="noreferrer"
         className={btn}
       >
-        <span className="lg:hidden">Facebook</span>
-        <span className="hidden lg:inline">Share on Facebook</span>
+        <span className="lg:hidden">{t('facebook')}</span>
+        <span className="hidden lg:inline">{t('shareFacebook')}</span>
       </a>
       <a
         href={`https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`}
@@ -44,7 +46,7 @@ export function ShareRow({ url, title }: Props) {
         WhatsApp
       </a>
       <button type="button" onClick={() => void copy()} className={btn} aria-live="polite">
-        {copied ? 'Copied' : 'Copy link'}
+        {copied ? t('copied') : t('copyLink')}
       </button>
     </div>
   );

@@ -1,4 +1,7 @@
 import type { Metadata } from 'next';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { localisedPath } from '@/i18n/locales';
+import { groupDigits } from '@/server/lib/digits';
 import { eventsService } from '@/server/container';
 import { REGISTRATION_OPENS_DAYS_BEFORE } from '@/server/lib/registration-window';
 import { ButtonLink } from '@/components/button-link';
@@ -7,11 +10,14 @@ import { EventCard } from '@/components/public/event-card';
 import { siteUrl } from '@/lib/env.public';
 import { cn } from '@/lib/utils';
 
-export const metadata: Metadata = {
-  title: 'Upcoming events',
-  description: 'Every echoandaura show on sale or coming up, soonest first.',
-  alternates: { canonical: `${siteUrl()}/events` },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [t, locale] = await Promise.all([getTranslations('events'), getLocale()]);
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+    alternates: { canonical: `${siteUrl()}${localisedPath('/events', locale)}` },
+  };
+}
 
 // Reads the database on every request: a show appears the moment it is
 // published and its chip follows the sale phase.
@@ -23,7 +29,11 @@ export const dynamic = 'force-dynamic';
  * the full list the home page's "Also upcoming" strip is capped from.
  */
 export default async function UpcomingEventsPage() {
-  const events = await eventsService.getUpcomingPage();
+  const [events, t, locale] = await Promise.all([
+    eventsService.getUpcomingPage(),
+    getTranslations('events'),
+    getLocale(),
+  ]);
   // A lone card lies on its side on desktop, as on the home page.
   const wide = events.length === 1;
 
@@ -37,13 +47,13 @@ export default async function UpcomingEventsPage() {
         />
         <div className="relative mx-auto flex w-full max-w-360 flex-col gap-3 px-4 py-10 lg:gap-4 lg:px-16 lg:py-16">
           <p className="text-[11px] font-medium tracking-[0.14em] text-[#a8a29a] uppercase lg:text-xs">
-            Upcoming
+            {t('eyebrow')}
           </p>
           <h1 className="font-heading text-[38px] leading-[1.02] font-extrabold tracking-tight lg:text-[56px]">
-            Upcoming events
+            {t('title')}
           </h1>
           <p className="max-w-130 text-[15px] leading-relaxed text-[#c9c3b7] lg:text-[17px]">
-            Every show on sale or coming up, soonest first.
+            {t('lead')}
           </p>
         </div>
       </section>
@@ -63,11 +73,13 @@ export default async function UpcomingEventsPage() {
         ) : (
           <EmptyState
             icon="♪"
-            title="No shows on sale right now"
-            description={`Tickets for a new show go on sale ${REGISTRATION_OPENS_DAYS_BEFORE} days before the date. Until then, see the shows we have already put on.`}
+            title={t('emptyTitle')}
+            description={t('emptyBody', {
+              days: groupDigits(REGISTRATION_OPENS_DAYS_BEFORE, locale),
+            })}
             action={
-              <ButtonLink href="/archive" variant="secondary">
-                See past events
+              <ButtonLink href={localisedPath('/archive', locale)} variant="secondary">
+                {t('seePast')}
               </ButtonLink>
             }
           />

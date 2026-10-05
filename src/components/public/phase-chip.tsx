@@ -1,5 +1,6 @@
 import type { EventPhase } from '@/server/lib/event-phase';
 import { Chip } from '@/components/status-chip';
+import { useLocale } from 'next-intl';
 import { phaseChipLabel } from '@/lib/phase-chip-label';
 
 /**
@@ -28,7 +29,8 @@ export function PhaseChip({
   size?: 'default' | 'sm';
   className?: string;
 }) {
-  const chip = phaseChipLabel(phase, { registrationOpensAt, earlyBirdOnSale, variant });
+  const locale = useLocale();
+  const chip = phaseChipLabel(phase, { registrationOpensAt, earlyBirdOnSale, variant, locale });
   const hero = variant === 'hero';
   return (
     <Chip tone={chip.tone} dot={!hero && chip.dot} size={size} className={className}>

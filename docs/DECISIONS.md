@@ -3876,6 +3876,28 @@ staying at `/`. The design proposed moving the public tree under
   English paths; the cookie redirect brings Bangla visitors back to `/bn`
   until then.
 
+**L2 addendum (2026-10-05):**
+
+- The public shell, home, events list, archive, event page, 404 and error
+  page read their text from `src/messages/{en,bn}.ts`. The English output
+  is unchanged; the existing unit and e2e suites pin it.
+- Pure helpers that build sentences (`hero-copy.ts`, `phase-chip-label.ts`,
+  `seo.ts`, the countdown label) take a `locale` and use `createTranslator`
+  from `use-intl/core` (a direct dependency), so `src/server/` still never
+  imports `next/*`.
+- Numbers: Bangla digits everywhere on `/bn`. A count that English printed
+  plain (`1439 days`) stays plain (`plainDigits`); grouped figures (money,
+  tickets left) use `groupDigits`, which groups in lakhs for Bangla.
+- Canonical URLs and `og:locale` follow the page's language (`bn_BD`);
+  hreflang waits for L5.
+- Unit tests render components through a vitest setup that backs next-intl
+  with the real catalogue (`tests/unit/setup/intl.ts`, `useTestLocale`).
+- The Bangla text is a **draft** by Claude, marked so in `bn.ts`, for Raj's
+  review before Bangla is switched on.
+- Not translated: names, venues, event titles and descriptions, ticket
+  type names, and the organizer's settings text (the verification promise).
+  Bangla event fields come in L5.
+
 **Rejected:** the `[locale]` segment (about 60 files moved, multiple root
 layouts, and the root 404 and global error rebuilt for little gain);
 next-intl's own middleware (it expects that segment).

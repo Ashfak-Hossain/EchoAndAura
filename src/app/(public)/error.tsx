@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
 import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/button';
@@ -19,6 +20,7 @@ export default function PublicError({
 }) {
   // A client-side error has no digest: make one reference (lazy state, so
   // it is computed once) and keep it across re-renders.
+  const t = useTranslations('errors');
   const [fallback] = useState(randomReference);
   const reference = errorReference(error.digest, () => fallback);
 
@@ -29,11 +31,18 @@ export default function PublicError({
   return (
     <ErrorPage
       reference={reference}
+      text={{
+        eyebrow: t('eyebrow'),
+        title: t('title'),
+        copy: t('copy'),
+        reference: t('reference'),
+        quote: t('quote'),
+      }}
       actions={
         <>
-          <Button onClick={reset}>Try again</Button>
+          <Button onClick={reset}>{t('tryAgain')}</Button>
           <Link href="/contact" className={buttonVariants({ variant: 'secondary' })}>
-            Message the organizer
+            {t('messageOrganizer')}
           </Link>
         </>
       }

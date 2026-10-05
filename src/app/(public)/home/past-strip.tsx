@@ -1,15 +1,16 @@
 import Image from 'next/image';
 import Link from '@/i18n/link';
-import { formatInTimeZone } from 'date-fns-tz';
+import { useLocale, useTranslations } from 'next-intl';
+import type { Locale } from '@/i18n/locales';
 import { venueCity } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';
-import { DHAKA_TZ } from '@/lib/time';
+import { formatDhakaMonth } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { SectionHeading, sectionLink } from './section-heading';
 
 /** A past show's meta, "Aug 2026 · Chattogram"; just the month when the venue names no city. */
-export function monthAndCity(event: HomeEvent['event']): string {
-  const month = formatInTimeZone(event.startsAt, DHAKA_TZ, 'MMM yyyy');
+export function monthAndCity(event: HomeEvent['event'], locale: Locale = 'en'): string {
+  const month = formatDhakaMonth(event.startsAt, locale);
   const city = venueCity(event);
   return city ? `${month} · ${city}` : month;
 }
@@ -24,6 +25,8 @@ const DESKTOP_PAST_ITEMS = 4;
  * of 240px items that runs to the screen's edges, snapping to the gutter.
  */
 export function PastStrip({ events }: { events: HomeEvent[] }) {
+  const t = useTranslations('home');
+  const locale = useLocale();
   if (events.length === 0) return null;
   return (
     <section aria-labelledby="past-heading" className="pt-16 lg:pt-24">
@@ -34,11 +37,11 @@ export function PastStrip({ events }: { events: HomeEvent[] }) {
             id="past-heading"
             aside={
               <Link href="/archive" className={sectionLink}>
-                See all past events →
+                {t('seeAllPast')}
               </Link>
             }
           >
-            Past events
+            {t('pastTitle')}
           </SectionHeading>
         </div>
         {/* The vertical padding keeps the focus ring inside the scroller's clip. */}
@@ -68,7 +71,9 @@ export function PastStrip({ events }: { events: HomeEvent[] }) {
                 <span className="text-base leading-[1.3] font-semibold text-pretty">
                   {event.title}
                 </span>
-                <span className="text-sm text-muted-foreground tabular">{monthAndCity(event)}</span>
+                <span className="text-sm text-muted-foreground tabular">
+                  {monthAndCity(event, locale)}
+                </span>
               </Link>
             </li>
           ))}

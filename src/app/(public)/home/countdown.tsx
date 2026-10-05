@@ -1,5 +1,10 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { createTranslator } from 'use-intl/core';
+import { catalogue } from '@/i18n/catalogue';
+import type { Locale } from '@/i18n/locales';
+import { toBanglaDigits } from '@/server/lib/digits';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -24,14 +29,29 @@ export function countdownParts(targetMs: number, nowMs: number): CountdownParts 
   return { days, hours, minutes: Math.floor(s / 60), seconds: s % 60 };
 }
 
-const count = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+/** Digits for the page's language (ADR-061). */
+const digits = (n: number | string, locale: Locale) =>
+  locale === 'bn' ? toBanglaDigits(String(n)) : String(n);
 
 /**
  * The timer's accessible name, to the minute: it changes once a minute,
  * so a screen reader that re-reads it never hears the seconds churn.
  */
-export function countdownLabel(label: string, { days, hours, minutes }: CountdownParts): string {
-  return `${label} ${count(days, 'day')}, ${count(hours, 'hour')}, ${count(minutes, 'minute')}`;
+export function countdownLabel(
+  label: string,
+  { days, hours, minutes }: CountdownParts,
+  locale: Locale = 'en',
+): string {
+  const t = createTranslator({ locale, messages: catalogue(locale), namespace: 'countdown' });
+  return t('a11y', {
+    label,
+    days,
+    hours,
+    minutes,
+    d: digits(days, locale),
+    h: digits(hours, locale),
+    m: digits(minutes, locale),
+  });
 }
 
 /** Before hydration: same cells, same size, no numbers — nothing jumps when they fill in. */
@@ -56,6 +76,8 @@ const RETRY_DELAYS_MS = [0, 3_000, 10_000, 30_000];
  */
 export function Countdown({ label, target }: { label: string; target: string }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations('countdown');
   const targetMs = new Date(target).getTime();
   const [now, setNow] = useState<number | null>(null);
   const attempts = useRef(0);
@@ -101,12 +123,24 @@ export function Countdown({ label, target }: { label: string; target: string }) 
   const cells = [
     {
       key: 'days',
-      value: parts ? String(parts.days) : PLACEHOLDER,
-      unit: parts?.days === 1 ? 'day' : 'days',
+      value: parts ? digits(parts.days, locale) : PLACEHOLDER,
+      unit: t('days', { count: parts?.days ?? 0 }),
     },
-    { key: 'hours', value: parts ? pad(parts.hours) : PLACEHOLDER, unit: 'hours' },
-    { key: 'minutes', value: parts ? pad(parts.minutes) : PLACEHOLDER, unit: 'minutes' },
-    { key: 'seconds', value: parts ? pad(parts.seconds) : PLACEHOLDER, unit: 'seconds' },
+    {
+      key: 'hours',
+      value: parts ? digits(pad(parts.hours), locale) : PLACEHOLDER,
+      unit: t('hours'),
+    },
+    {
+      key: 'minutes',
+      value: parts ? digits(pad(parts.minutes), locale) : PLACEHOLDER,
+      unit: t('minutes'),
+    },
+    {
+      key: 'seconds',
+      value: parts ? digits(pad(parts.seconds), locale) : PLACEHOLDER,
+      unit: t('seconds'),
+    },
   ];
 
   return (
@@ -115,7 +149,7 @@ export function Countdown({ label, target }: { label: string; target: string }) 
     <div
       role="timer"
       aria-live="off"
-      aria-label={parts ? countdownLabel(label, parts) : label}
+      aria-label={parts ? countdownLabel(label, parts, locale) : label}
       className="flex flex-col gap-2 print:hidden"
     >
       <span

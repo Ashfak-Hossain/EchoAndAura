@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import type { PublicSponsor } from '@/server/services/sponsors.service';
 import { SPONSOR_LOGO_BOXES } from '@/lib/sponsor-fit';
 import { cn } from '@/lib/utils';
@@ -20,13 +21,14 @@ const FOOTER_TILE_TONE = {
  * focus ring; hover is a border change, never a box-shadow (the ring owns it).
  */
 export function FooterSponsors({ sponsors }: { sponsors: PublicSponsor[] }) {
+  const t = useTranslations('sponsors');
   if (sponsors.length === 0) return null;
   const box = SPONSOR_LOGO_BOXES.footer;
   return (
     <div className="flex flex-col items-start gap-x-5 gap-y-3 border-t border-[#33302a] pt-6 lg:flex-row lg:items-center">
       {/* font-sans: the base layer sets every h2 in Archivo; this is an overline. */}
       <h2 className="shrink-0 font-sans text-xs font-medium tracking-[0.14em] text-[#a8a29a] uppercase">
-        Supported by
+        {t('supportedBy')}
       </h2>
       <ul className="flex flex-wrap gap-2">
         {sponsors.map((s) => (

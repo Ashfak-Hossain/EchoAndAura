@@ -8,7 +8,7 @@ import { publicLocales } from '@/i18n/locales';
 import { FooterSponsors } from '@/components/public/sponsors/footer-sponsors';
 import { getPublicSession } from '@/lib/session';
 import { getSiteSettings } from '@/lib/settings';
-import { SITE_NAME, siteUrl } from '@/lib/seo';
+import { SITE_NAME, ogLocale, siteUrl } from '@/lib/seo';
 import { getPublicSponsors } from '@/lib/sponsors';
 import { featuredCta, hasUpcomingShows } from './home/load';
 
@@ -19,10 +19,11 @@ import { featuredCta, hasUpcomingShows } from './home/load';
  * sets its own `openGraph` replaces this one whole, so pages without one
  * (About, FAQ, policies) share with these defaults and the generated image.
  */
-export function generateMetadata(): Metadata {
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
   return {
     metadataBase: new URL(siteUrl()),
-    openGraph: { type: 'website', siteName: SITE_NAME, locale: 'en_GB' },
+    openGraph: { type: 'website', siteName: SITE_NAME, locale: ogLocale(locale) },
     twitter: { card: 'summary_large_image' },
   };
 }

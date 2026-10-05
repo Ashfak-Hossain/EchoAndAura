@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from '@/i18n/link';
 import type { HomeEvent } from '@/server/services/events.service';
 import { BAND_COVER_SIZES, CoverPlaceholder, bandCover } from './cover-placeholder';
@@ -20,6 +21,8 @@ export function DormantHero({
   lastShow: HomeEvent | null;
   facebookUrl: string | null;
 }) {
+  const t = useTranslations('home');
+  const locale = useLocale();
   return (
     <section
       aria-labelledby="dormant-title"
@@ -29,17 +32,16 @@ export function DormantHero({
       <div className="mx-auto grid max-w-360 grid-cols-1 items-center gap-6 px-4 py-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16 lg:px-16 lg:py-24">
         <div className="flex min-w-0 flex-col gap-6">
           <p className="font-mono text-xs font-medium tracking-[0.14em] text-[#a8a29a] uppercase">
-            Between shows
+            {t('dormantEyebrow')}
           </p>
           <h1
             id="dormant-title"
             className="text-[30px] leading-[1.05] font-bold tracking-tight text-balance text-[#fbfaf8] lg:text-[48px]"
           >
-            No shows on sale right now.
+            {t('dormantTitle')}
           </h1>
           <p className="max-w-130 text-base leading-[1.6] text-pretty lg:text-lg">
-            echoandaura puts on a handful of small live-music nights a year in Dhaka and Chattogram.
-            New shows are posted on Facebook.
+            {t('dormantBody')}
           </p>
           {facebookUrl || lastShow ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -51,8 +53,8 @@ export function DormantHero({
                   className="inline-flex h-13 items-center gap-2 rounded-[8px] border border-[#fbfaf8] bg-[#fbfaf8] px-6 text-base font-semibold text-foreground hover:bg-[#e6e1d6]"
                 >
                   <FacebookIcon />
-                  Follow on Facebook
-                  <span className="sr-only"> (opens in a new tab)</span>
+                  {t('followFacebook')}
+                  <span className="sr-only">{t('newTab')}</span>
                 </a>
               ) : null}
               {lastShow ? (
@@ -61,7 +63,7 @@ export function DormantHero({
                   href="/archive"
                   className="inline-flex h-13 items-center rounded-[8px] px-4 text-base font-semibold text-[#fbfaf8] first:-ml-4 hover:bg-wash"
                 >
-                  See past events →
+                  {t('seePastArrow')}
                 </Link>
               ) : null}
             </div>
@@ -89,7 +91,7 @@ export function DormantHero({
               <CoverPlaceholder />
             )}
             <span className="text-sm text-[#a8a29a] tabular">
-              Last show · {monthAndCity(lastShow.event)}
+              {t('lastShow', { when: monthAndCity(lastShow.event, locale) })}
             </span>
             <span className="font-heading text-xl font-semibold text-[#fbfaf8] group-hover:underline">
               {lastShow.event.title}

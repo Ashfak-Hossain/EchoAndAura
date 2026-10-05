@@ -40,9 +40,12 @@ export function DatesInPlainWords({ event }: { event: EventRecord }) {
         </p>
       ) : null}
       {event.hideAvailability ? (
-        <p className="text-sm leading-relaxed text-[#4a4640]" data-testid="availability-hidden-summary">
-          Tickets left: <Strong>hidden</Strong> from the public — they see &ldquo;Sold out&rdquo; when
-          it is, never a count.
+        <p
+          className="text-sm leading-relaxed text-[#4a4640]"
+          data-testid="availability-hidden-summary"
+        >
+          Tickets left: <Strong>hidden</Strong> from the public — they see &ldquo;Sold out&rdquo;
+          when it is, never a count.
         </p>
       ) : null}
       <p className="border-t border-border pt-3 font-mono text-xs leading-relaxed text-muted-foreground">
