@@ -1,0 +1,9 @@
+# The script is safe to re-run ("apply" replaces its own chain), so a
+# restart just puts the current rules in place. No effect on the site
+# beyond a moment while the chain is rebuilt.
+- name: Re-apply origin lockdown
+  ansible.builtin.systemd_service:
+    name: origin-lockdown.service
+    state: restarted
+    daemon_reload: true
+  when: origin_lockdown_docker.stat.exists | default(false)

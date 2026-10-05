@@ -380,9 +380,14 @@ describe('doorService (Postgres)', () => {
         phoneOnFile: true,
       }),
     ]);
-    const json = JSON.stringify(hits);
-    expect(json).not.toContain('TKT-');
-    expect(json).not.toContain('678');
+    // No ticket code and no phone digits reach the door phone. The random
+    // ticketId is left out of the check: a UUID is hex and can contain
+    // "678" by chance (it did, in CI on 2026-10-06).
+    const shown = JSON.stringify(hits, (key, value: unknown) =>
+      key === 'ticketId' ? undefined : value,
+    );
+    expect(shown).not.toContain('TKT-');
+    expect(shown).not.toContain('678');
     const admit = (phoneLast3: string) =>
       door.scan(gateA, {
         scanId: randomUUID(),

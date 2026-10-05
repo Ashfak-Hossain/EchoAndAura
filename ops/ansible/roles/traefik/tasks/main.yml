@@ -1,0 +1,50 @@
+# Traefik runs inside Dokploy. Two pieces are ours:
+#
+# - the in-flight cap, a file in Traefik's dynamic folder (SERVER.md § 21):
+#   owned here; Traefik reloads it by itself;
+# - two hand edits in /etc/dokploy/traefik/traefik.yml (§ 13 trustedIPs,
+#   § 21 the middleware on websecure). Dokploy owns and rewrites that file,
+#   so Ansible never edits it: it only CHECKS the edits are still there
+#   and fails with the fix if a Dokploy settings change removed them.
+
+- name: Check whether Dokploy's Traefik is installed
+  ansible.builtin.stat:
+    path: /etc/dokploy/traefik/traefik.yml
+  register: traefik_config
+
+- name: Traefik is ours to check (Dokploy installed)
+  when: traefik_config.stat.exists
+  block:
+    - name: Cap requests in flight at 100 (429 beyond that)
+      ansible.builtin.copy:
+        src: inflight.yml
+        dest: /etc/dokploy/traefik/dynamic/inflight.yml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Read traefik.yml (Dokploy's file; never written here)
+      ansible.builtin.slurp:
+        path: /etc/dokploy/traefik/traefik.yml
+      register: traefik_yml
+
+    - name: Check § 13 and § 21 survived Dokploy
+      vars:
+        traefik_text: '{{ traefik_yml.content | b64decode }}'
+        traefik_lists: "{{ traefik_text | regex_findall('trustedIPs: \\[(.*?)\\]') }}"
+        # The ranges, from the one list we keep (origin_lockdown's script).
+        traefik_cloudflare: >-
+          {{ lookup('ansible.builtin.file', role_path ~ '/../origin_lockdown/files/origin-lockdown')
+             | regex_search('# BEGIN CLOUDFLARE RANGES[\s\S]*?# END CLOUDFLARE RANGES')
+             | regex_findall('[0-9a-f:.]+/[0-9]+') | sort }}
+      ansible.builtin.assert:
+        that:
+          - traefik_lists | length == 2
+          - traefik_lists | map('regex_findall', '[0-9a-f:.]+/[0-9]+') | map('sort') | unique | list == [traefik_cloudflare]
+          - traefik_text | regex_findall('inflight-cap@file') | length == 1
+        fail_msg: >-
+          /etc/dokploy/traefik/traefik.yml lost a hand edit (a Dokploy web
+          server settings change rewrites it). Restore the trustedIPs on web
+          and websecure (SERVER.md § 13) and/or the inflight-cap@file
+          middleware on websecure (§ 21), then: docker restart dokploy-traefik.
+        quiet: true

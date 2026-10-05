@@ -18,3 +18,9 @@
       tags: [sysctl]
     - role: apt_clean
       tags: [apt]
+    - role: origin_lockdown
+      tags: [origin_lockdown]
+    - role: disk_alert
+      tags: [disk_alert]
+    - role: traefik
+      tags: [traefik]

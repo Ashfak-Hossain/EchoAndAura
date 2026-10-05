@@ -1,0 +1,65 @@
+# SERVER.md § 18: hourly, a Telegram message when / is above 80 %, at most
+# once a day while it stays high, and one when it recovers. Something on
+# the server itself has to watch the disk: the outside checks (Better
+# Stack) only see the site answering.
+
+- name: Install the disk check
+  ansible.builtin.copy:
+    src: disk-alert
+    dest: /usr/local/sbin/disk-alert
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install its service and hourly timer
+  ansible.builtin.copy:
+    src: '{{ item }}'
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [disk-alert.service, disk-alert.timer]
+
+- name: Create the folders for its settings and its "already alerted" stamp
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: [/etc/echoandaura, /var/lib/echoandaura]
+
+# Production must never get placeholder values written over the real ones.
+- name: Make sure the Telegram settings are in .env
+  ansible.builtin.assert:
+    that:
+      - alerts_telegram_bot_token | length > 0
+      - alerts_telegram_chat_id | length > 0
+    fail_msg: >-
+      ALERTS_TELEGRAM_BOT_TOKEN and ALERTS_TELEGRAM_CHAT_ID are missing from
+      .env (Bitwarden: Telegram alert bot). Add them, or skip this role with
+      --skip-tags alerts_secret.
+    quiet: true
+  tags: [alerts_secret]
+
+# no_log + diff off: the bot token never reaches the screen, CI or logs,
+# not even in a --diff check.
+- name: Write the Telegram settings (root only)
+  ansible.builtin.copy:
+    dest: /etc/echoandaura/alerts.env
+    content: |
+      TELEGRAM_BOT_TOKEN={{ alerts_telegram_bot_token }}
+      TELEGRAM_CHAT_ID={{ alerts_telegram_chat_id }}
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  diff: false
+  tags: [alerts_secret]
+
+- name: Check the disk every hour
+  ansible.builtin.systemd_service:
+    name: disk-alert.timer
+    enabled: true
+    state: started
+    daemon_reload: true
