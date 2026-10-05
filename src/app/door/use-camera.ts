@@ -132,6 +132,11 @@ export function useCamera(onCode: (text: string) => void) {
   const [readMs, setReadMs] = useState<number | null>(null);
   /** Which reader runs: the browser's own, or the WebAssembly fallback. */
   const [decoder, setDecoder] = useState<QrDetector['kind'] | null>(null);
+  /** For the pre-doors test: which way the camera faces, and whether it keeps refocusing. */
+  const [lens, setLens] = useState<{ facing: 'back' | 'front' | null; focused: boolean }>({
+    facing: null,
+    focused: false,
+  });
   /** Null until started; false = asked for, refused (the screen may sleep). */
   const [awake, setAwake] = useState<boolean | null>(null);
 
@@ -309,9 +314,18 @@ export function useCamera(onCode: (text: string) => void) {
         setTorch({ available: caps.torch === true, on: false });
         setZoom({ available: (caps.zoom?.max ?? 1) >= 2, level: 1 });
         // Keep refocusing as codes come and go at different distances.
+        const facingMode = track.getSettings().facingMode;
+        const facing =
+          facingMode === 'environment' ? 'back' : facingMode === 'user' ? 'front' : null;
+        setLens({ facing, focused: false });
         if (caps.focusMode?.includes('continuous')) {
           const advanced: CameraConstraint[] = [{ focusMode: 'continuous' }];
-          void track.applyConstraints({ advanced }).catch(() => {});
+          void track
+            .applyConstraints({ advanced })
+            .then(() => {
+              if (generation.current === gen) setLens({ facing, focused: true });
+            })
+            .catch(() => {});
         }
       }
       const el = video.current;
@@ -421,6 +435,7 @@ export function useCamera(onCode: (text: string) => void) {
     zoom,
     readMs,
     decoder,
+    lens,
     cameras,
     awake,
     start,

@@ -426,6 +426,8 @@ tickets, and messages to the organizer.
 
 **Before doors open**
 
+- [ ] On every gate phone: open the gate pass, tap **Run pre-doors test**,
+      and fix each row until it shows **READY** (ADR-059).
 - [ ] Dokploy → the Postgres service → Backups → the R2 nightly row →
       **Run** by hand, so a restore that night starts from now.
 

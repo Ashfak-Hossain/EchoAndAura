@@ -78,9 +78,37 @@ test('the camera reads a real ticket QR and admits it, with either reader', asyn
           delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
         });
       }
+      // Chromium reports this machine's real battery: a laptop at 49 % and
+      // unplugged would fail the pre-doors test's battery row. Fix it here.
+      await context.addInitScript(() => {
+        const battery = Object.assign(new EventTarget(), { level: 1, charging: true });
+        Object.defineProperty(navigator, 'getBattery', { value: () => Promise.resolve(battery) });
+      });
       const phone = await context.newPage();
       await phone.goto(`/door#code=${gate}`);
-      await phone.getByRole('button', { name: 'Start scanning' }).click();
+      if (zxing) {
+        await phone.getByRole('button', { name: 'Start scanning' }).click();
+      } else {
+        // ADR-059: the pre-doors test, on real frames. The code in view is
+        // not admitted while the test covers the viewfinder.
+        await phone.getByRole('button', { name: 'Run pre-doors test' }).click();
+        const selfTest = phone.getByTestId('door-selftest');
+        for (const key of ['camera', 'speed', 'list', 'battery', 'offline']) {
+          await expect(selfTest.locator(`[data-check="${key}"]`)).toHaveAttribute(
+            'data-level',
+            'ok',
+            { timeout: 15_000 },
+          );
+        }
+        const sound = selfTest.locator('[data-check="sound"]');
+        await expect(sound).toHaveAttribute('data-level', 'warn');
+        await expect(selfTest).toHaveAttribute('data-ready', 'false');
+        await expect(phone.getByTestId('door-count')).toHaveText('0 / 2 in');
+        await sound.getByRole('button', { name: 'Test' }).click();
+        await sound.getByRole('button', { name: 'Heard it' }).click();
+        await expect(selfTest).toHaveAttribute('data-ready', 'true');
+        await selfTest.getByRole('button', { name: 'Start scanning' }).click();
+      }
 
       // One condition, polled as a whole: a green clears itself in 0.8 s.
       const admitted = phone.locator('[data-testid="door-result"][data-result="admitted"]', {
