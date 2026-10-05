@@ -11,7 +11,9 @@ principals, three budgets, one send-only key, one upload-only key, and
 one SNS topic that tells the developer about bounces and complaints.
 The SES side was set up once by hand and this page is the record
 (`pnpm infra:check` proves it is still true); the S3 side is
-CloudFormation, `ops/aws/offsite-backups.yaml`.
+CloudFormation, `ops/aws/offsite-backups.yaml`. Both are moving into
+Terraform (ADR-062, `ops/terraform/aws/`); its state lives in one more
+bucket, [Terraform state](#terraform-state).
 
 How email flows through SES, and what to do when a message does not
 arrive, is in [../systems/EMAIL.md](../systems/EMAIL.md). DNS records that
@@ -116,6 +118,25 @@ reports failure. **Rotate the key:** create a second key on the user →
 Dokploy → Settings → S3 Destinations → `aws-offsite` → new key → **Test**
 → run the backup by hand → deactivate, then delete the old key →
 Bitwarden.
+
+## Terraform state
+
+Stack `echoandaura-terraform-state` (`ap-south-1`), from
+`ops/aws/terraform-state.yaml` (ADR-062). Created 2026-10-05. This is the
+one bucket Terraform can't create itself, because its own state is kept here.
+
+| Item      | Value                                                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Bucket    | `echoandaura-terraform-state`: private (all four public-access blocks), SSE-S3, versioning on, HTTPS only, kept if the stack is deleted |
+| Files     | `aws/terraform.tfstate`, `cloudflare/terraform.tfstate`, plus a `.tflock` beside each while an apply runs                               |
+| Lifecycle | old versions expire after **365 days**; the current one never does; unfinished uploads after 1 day                                      |
+| Access    | `ash-admin` only (profile `echoandaura`). No key on any server: Terraform runs from a laptop                                            |
+| Cost      | a few kB; well under a cent                                                                                                             |
+
+**A bad apply?** Every write is a new version: S3 → the bucket → the
+file → Versions → download the one before, then fix forward in code
+(docs/infra/TERRAFORM.md). Never delete this bucket; Terraform would lose
+track of everything it manages.
 
 ## Budgets and cost
 
@@ -374,6 +395,8 @@ aws sns get-topic-attributes --topic-arn "arn:aws:sns:ap-south-1:${AWS_ACCOUNT_I
 aws budgets describe-budgets --account-id "$AWS_ACCOUNT_ID" --query 'Budgets[].BudgetName'
 aws s3api get-bucket-versioning --bucket echoandaura-offsite-backups      # Enabled
 aws iam list-access-keys --user-name echoandaura-offsite-backups-dokploy  # exactly one Active
+aws s3api get-bucket-versioning --bucket echoandaura-terraform-state      # Enabled
+aws s3api get-public-access-block --bucket echoandaura-terraform-state    # all four true
 pnpm email:test <verified address>                            # "SES accepted the message: …"
 ```
 
@@ -386,3 +409,4 @@ pnpm email:test <verified address>                            # "SES accepted th
 | 2026-09-21 | Production access **denied** (generic refusal, account one day old, no site at the domain). Reopen after the domain is live — runbook above                                                                                                                                                               |
 | 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site                                                                                                     |
 | 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both |
+| 2026-10-05 | Terraform state (ADR-062): stack `echoandaura-terraform-state` from `ops/aws/terraform-state.yaml`. Checked: CREATE_COMPLETE, versioning Enabled, 4 public-access blocks on, SSE AES256, HTTPS-only policy, `ap-south-1`                                                                                  |

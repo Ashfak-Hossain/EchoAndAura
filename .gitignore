@@ -59,3 +59,11 @@ dist/
 # Wrangler (gate relay, ADR-058): local Durable Object state and builds
 .wrangler/
 .dev.vars*
+
+# Terraform (ADR-062): state lives in S3, never here; providers download per machine.
+# .terraform.lock.hcl IS committed (pins provider checksums).
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

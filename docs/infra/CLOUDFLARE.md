@@ -1,6 +1,6 @@
 # Cloudflare
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-02
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-05
 
 Cloudflare holds the **domain** (registrar + authoritative DNS), receives
 mail for `hello@` (**Email Routing**), holds event cover images
@@ -27,6 +27,12 @@ log shows who changed what. Both logins have 2FA.
 
 ## DNS — the authoritative record list
 
+**Terraform owns the records marked _TF_** (`ops/terraform/cloudflare/dns.tf`,
+ADR-062, since 2026-10-05). Change those in code, never in the dashboard;
+see [TERRAFORM.md](TERRAFORM.md). The rest are read-only in Cloudflare:
+another Cloudflare product made them and edits them (Email Routing, Email
+Service, R2, the relay Worker).
+
 All mail records are **DNS only** (grey cloud). Proxying a DKIM CNAME or
 an MX host breaks it silently. The app's own `A`/`AAAA` records arrive
 with deployment (Phase 6) and are proxied, like `media` (R2).
@@ -37,23 +43,26 @@ Cloudflare's challenges off `deploy`'s `/api/*`, where GitHub's deploy
 call goes ([SERVER.md § 20](SERVER.md)). Traefik still renews its Let's
 Encrypt certificate: the HTTP challenge arrives through Cloudflare.
 
-| Type   | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                            |
-| ------ | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| CNAME  | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                               |
-| CNAME  | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (2 of 3)                                                                                                                     |
-| CNAME  | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`                  | DNS only | SES Easy DKIM (3 of 3)                                                                                                                     |
-| TXT    | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`     | —        | SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                               |
-| TXT    | `@`                                           | `google-site-verification=S3DYisjK96_Pj68G62eYa0CZZ3q8k8pM1_e4FaRmDWU` | —        | Google Search Console owns the domain property (ADR-042). Bing imported the site from it. **Deleting it drops Search Console access**      |
-| TXT    | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`                   | —        | DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                              |
-| MX     | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Routing — inbound mail                                                                                                    |
-| MX     | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | SES custom MAIL FROM — bounces return to SES                                                                                               |
-| TXT    | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                          |
-| MX     | `cf-bounce`                                   | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Service bounces (ADR-057); added by Onboard Domain                                                                        |
-| TXT    | `cf-bounce`                                   | `v=spf1 include:_spf.mx.cloudflare.net ~all`                           | —        | SPF for Cloudflare's envelope sender (aligns with the From domain)                                                                         |
-| TXT    | `cf-bounce._domainkey`                        | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…` (2048-bit key)            | —        | Cloudflare Email Service DKIM — signs outgoing mail as `echoandaura.com`                                                                   |
-| A/AAAA | `@`, `www`                                    | _not yet_ — Phase 6                                                    | Proxied  | the app                                                                                                                                    |
-| A      | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                      |
-| R2     | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27 |
+| Type  | Name (relative)                               | Content                                                                | Proxy    | Owner / purpose                                                                                                                               |
+| ----- | --------------------------------------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| CNAME | `tiqho3f6k6gqjjucwewakfvqyjmiu46q._domainkey` | `tiqho3f6k6gqjjucwewakfvqyjmiu46q.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (1 of 3) — signs outgoing mail                                                                                          |
+| CNAME | `bjtddvusgm23hci2bzarxllb7py7l7kk._domainkey` | `bjtddvusgm23hci2bzarxllb7py7l7kk.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (2 of 3)                                                                                                                |
+| CNAME | `tsrr3pkudaqmrgu7hdfft4camf656gro._domainkey` | `tsrr3pkudaqmrgu7hdfft4camf656gro.dkim.amazonses.com`                  | DNS only | **TF**. SES Easy DKIM (3 of 3)                                                                                                                |
+| TXT   | `@`                                           | `v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`     | —        | **TF**. SPF for the root domain: Cloudflare Routing **and** SES. **One SPF record only** — merge, never add a second                          |
+| TXT   | `@`                                           | `google-site-verification=S3DYisjK96_Pj68G62eYa0CZZ3q8k8pM1_e4FaRmDWU` | —        | **TF**. Google Search Console owns the domain property (ADR-042). Bing imported the site from it. **Deleting it drops Search Console access** |
+| TXT   | `_dmarc`                                      | `v=DMARC1; p=none; rua=mailto:hello@echoandaura.com`                   | —        | **TF**. DMARC policy; reports to `hello@`. Tighten to `p=quarantine` after a clean week (see runbook)                                         |
+| MX    | `@`                                           | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Routing — inbound mail                                                                                                       |
+| MX    | `mail`                                        | `feedback-smtp.ap-south-1.amazonses.com` (10)                          | —        | **TF**. SES custom MAIL FROM — bounces return to SES                                                                                          |
+| TXT   | `mail`                                        | `v=spf1 include:amazonses.com ~all`                                    | —        | **TF**. SPF for the MAIL FROM subdomain (aligns SPF with the From domain)                                                                     |
+| MX    | `cf-bounce`                                   | `route1.mx.cloudflare.net` (51), `route2…` (65), `route3…` (78)        | —        | Cloudflare Email Service bounces (ADR-057); added by Onboard Domain                                                                           |
+| TXT   | `cf-bounce`                                   | `v=spf1 include:_spf.mx.cloudflare.net ~all`                           | —        | SPF for Cloudflare's envelope sender (aligns with the From domain)                                                                            |
+| TXT   | `cf-bounce._domainkey`                        | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…` (2048-bit key)            | —        | Cloudflare Email Service DKIM — signs outgoing mail as `echoandaura.com`                                                                      |
+| TXT   | `cf2024-1._domainkey`                         | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqh…`                           | —        | Cloudflare's own DKIM key for mail it sends or forwards as `echoandaura.com`; read-only, Cloudflare owns it                                   |
+| A     | `@`                                           | `160.25.226.166`                                                       | Proxied  | **TF**. The site. Proxied: the origin answers Cloudflare only (ADR-045)                                                                       |
+| CNAME | `www`                                         | `echoandaura.com`                                                      | Proxied  | **TF**. `www` reaches the same site                                                                                                           |
+| A     | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | **TF**. the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                 |
+| R2    | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27    |
+| AAAA  | `relay`                                       | `100::` (a Worker route)                                               | Proxied  | the gate relay Worker (ADR-058). Created by `wrangler`'s custom domain; read-only here                                                        |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
 leave it.
@@ -514,3 +523,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-04 | Email Sending: Onboard Domain `echoandaura.com` (top level, no subdomain): `cf-bounce` MX ×3, SPF, DKIM added; the proposed `_dmarc` `p=reject` did **not** replace ours (`p=none` + `rua` kept, checked on the authoritative NS). Reputation Healthy, sending Enabled (ADR-057)                                                                                                                                                                                                   |
 | 2026-10-05 | Email Sending live: account API token `echoandaura-worker-email` (Email Sending Edit, IPs `160.25.226.166` + `2001:df3:ad40::/48`). First send (sign-in link to a never-SES-verified Gmail): delivered in 12 s, SPF/DKIM (`echoandaura.com`)/DMARC **PASS**; landed in spam (new sending reputation)                                                                                                                                                                               |
 | 2026-10-05 | Worker `echoandaura-relay` deployed (`pnpm relay:deploy`), custom domain `relay.echoandaura.com`, secret `RELAY_SECRET` set; `/health` ok, a connection without a pass refused (401)                                                                                                                                                                                                                                                                                               |
+| 2026-10-05 | DNS under Terraform (ADR-062): 11 records imported into `ops/terraform/cloudflare/dns.tf` with no change (plan: 11 imported, 0 changed); then `plan` = No changes. Table corrected: `@` A and `www` CNAME existed since Phase 6; `relay` AAAA and `cf2024-1._domainkey` added                                                                                                                                                                                                      |
