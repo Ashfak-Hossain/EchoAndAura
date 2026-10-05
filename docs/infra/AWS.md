@@ -152,15 +152,50 @@ narrow: the send-only worker key, and the backup key, which can only add
 files to one bucket (anything it adds expires in 35 days). Neither can
 create billable resources.
 
-| Budget (Billing → Budgets)          | Limit / month | Alerts                              | Action                                                                  |
-| ----------------------------------- | ------------- | ----------------------------------- | ----------------------------------------------------------------------- |
-| `Echo And Aura Zero-Spend Budget`   | $1            | any spend at all → email            | —                                                                       |
-| `Echo and Aura Monthly Cost Budget` | $2            | 85 % actual, 100 % forecast → email | —                                                                       |
-| `Echo and Aura hard stop budget`    | $2            | 100 % actual → email                | attaches `AWSDenyAll` to `echoandaura-worker` (automatic, via the role) |
+**Terraform** (`budgets.tf`, ADR-062): the three budgets, the hard-stop
+action and its role `BudgetsActionsRole`, the anomaly monitor and its
+subscription. Change the numbers there and apply.
 
-Plus **Cost Anomaly Detection**, monitor `Default-Services-Monitor`, and
-Free Tier / CloudWatch billing alerts in Billing preferences. Alerts go to
-the billing alternate contact.
+| Budget (Billing → Budgets)          | Limit / month | Alerts                                            | Action                                                                  |
+| ----------------------------------- | ------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `Echo And Aura Zero-Spend Budget`   | $1            | actual spend > **$0.25** → email                  | —                                                                       |
+| `Echo and Aura Monthly Cost Budget` | **$5**        | 85 % actual, 100 % actual, 100 % forecast → email | —                                                                       |
+| `Echo and Aura hard stop budget`    | **$10**       | 100 % actual → email                              | attaches `AWSDenyAll` to `echoandaura-worker` (automatic, via the role) |
+
+**Why these numbers** (raised 2026-10-06 from $0.01 / $2 / $2): normal
+spend is a fraction of a cent (S3 backups and state, SNS). An alert at a
+cent would ring most months for tax and S3 requests, and ignored alarms
+are worse than none. The hard stop blocks **only** the SES worker key: not
+the site, not Cloudflare Email Service (the primary mailer), not the S3
+backups. At $0.10 per 1,000 emails, $10 is about 100,000 SES emails, about
+5x any real event, so a night on the SES rollback never trips it; a stolen
+key still costs at most about $10. Budget data updates a few times a day,
+so the stop fires hours late: a seatbelt, not a brake.
+
+**The action's status** (Budgets → the hard-stop budget → Actions):
+_Standby_ = armed, below the limit: the normal state. _Execution success_
+= it fired; the worker key is blocked until you undo it (runbook below).
+_Failure_ = it tried and couldn't (role broken); you get an email.
+
+**Not covered by the hard stop: the backup upload key.** A thief could
+upload junk (about $25 per TB per month; it expires in 35 days). Adding
+that user to the hard stop would also stop the backups, perhaps mid-sale.
+The $5 alerts catch it; respond by rotating the key (S3 off-site backups).
+
+Plus **Cost Anomaly Detection**, monitor `Default-Services-Monitor`, with a
+daily digest when an anomaly costs **≥ $100 and ≥ 40 %** above normal (the
+console's defaults): a net for a large surprise; the budgets fire long
+before it. And Free Tier / CloudWatch billing alerts in Billing
+preferences.
+
+**Who is told:** budget alerts and the hard stop go to two addresses, the
+developer's Gmail and a second contact (`TF_VAR_alerts_developer_email`,
+`TF_VAR_alerts_account_email` in `.env`; not in the repo). The anomaly
+digest goes to the second one. **Each address must be verified**: AWS
+Budgets enforces email verification (since 2026-10), and an unverified
+address silently gets nothing. A new or re-added address gets a "verify"
+email from AWS Budgets; click it (check spam). Changing an alert in
+Terraform can re-add the addresses and ask again. Verified 2026-10-06.
 
 SNS (bounce and complaint notifications only) is free at this volume: the
 first 1,000 email notifications and the first 1,000,000 requests each month
@@ -310,9 +345,12 @@ budget → Edit → notification recipients. Update all three budgets.
 
 ### A budget alert fired
 
-1. Billing → **Bills** → current month → expand the service. If it is
-   anything other than _Simple Email Service_, a resource exists that this
-   document does not know about: Console → Resource Explorer (or the
+1. Billing → **Bills** → current month → expand the service. Expected:
+   _Simple Email Service_, and cents of _S3_ (backups, Terraform state).
+   S3 far above cents: list `echoandaura-offsite-backups` for files
+   Dokploy didn't write; if found, the backup key leaked → rotate it
+   ([S3 off-site backups](#s3-off-site-backups)). Anything else means a
+   resource exists that this document does not know about: Console → Resource Explorer (or the
    service's console in `ap-south-1` and `us-east-1`) and delete it.
 2. If it _is_ SES: SES → Account dashboard → Sending statistics. Volume
    far above the app's audit trail (`order_events` rows with
@@ -426,3 +464,5 @@ pnpm email:test <verified address>                            # "SES accepted th
 | 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both |
 | 2026-10-05 | Terraform state (ADR-062): stack `echoandaura-terraform-state` from `ops/aws/terraform-state.yaml`. Checked: CREATE_COMPLETE, versioning Enabled, 4 public-access blocks on, SSE AES256, HTTPS-only policy, `ap-south-1`                                                                                  |
 | 2026-10-05 | SES, SNS feedback and the worker user under Terraform (ADR-062, `ses.tf`, `iam.tf`): 10 imported; only change was Terraform-side (subscription address marked sensitive, value unchanged; two Terraform-only defaults). Plan = No changes. Account SES settings and the Gmail identities stay manual      |
+| 2026-10-05 | Budgets under Terraform (ADR-062, `budgets.tf`): 3 budgets, hard-stop action, `BudgetsActionsRole` + attachment, anomaly monitor + subscription; 8 imported, 0 changed. The monthly budget's third alert (100 % actual) recorded                                                                          |
+| 2026-10-06 | Limits raised: zero-spend alert > $0.25, monthly $5, hard stop $10 (see Budgets and cost). AWS Budgets email verification: both alert addresses verified. Action status Standby                                                                                                                           |

@@ -61,7 +61,11 @@ checksums. `.terraform/` is a local download cache and is git-ignored.
    TF_VAR_access_developer_emails='["<developer>"]'
    ```
 4. AWS: in `.env`, `TF_VAR_ses_feedback_email` (the developer's Gmail,
-   which receives SES bounces and complaints).
+   which receives SES bounces and complaints), and the budget alert
+   addresses `TF_VAR_alerts_developer_email`, `TF_VAR_alerts_account_email`.
+   These two are not marked sensitive (marking them would rewrite every
+   live alert once), so a plan can print them: never paste such a plan in
+   public.
 5. `pnpm tf:aws init` and `pnpm tf:cloudflare init`: downloads the
    providers and connects to the state. Run again after a version change.
 
@@ -86,14 +90,15 @@ permissions keeps its value, so `.env` does not change.
 
 ## What is managed
 
-| Folder        | File        | Resources                                                                                                                            | Since      |
-| ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `cloudflare/` | `dns.tf`    | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                  | 2026-10-05 |
-| `cloudflare/` | `rules.tf`  | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                | 2026-10-05 |
-| `cloudflare/` | `zone.tf`   | email obfuscation (off), DNSSEC (on)                                                                                                 | 2026-10-05 |
-| `cloudflare/` | `access.tf` | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                      | 2026-10-05 |
-| `aws/`        | `ses.tf`    | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription | 2026-10-05 |
-| `aws/`        | `iam.tf`    | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                             | 2026-10-05 |
+| Folder        | File         | Resources                                                                                                                            | Since      |
+| ------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `cloudflare/` | `dns.tf`     | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                  | 2026-10-05 |
+| `cloudflare/` | `rules.tf`   | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                | 2026-10-05 |
+| `cloudflare/` | `zone.tf`    | email obfuscation (off), DNSSEC (on)                                                                                                 | 2026-10-05 |
+| `cloudflare/` | `access.tf`  | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                      | 2026-10-05 |
+| `aws/`        | `ses.tf`     | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription | 2026-10-05 |
+| `aws/`        | `iam.tf`     | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                             | 2026-10-05 |
+| `aws/`        | `budgets.tf` | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                  | 2026-10-05 |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -143,3 +148,5 @@ changes** once they match.
 | 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                             |
 | 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed |
 | 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                           |
+| 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                          |
+| 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                 |
