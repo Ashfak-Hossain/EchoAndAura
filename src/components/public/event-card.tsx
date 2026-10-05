@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { formatBDT } from '@/server/lib/money';
 import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';

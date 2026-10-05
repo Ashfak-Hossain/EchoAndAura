@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { eventsService } from '@/server/container';

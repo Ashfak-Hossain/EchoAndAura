@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { formatInTimeZone } from 'date-fns-tz';
 import { BrandMark } from '@/components/public/brand-mark';
 import { ContactCard } from '@/components/public/help/contact';

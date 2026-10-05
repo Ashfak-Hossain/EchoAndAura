@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { ContactChannels } from '@/components/public/help/contact';
 import { CodeRef, HelpHeader, HelpMain } from '@/components/public/help/layout';
 import { REPLY_PROMISE } from '@/content/site';

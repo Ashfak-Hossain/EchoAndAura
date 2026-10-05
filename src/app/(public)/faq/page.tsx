@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { FaqAccordion } from '@/components/public/faq-accordion';
 import { TocSpy } from '@/components/public/help/client';
 import { ContactCard } from '@/components/public/help/contact';

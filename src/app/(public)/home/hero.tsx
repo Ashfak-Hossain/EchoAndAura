@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { HERO_EYEBROW, heroCopy } from '@/server/lib/hero-copy';
 import { VENUE_PRIVATE_NOTE, publicVenue } from '@/server/lib/venue';
 import type { HomeEvent } from '@/server/services/events.service';

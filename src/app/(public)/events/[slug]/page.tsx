@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { notFound } from 'next/navigation';
 import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';

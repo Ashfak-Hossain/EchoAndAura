@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import Link from '@/i18n/link';
+import { LanguageSwitch } from './language-switch';
 import type { ReactNode } from 'react';
 import { formatInTimeZone } from 'date-fns-tz';
 import { type AccountLink, type FeaturedCta, accountLink } from '@/lib/public-nav';
@@ -25,6 +26,7 @@ export function SiteShell({
   hasUpcoming = false,
   settings,
   sponsorRow,
+  bangla = false,
 }: {
   children: ReactNode;
   /** Buyer session, when signed in; the admin never uses the public chrome. */
@@ -37,6 +39,8 @@ export function SiteShell({
   settings: FooterSettings;
   /** The footer's "Supported by" row, rendered between the columns and the legal line. */
   sponsorRow?: ReactNode;
+  /** ADR-061: Bangla is switched on (`PUBLIC_LOCALES`): show the language switch. */
+  bangla?: boolean;
 }) {
   const account = accountLink(Boolean(session));
   return (
@@ -46,9 +50,10 @@ export function SiteShell({
         hasUpcoming={hasUpcoming}
         account={account}
         facebook={settings.facebookPageUrl}
+        bangla={bangla}
       />
       <div className="flex flex-1 flex-col">{children}</div>
-      <SiteFooter account={account} settings={settings} sponsorRow={sponsorRow} />
+      <SiteFooter account={account} settings={settings} sponsorRow={sponsorRow} bangla={bangla} />
     </div>
   );
 }
@@ -63,11 +68,13 @@ export function SiteHeader({
   hasUpcoming = false,
   account,
   facebook,
+  bangla = false,
 }: {
   cta: FeaturedCta | null;
   hasUpcoming?: boolean;
   account: AccountLink;
   facebook: string | null;
+  bangla?: boolean;
 }) {
   const register = cta ? `/events/${cta.slug}/register` : null;
   return (
@@ -110,7 +117,13 @@ export function SiteHeader({
               Get tickets
             </Link>
           ) : null}
-          <MobileMenu cta={cta} hasUpcoming={hasUpcoming} account={account} facebook={facebook} />
+          <MobileMenu
+            cta={cta}
+            hasUpcoming={hasUpcoming}
+            account={account}
+            facebook={facebook}
+            languageSwitch={bangla ? <LanguageSwitch /> : undefined}
+          />
         </div>
       </div>
     </HeaderFrame>
@@ -129,10 +142,12 @@ export function SiteFooter({
   account,
   settings,
   sponsorRow,
+  bangla = false,
 }: {
   account: AccountLink;
   settings: FooterSettings;
   sponsorRow?: ReactNode;
+  bangla?: boolean;
 }) {
   const facebook = settings.facebookPageUrl;
   const supportEmail = settings.supportEmail;
@@ -211,6 +226,7 @@ export function SiteFooter({
             <LegalLink href="/privacy">Privacy policy</LegalLink>
             <LegalLink href="/refund">Refund policy</LegalLink>
           </nav>
+          {bangla ? <LanguageSwitch className="text-[#e6e1d6]" /> : null}
         </div>
       </div>
     </footer>

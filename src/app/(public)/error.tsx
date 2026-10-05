@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/button';
 import { ErrorPage, errorReference, randomReference } from '@/components/error-page';

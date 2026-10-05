@@ -8,6 +8,8 @@
  * across thousands of orders. Integer paisa is exact.
  */
 
+import { groupDigits, toBanglaDigits } from './digits';
+
 /** 1 taka = 100 paisa. */
 export const PAISA_PER_TAKA = 100;
 
@@ -97,12 +99,13 @@ export function percentOfPaisa(paisa: number, percent: number): number {
  * Grouping is done manually (not Intl currency) so output is deterministic
  * across environments/ICU builds and trivial to assert in tests.
  */
-export function formatBDT(paisa: number): string {
+export function formatBDT(paisa: number, locale: 'en' | 'bn' = 'en'): string {
   assertValidPaisa(paisa);
   const takaPart = Math.floor(paisa / PAISA_PER_TAKA);
-  const paisaPart = paisa % PAISA_PER_TAKA;
-  const grouped = takaPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `৳${grouped}.${paisaPart.toString().padStart(2, '0')}`;
+  const paisaPart = (paisa % PAISA_PER_TAKA).toString().padStart(2, '0');
+  // ADR-061: Bangla groups in lakhs and prints Bangla digits (৳১,২৩,৪৫৬.০০).
+  const fraction = locale === 'bn' ? toBanglaDigits(paisaPart) : paisaPart;
+  return `৳${groupDigits(takaPart, locale)}.${fraction}`;
 }
 
 /**

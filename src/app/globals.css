@@ -71,6 +71,7 @@
 :root {
   /* Type (S2): Helvetica system stack for UI; Archivo + Geist Mono come from next/font */
   --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-archivo: var(--font-archivo-face);
 
   /* Surfaces & borders (S1) */
   --background: #fbfaf8;
@@ -136,6 +137,19 @@
   --chart-3: #1f7a4c;
   --chart-4: #1d4e89;
   --chart-5: #c9c3b7;
+}
+
+/*
+ * ADR-061: Bangla pages. Latin letters keep their faces; Bangla letters
+ * fall through to Noto Sans Bengali (the browser picks a face per glyph).
+ * Vowel signs sit above and below the line, so the text gets more room.
+ */
+:root:lang(bn) {
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, var(--font-bangla), sans-serif;
+  --font-archivo: var(--font-archivo-face), var(--font-bangla), sans-serif;
+}
+:root:lang(bn) body {
+  line-height: 1.65;
 }
 
 @layer base {

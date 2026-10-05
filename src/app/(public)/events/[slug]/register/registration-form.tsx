@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { Check, Minus, Plus } from 'lucide-react';
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';

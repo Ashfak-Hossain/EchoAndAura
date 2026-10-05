@@ -8,6 +8,13 @@ import {
   type AccessVerifier,
 } from '@/lib/cf-access';
 import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
+import {
+  LOCALE_COOKIE,
+  LOCALE_HEADER,
+  type LocaleStep,
+  localeStep,
+  publicLocales,
+} from '@/i18n/locales';
 
 const LOGIN_PATH = '/admin/login';
 /** Pages for a signed-out admin: sign in and its code step (ADR-049), and the password reset (ADR-038). */
@@ -35,6 +42,10 @@ const PUBLIC_PATHS = new Set([
  *    session cookie is *present*. The authoritative, DB-backed check lives
  *    in src/app/admin/(protected)/layout.tsx; this just saves a render
  *    round-trip for clearly-anonymous requests.
+ * 3. ADR-061: the language. `/bn/…` is rewritten to the English route with
+ *    the locale in a request header; a visitor who chose Bangla is sent to
+ *    the `/bn` form of an English link. Before the CSP step, so the policy
+ *    lands on whichever response this produces.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -49,6 +60,29 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
   }
 
+  const step = localeStep({
+    pathname,
+    search: request.nextUrl.search,
+    method: request.method,
+    cookie: request.cookies.get(LOCALE_COOKIE)?.value,
+    locales: publicLocales(process.env.PUBLIC_LOCALES),
+  });
+  if (step.kind === 'redirect') {
+    return NextResponse.redirect(new URL(step.to, request.url), 307);
+  }
+
+  const requestHeaders = new Headers(request.headers);
+  // Always set, never passed through: a visitor's own header must not make
+  // an English URL render (and be cached) in Bangla.
+  requestHeaders.set(LOCALE_HEADER, step.locale);
+
+  // A public prefetch gets only the language step — before ADR-061 it got
+  // nothing: a nonce on a prefetched render broke the navigation after it
+  // (measured: the e2e suite failed). The navigation gets its own.
+  if (isPrefetch(request) && !isAdminPath(pathname)) {
+    return forward(request, step, requestHeaders);
+  }
+
   const csp = buildCsp({
     nonce: newNonce(),
     mediaOrigin: originFrom(process.env.R2_PUBLIC_URL),
@@ -57,9 +91,8 @@ export async function proxy(request: NextRequest) {
     relayOrigin: wsOriginFrom(process.env.RELAY_URL),
     dev: process.env.NODE_ENV === 'development',
   });
-  const requestHeaders = new Headers(request.headers);
   requestHeaders.set('Content-Security-Policy', csp);
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = forward(request, step, requestHeaders);
   response.headers.set('Content-Security-Policy', csp);
   return response;
 }
@@ -78,26 +111,32 @@ async function passesAccess(request: NextRequest): Promise<boolean> {
   return accessVerifier.verify(token);
 }
 
+/** On to the page — under its English route for `/bn/…` (ADR-061). */
+function forward(request: NextRequest, step: LocaleStep, headers: Headers): NextResponse {
+  const init = { request: { headers } };
+  return step.kind === 'rewrite'
+    ? NextResponse.rewrite(new URL(`${step.path}${request.nextUrl.search}`, request.url), init)
+    : NextResponse.next(init);
+}
+
+function isPrefetch(request: NextRequest): boolean {
+  return (
+    request.headers.has('next-router-prefetch') || request.headers.get('purpose') === 'prefetch'
+  );
+}
+
 function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
 export const config = {
   matcher: [
-    {
-      // Pages only. API routes (the door's too), build assets, the image
-      // optimizer, the self-hosted decoder and the door's service worker
-      // carry no HTML.
-      // Prefetches are skipped: the navigation that follows gets its own.
-      source: '/((?!api/|door/api/|_next/static|_next/image|vendor/|door/sw\\.js|favicon\\.ico).*)',
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
-      ],
-    },
-    // ADR-050: admin prefetches too. A prefetch carries the admin page's
-    // render, so the Access check can't skip it.
-    '/admin',
-    '/admin/:path*',
+    // Pages only. API routes (the door's too), build assets, the image
+    // optimizer, the self-hosted decoder and the door's service worker
+    // carry no HTML. Prefetches included: a prefetch carries a page's
+    // render, so the Access check (ADR-050) and the language step
+    // (ADR-061: `/bn` rewritten, a visitor's own locale header replaced)
+    // can't skip it.
+    '/((?!api/|door/api/|_next/static|_next/image|vendor/|door/sw\\.js|favicon\\.ico).*)',
   ],
 };

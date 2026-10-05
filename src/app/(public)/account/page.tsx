@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import { redirect } from 'next/navigation';
 import { ordersService } from '@/server/container';
 import { Money } from '@/components/money';

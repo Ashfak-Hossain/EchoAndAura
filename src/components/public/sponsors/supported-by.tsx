@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/i18n/link';
 import type { PublicSponsor } from '@/server/services/sponsors.service';
 import { SPONSOR_GROUP_LABELS } from '@/lib/sponsor-levels';
 import { SPONSOR_LOGO_BOXES } from '@/lib/sponsor-fit';

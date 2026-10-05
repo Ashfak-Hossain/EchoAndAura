@@ -84,6 +84,9 @@ services:
       # share by the status ping alone). The secret is the Worker's too.
       RELAY_URL: ${RELAY_URL:-}
       RELAY_SECRET: ${RELAY_SECRET:-}
+      # ADR-061: public languages. `en` (default) keeps Bangla off: /bn is a
+      # 404 and the switch is hidden. `en,bn` once every page is translated.
+      PUBLIC_LOCALES: ${PUBLIC_LOCALES:-en}
     # Resized covers survive a deploy (ADR-033).
     volumes:
       - image-cache:/app/.next-build/cache/images
