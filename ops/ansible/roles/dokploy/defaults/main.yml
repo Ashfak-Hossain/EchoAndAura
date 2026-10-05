@@ -1,0 +1,14 @@
+# The Dokploy version a NEW server gets (SERVER.md § 8). Dokploy updates
+# itself from its own dashboard afterwards and this role never upgrades it,
+# so production can move ahead of this pin. When it does, the role prints
+# a reminder: bump this to match, so a rebuild comes out like production.
+dokploy_version: v0.30.8
+
+# files/dokploy-install.sh is Dokploy's own install script (Apache-2.0),
+# kept here unmodified: what runs as root on a new server is what was read
+# and reviewed in a PR, and a rebuild never depends on the script upstream
+# being unchanged that night. Downloaded from https://dokploy.com/install.sh
+# on 2026-09-27 and again, identical, on 2026-10-06. To move to a newer
+# script: download it, read the diff, replace the file, update this hash
+# (tests/unit/ansible-dokploy.test.ts keeps the two equal).
+dokploy_install_sha256: 92749e5fe1678d1a2dc1e5bad193a1e113fcdbee3cf24193fc14ab85765b6b8a

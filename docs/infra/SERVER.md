@@ -282,21 +282,34 @@ bash dokploy-install.sh
 The script changes over time. On a rebuild, read the new one before
 running it, and expect a different hash.
 
+**Today: the Ansible role `dokploy`** ([ANSIBLE.md](ANSIBLE.md)). The
+reviewed script is kept in the repo
+(`ops/ansible/roles/dokploy/files/dokploy-install.sh`, the same hash;
+upstream was still identical on 2026-10-06) and runs only where there is
+no Dokploy yet, pinned to `dokploy_version`. The role never upgrades;
+when Dokploy has updated itself past the pin, a run says so. To take a
+newer script: download it, read the diff, replace the file, update
+`dokploy_install_sha256` (a unit test keeps them equal).
+
 What it installed:
 
-| Piece              | Version / detail                                     | Notes                                                                           |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Docker             | 28.5.0, **held** (`apt-mark hold docker-ce …`)       | Automatic updates never change Docker under a running site. Update it by hand.  |
-| Docker Swarm       | single node, advertised on the public IP             | Its ports (2377, 7946, 4789) are closed by ufw                                  |
-| `dokploy-network`  | overlay network                                      | What `docker-compose.prod.yml` joins                                            |
-| `dokploy`          | v0.30.7, a Swarm service, port 3000                  | The dashboard. Updates from its own UI                                          |
-| `dokploy-postgres` | Postgres 16, a Swarm service                         | **Dokploy's own settings**, not the app's database. Password is a Docker secret |
-| `dokploy-traefik`  | Traefik v3.6, a container, ports 80, 443 (TCP + UDP) | The front door: routes domains to containers, gets HTTPS certificates           |
+| Piece              | Version / detail                                            | Notes                                                                           |
+| ------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Docker             | 28.5.0, **held** (`apt-mark hold docker-ce …`)              | Automatic updates never change Docker under a running site. Update it by hand.  |
+| Docker Swarm       | single node, advertised on the public IP                    | Its ports (2377, 7946, 4789) are closed by ufw                                  |
+| `dokploy-network`  | overlay network                                             | What `docker-compose.prod.yml` joins                                            |
+| `dokploy`          | v0.30.7, a Swarm service, port 3000 (v0.30.8 on 2026-10-06) | The dashboard. Updates from its own UI                                          |
+| `dokploy-postgres` | Postgres 16, a Swarm service                                | **Dokploy's own settings**, not the app's database. Password is a Docker secret |
+| `dokploy-traefik`  | Traefik v3.6, a container, ports 80, 443 (TCP + UDP)        | The front door: routes domains to containers, gets HTTPS certificates           |
 
-**The owner account is whoever signs up first.** Port 3000 is public as
-soon as the script finishes, so the account must be created right away.
-It was created through an SSH tunnel, so the password never crossed the
-internet unencrypted:
+**The owner account is whoever signs up first.** Port 3000 was public as
+soon as the script finished, so the account had to be created right away.
+Since 2026-10-06 (Ansible slice D) the origin lockdown (section 20) drops
+3000 from the internet and starts with Docker's first start, before the
+script publishes the port: on a server built by the playbook the
+dashboard is never public, even for a minute. Create the account at once
+anyway. It was created through an SSH tunnel, so the password never
+crossed the internet unencrypted:
 
 ```sh
 ssh -N -L 3000:localhost:3000 echoandaura    # on the laptop; then open http://localhost:3000
@@ -330,6 +343,8 @@ in. GitHub's Deploy workflow calls the same address (`DOKPLOY_URL`).
    ```
 
    Traefik still reaches the dashboard over Docker's internal network.
+   Since 2026-10-06 the origin lockdown (section 20) also drops 3000
+   from the internet, so a re-published port is never public either.
 
 **Emergency way in**, if the address breaks (a DNS mistake, a
 certificate problem): re-open the port for a moment, use the tunnel,
@@ -905,12 +920,13 @@ the rest.
 
 **How the traffic flows, and where each part is closed:**
 
-| Path                              | How it reaches Traefik                                    | Closed by                                                                                                                   |
-| --------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| IPv4 80/443 (Cloudflare's way in) | Docker NAT on `eth0`, then the `FORWARD` chain (not ufw)  | `ops/server/origin-lockdown`: `DOCKER-USER` jumps to `ORIGIN-LOCKDOWN`, which allows Cloudflare's ranges and drops the rest |
-| IPv6 80/443                       | `docker-proxy` listening on `[::]`, through ufw (`INPUT`) | ufw: the 80/443 rules deleted. Cloudflare reaches the server over IPv4 only (no AAAA)                                       |
-| UDP 443 (HTTP/3)                  | Docker NAT                                                | the same `ORIGIN-LOCKDOWN` chain                                                                                            |
-| SSH 22                            | ufw                                                       | unchanged (keys only, section 2)                                                                                            |
+| Path                              | How it reaches Traefik                                        | Closed by                                                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IPv4 80/443 (Cloudflare's way in) | Docker NAT on `eth0`, then the `FORWARD` chain (not ufw)      | `origin-lockdown` (Ansible role `origin_lockdown`): `DOCKER-USER` jumps to `ORIGIN-LOCKDOWN`, which allows Cloudflare's ranges and drops the rest |
+| IPv6 80/443                       | `docker-proxy` listening on `[::]`, through ufw (`INPUT`)     | ufw: the 80/443 rules deleted. Cloudflare reaches the server over IPv4 only (no AAAA)                                                             |
+| UDP 443 (HTTP/3)                  | Docker NAT                                                    | the same `ORIGIN-LOCKDOWN` chain                                                                                                                  |
+| TCP 3000 (Dokploy dashboard)      | Docker NAT, only while published (a new server; an emergency) | the same script: dropped for everyone, Cloudflare included (since 2026-10-06)                                                                     |
+| SSH 22                            | ufw                                                           | unchanged (keys only, section 2)                                                                                                                  |
 
 The script also sets the same rules for IPv6 in `DOCKER-USER`, in case
 Docker ever starts NAT-ing IPv6. `--ctdir ORIGINAL` keeps the replies to
@@ -969,7 +985,8 @@ the server stops answering anyone else):
   a reboot `origin-lockdown status` shows the rules again.
 
 **Emergency way in** is unchanged (section 9): the SSH tunnel arrives from
-inside the server, so the lockdown never blocks it.
+inside the server (loopback, not `eth0`), so the lockdown never blocks
+it, 3000 included.
 
 **Cloudflare changes its ranges** (rarely; cloudflare.com/ips): update
 the script, `src/lib/client-ip.ts` and Traefik's `trustedIPs` together,
@@ -1084,14 +1101,34 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
 
 1. A new VPS with Ubuntu 24.04 and your SSH public key (from the
    provider's panel). Put the root password in Bitwarden (`VPS root`).
-2. Sections 1 to 7 above, in order. The firewall and `daemon.json` come
-   **before** Dokploy.
-3. Section 8: Dokploy, then create the owner account through the tunnel
-   immediately.
-4. Section 9: point `deploy` at the new IP in Cloudflare (and update the
-   IP in this file, CLOUDFLARE.md and `scripts/infra-check.ts`), set the
-   Server Domain, close port 3000.
-5. Section 10: the project, Postgres and Redis. **Restore the latest
+   Point the `echoandaura` alias in `~/.ssh/config` at the new IP.
+2. **The playbook** ([ANSIBLE.md](ANSIBLE.md)), with the Telegram alert
+   values in `.env` (the disk alert needs them):
+
+   ```sh
+   pnpm ansible apply production
+   ```
+
+   It does sections 2 to 8 and the parts of 10, 17, 18, 20
+   and 21 that live in files, in the right order (firewall, `daemon.json`
+   and the origin lockdown **before** Dokploy). About 7 minutes. It is
+   **expected to stop at the last role, `traefik`**: a fresh Dokploy's
+   `traefik.yml` doesn't have the two hand edits yet (step 4).
+
+3. Create the Dokploy owner account **at once**, through the tunnel (the
+   run prints the command; section 8). Port 3000 is already closed to
+   the internet.
+4. Traefik's two hand edits in `/etc/dokploy/traefik/traefik.yml`:
+   section 13's `trustedIPs` on `web` and `websecure`, and section 21's
+   `inflight-cap@file` middleware on `websecure`. Then restart Traefik
+   (`docker restart dokploy-traefik`) and run the playbook again: it must
+   finish with `failed=0`, and `pnpm ansible check production` with
+   **`changed=0`**.
+5. Section 9: point `deploy` at the new IP (Terraform,
+   `ops/terraform/cloudflare/dns.tf`, both records; and the IP in this
+   file, CLOUDFLARE.md and `scripts/infra-check.ts`), set the Server
+   Domain, remove the 3000 publish.
+6. Section 10: the project, Postgres and Redis. **Restore the latest
    Postgres backup** into the new database before the app starts
    (section 16, "Restore into an empty database"), then create the app's
    role (section 19, steps 3–5, with the password already in Bitwarden
@@ -1099,11 +1136,11 @@ the Postgres backup in R2, the settings from Bitwarden. In order:
    destination and nightly backup again. The new
    App Names get new suffixes: update this file and the URLs in
    Bitwarden.
-6. Section 11: the Compose app and its Environment, from Bitwarden. Put
+7. Section 11: the Compose app and its Environment, from Bitwarden. Put
    its new compose ID in GitHub's `DOKPLOY_COMPOSE_ID` secret.
-7. Deploy: GitHub → Actions → Deploy → Run workflow (branch `main`).
+8. Deploy: GitHub → Actions → Deploy → Run workflow (branch `main`).
    Check as in section 12.
-8. The steps after this point are added here as they are done.
+9. The steps after this point are added here as they are done.
 
 ## History
 

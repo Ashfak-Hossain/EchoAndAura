@@ -1,17 +1,24 @@
 #!/bin/sh
 # Only Cloudflare may open connections to the web ports (ADR-045). Anyone
 # else who finds the server's address gets nothing, instead of the site
-# without Cloudflare's DDoS protection in front of it.
+# without Cloudflare's DDoS protection in front of it. Port 3000, the Dokploy
+# dashboard's own port, is closed to the internet outright: on a new server
+# Dokploy publishes it before its owner account exists (section 9), and an
+# emergency re-open should only ever be reachable through the SSH tunnel.
 #
 # Docker publishes Traefik's ports around ufw (NAT, then the FORWARD chain),
 # so the rule goes in DOCKER-USER, the chain Docker leaves to us. Installed
 # as /usr/local/sbin/origin-lockdown and run by origin-lockdown.service at
-# boot and whenever Docker restarts. docs/infra/SERVER.md section 20.
+# boot and whenever Docker starts or restarts. docs/infra/SERVER.md
+# section 20. The internet-facing interface (eth0 in production) comes
+# from /etc/default/origin-lockdown, written by Ansible, so the service
+# and a by-hand `status` or `remove` always act on the same rules.
 #
 #   origin-lockdown          apply (safe to re-run)
 #   origin-lockdown status   show the rules
 #   origin-lockdown remove   undo, if the site stops answering after a change
 set -eu
+if [ -r /etc/default/origin-lockdown ]; then . /etc/default/origin-lockdown; fi
 IFACE=${ORIGIN_LOCKDOWN_IFACE:-eth0}
 CHAIN=ORIGIN-LOCKDOWN
 
@@ -50,10 +57,13 @@ V6="
 # New connections arriving from the internet (eth0) for 80/443. After Docker's
 # NAT the destination port is Traefik's, the same 80/443. --ctdir ORIGINAL
 # leaves alone the replies to connections the containers make themselves
-# (SES, R2, Telegram), which also come in on eth0.
+# (SES, R2, Telegram), which also come in on eth0. 3000 is dropped for
+# everyone, Cloudflare included; the SSH tunnel arrives on the loopback
+# interface, not $IFACE, so it still works.
 hooks() {
   echo "-i $IFACE -p tcp -m multiport --dports 80,443 -m conntrack --ctdir ORIGINAL -j $CHAIN"
   echo "-i $IFACE -p udp --dport 443 -m conntrack --ctdir ORIGINAL -j $CHAIN"
+  echo "-i $IFACE -p tcp --dport 3000 -m conntrack --ctdir ORIGINAL -j DROP"
 }
 
 apply() { # $1 iptables|ip6tables, $2 ranges
@@ -97,7 +107,7 @@ case ${1:-apply} in
   remove)
     remove iptables
     remove ip6tables
-    echo "origin-lockdown: removed; 80/443 are open to everyone again"
+    echo "origin-lockdown: removed; 80/443 (and 3000, if published) are open to everyone again"
     ;;
   *)
     echo "usage: origin-lockdown [apply|status|remove]" >&2

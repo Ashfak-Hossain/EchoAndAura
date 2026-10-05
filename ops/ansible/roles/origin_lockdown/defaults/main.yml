@@ -1,0 +1,3 @@
+# The interface the internet arrives on, from the server's default route:
+# eth0 in production, enp0s1 on the lab VM.
+origin_lockdown_iface: "{{ ansible_facts['default_ipv4']['interface'] }}"

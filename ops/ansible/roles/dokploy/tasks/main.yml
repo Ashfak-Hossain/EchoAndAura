@@ -1,0 +1,134 @@
+# SERVER.md § 8, ADR-036: Dokploy (the dashboard), its own Postgres, and
+# Traefik, the front door. Installed once, by Dokploy's own script, which
+# also installs Docker 28.5.0 (held) and makes the server a one-node Swarm.
+#
+# Installed, never upgraded: Dokploy updates itself from its dashboard.
+# Everything INSIDE Dokploy (projects, the app's Postgres and Redis, the
+# compose app, its environment, backup schedules) lives in Dokploy's own
+# database and stays a manual step: SERVER.md § 10 onwards.
+#
+# Port 3000 (the dashboard, published by the script) is never reachable
+# from the internet: origin_lockdown runs before this role and starts with
+# Docker, so its DROP is in place before Dokploy exists (SERVER.md § 9).
+
+# Read-only probes: they run in check mode too, so `check production`
+# sees an installed Dokploy and reports nothing to do.
+- name: Look for Dokploy
+  ansible.builtin.command:
+    cmd: docker service inspect dokploy
+  register: dokploy_service
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Look for a Swarm left by a half-finished install
+  ansible.builtin.command:
+    cmd: docker node ls --quiet
+  register: dokploy_swarm
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: dokploy_service.rc != 0
+
+# The script can't be re-run over its own leftovers (`swarm init` fails on
+# a Swarm), and guessing what a broken run left is how servers get worse.
+- name: Stop on a half-finished install
+  ansible.builtin.fail:
+    msg: >-
+      Docker is in Swarm mode but there is no dokploy service: an earlier
+      install stopped half way. Look at `docker service ls` and `docker ps -a`.
+      On the lab VM: pnpm ansible:lab reset. On a new server with nothing on
+      it yet: docker swarm leave --force, then run the playbook again.
+  when:
+    - dokploy_service.rc != 0
+    - dokploy_swarm.rc == 0
+
+- name: Install Dokploy
+  when: dokploy_service.rc != 0
+  block:
+    - name: Check the install script is the reviewed one
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.file', 'dokploy-install.sh', rstrip=false) | hash('sha256') == dokploy_install_sha256
+        fail_msg: >-
+          roles/dokploy/files/dokploy-install.sh is not the reviewed script
+          (its sha256 differs from dokploy_install_sha256). Read the change
+          before updating the hash.
+        quiet: true
+
+    # Pulls Docker and three images: a few minutes. Copied over, run, and
+    # removed by Ansible; nothing is left in /root.
+    - name: Run Dokploy's install script (Docker, Swarm, Dokploy, Traefik)
+      ansible.builtin.script:
+        cmd: dokploy-install.sh
+        executable: /bin/bash
+      environment:
+        DOKPLOY_VERSION: '{{ dokploy_version }}'
+      changed_when: true
+
+    # A task, not a handler: on a new server the play stops at the traefik
+    # role (its hand edits come later), and handlers don't run after that.
+    - name: Create the owner account now
+      ansible.builtin.debug:
+        msg: >-
+          Dokploy is installed. Whoever signs up first becomes its owner:
+          do it now, through the tunnel (port 3000 is closed to the internet).
+          On the laptop: ssh -N -L 3000:localhost:3000 {{ ansible_host }},
+          then open http://localhost:3000. Then SERVER.md § 9 onwards.
+      when: not ansible_check_mode
+
+# Every run, not only after an install: the script carries on after a
+# failed step (no `set -e`), so its exit status proves little, and a run
+# cut short (a lost connection, a reboot) can leave the dokploy service
+# without Traefik. Read-only, so production check mode still changes
+# nothing. Skipped only in check mode on a server that has no Dokploy yet.
+- name: Wait for dokploy and dokploy-postgres to be running (1/1)
+  ansible.builtin.command:
+    cmd: docker service ls --filter name=dokploy --format json
+  register: dokploy_services
+  changed_when: false
+  check_mode: false
+  until: >-
+    dokploy_services.stdout_lines | map('from_json')
+    | selectattr('Name', 'in', ['dokploy', 'dokploy-postgres'])
+    | selectattr('Replicas', 'equalto', '1/1') | list | length == 2
+  retries: 36
+  delay: 5
+  when: dokploy_service.rc == 0 or not ansible_check_mode
+
+- name: Look at Traefik
+  ansible.builtin.command:
+    cmd: docker inspect dokploy-traefik
+  register: dokploy_traefik
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: dokploy_service.rc == 0 or not ansible_check_mode
+
+- name: Check Traefik is running
+  ansible.builtin.assert:
+    that:
+      - dokploy_traefik.rc == 0
+      - (dokploy_traefik.stdout | from_json)[0].State.Running
+    fail_msg: >-
+      dokploy-traefik is missing or stopped, so the site has no front door.
+      Stopped: docker start dokploy-traefik, then docker logs dokploy-traefik.
+      Missing: the install stopped half way. On the lab VM: pnpm ansible:lab
+      reset. On a new server with nothing on it yet: docker service rm dokploy
+      dokploy-postgres, docker swarm leave --force, then run the playbook again.
+    quiet: true
+  when: dokploy_service.rc == 0 or not ansible_check_mode
+
+- name: Note when Dokploy has moved past the pinned version
+  vars:
+    dokploy_running: >-
+      {{ (dokploy_service.stdout | from_json)[0].Spec.TaskTemplate.ContainerSpec.Image
+         | regex_replace('@.*$', '') | regex_replace('^.*:', '') }}
+  ansible.builtin.debug:
+    msg: >-
+      Dokploy here runs {{ dokploy_running }}; a rebuild would install
+      {{ dokploy_version }}. Set dokploy_version to {{ dokploy_running }} in
+      roles/dokploy/defaults/main.yml, and the version in SERVER.md § 8.
+  when:
+    - dokploy_service.rc == 0
+    - dokploy_running != dokploy_version

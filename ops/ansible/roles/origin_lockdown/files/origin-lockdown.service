@@ -1,7 +1,9 @@
 [Unit]
-Description=Only Cloudflare may reach ports 80 and 443 (SERVER.md section 20)
+Description=Only Cloudflare may reach ports 80 and 443, nobody 3000 (SERVER.md section 20)
 # DOCKER-USER exists once Docker is up. PartOf: when Docker restarts, this
-# runs again, so its rules are always in place while the site is.
+# runs again, so its rules are always in place while the site is. WantedBy:
+# enabled before Docker is even installed, it starts with Docker's first
+# start, before the Dokploy install script publishes any port.
 After=docker.service
 PartOf=docker.service
 
