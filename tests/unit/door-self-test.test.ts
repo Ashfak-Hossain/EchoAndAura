@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type SelfTestInput, selfTestRows } from '@/app/door/self-test';
 
-const NOW = Date.parse('2026-10-10T12:40:00Z'); // 18:40 in Dhaka
+const NOW = Date.parse('2026-10-10T12:40:00Z'); // 6:40 PM in Dhaka
 
 const good: SelfTestInput = {
   camera: { kind: 'on' },
@@ -26,7 +26,7 @@ describe('the pre-doors test', () => {
     expect(t.rows.map((r) => r.value)).toEqual([
       'Back camera · focused',
       '0.08 s per read · phone reader',
-      '450 tickets · 18:38',
+      '450 tickets · 6:38 PM',
       'Heard',
       '82 %',
       'Page and list saved on phone',

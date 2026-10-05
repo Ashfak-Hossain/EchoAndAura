@@ -78,7 +78,7 @@ test('race both: early admit, server disagrees, gates share check-ins', async ({
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('Farhana Akter');
   await expect(row).toContainText('Turned away');
-  await expect(row).toContainText(/In first \d\d:\d\d · Gate B/);
+  await expect(row).toContainText(/In first \d{1,2}:\d\d [AP]M · Gate B/);
   // Neither answer checks anyone in: Gate B's one stands.
   await expect(page.getByTestId('checked-in-count')).toHaveText('2 of 3 checked in');
 

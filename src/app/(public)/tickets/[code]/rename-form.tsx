@@ -10,7 +10,7 @@ import type { RenameState } from './actions';
 interface Props {
   action: (prev: RenameState, formData: FormData) => Promise<RenameState>;
   currentName: string;
-  /** "Sat 26 Sep 2026, 23:59 (Dhaka)" — when names lock. */
+  /** "Sat 26 Sep 2026, 11:59 PM (Dhaka)" — when names lock. */
   lockedAtText: string | null;
 }
 

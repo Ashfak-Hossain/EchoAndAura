@@ -52,7 +52,7 @@ describe('buildEventMetadata', () => {
       siteUrl: site,
     });
     expect(m.description).toBe(
-      'Thu 1 Oct 2026, 19:00 (Dhaka) · ICCB Hall 4, Dhaka · tickets from ৳800.00',
+      'Thu 1 Oct 2026, 7:00 PM (Dhaka) · ICCB Hall 4, Dhaka · tickets from ৳800.00',
     );
     // No cover: no image key at all, so the generated site image applies (ADR-042).
     expect(m.openGraph).not.toHaveProperty('images');
@@ -76,7 +76,7 @@ describe('buildEventMetadata', () => {
       siteUrl: site,
     });
     expect(m.description).toBe(
-      'Thu 1 Oct 2026, 19:00 (Dhaka) · Tejgaon, Dhaka · tickets from ৳800.00',
+      'Thu 1 Oct 2026, 7:00 PM (Dhaka) · Tejgaon, Dhaka · tickets from ৳800.00',
     );
     expect(JSON.stringify(m)).not.toContain('Warehouse 7');
   });
@@ -122,7 +122,7 @@ describe('buildHomeMetadata', () => {
     expect(m.title).toEqual({ absolute: HOME_TITLE });
     expect(HOME_TITLE).toBe('echoandaura · Live events and tickets in Dhaka');
     expect(m.description).toContain(
-      'Next: Echo & Aura Live — Dhaka — Thu 1 Oct 2026, 19:00 (Dhaka)',
+      'Next: Echo & Aura Live — Dhaka — Thu 1 Oct 2026, 7:00 PM (Dhaka)',
     );
     expect(m.description!.length).toBeLessThanOrEqual(DESCRIPTION_MAX);
     expect(m.alternates?.canonical).toBe(site);

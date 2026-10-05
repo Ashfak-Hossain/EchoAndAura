@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ORDER_REFERENCE_PATTERN } from '@/server/lib/order-reference';
 import { NAME_MAX, NAME_MIN } from '@/server/lib/attendee-name';
 import { MAX_TICKETS_PER_ORDER, MIN_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
+import { normaliseDigits } from '@/server/lib/digits';
 import { normalisePromoCode } from '@/server/lib/promo';
 
 /**
@@ -18,10 +19,15 @@ const BD_MOBILE_PATTERN = /^1[3-9]\d{8}$/;
  * A Bangladeshi mobile, entered as the ten digits after a fixed +880 prefix
  * and stored E.164. People type "01712…" or paste "+880 1712…"; the prefix
  * is fixed on the form, so those are stripped before the ten-digit check.
+ * Bangla digits (a Bangla keyboard) count as digits (ADR-060).
  */
 export const bdMobile = z
   .string({ error: 'A bKash number is 10 digits after +880.' })
-  .transform((v) => v.replace(/[\s-]/g, '').replace(/^(\+?880|0)/, ''))
+  .transform((v) =>
+    normaliseDigits(v)
+      .replace(/[\s-]/g, '')
+      .replace(/^(\+?880|0)/, ''),
+  )
   .pipe(z.string().regex(BD_MOBILE_PATTERN, { error: 'A bKash number is 10 digits after +880.' }))
   .transform((digits) => `${BD_MOBILE_PREFIX}${digits}`);
 
@@ -35,11 +41,14 @@ export const personName = (label: string) =>
 export const registrationFormSchema = z
   .object({
     ticketTypeId: z.uuid({ error: 'Choose a ticket type.' }),
-    quantity: z.coerce
-      .number({ error: 'Choose how many tickets.' })
-      .int({ error: 'Choose how many tickets.' })
-      .min(MIN_TICKETS_PER_ORDER, { error: `At least ${MIN_TICKETS_PER_ORDER} ticket.` })
-      .max(MAX_TICKETS_PER_ORDER, { error: `Max ${MAX_TICKETS_PER_ORDER} per order.` }),
+    quantity: z.preprocess(
+      (v) => (typeof v === 'string' ? normaliseDigits(v) : v),
+      z.coerce
+        .number({ error: 'Choose how many tickets.' })
+        .int({ error: 'Choose how many tickets.' })
+        .min(MIN_TICKETS_PER_ORDER, { error: `At least ${MIN_TICKETS_PER_ORDER} ticket.` })
+        .max(MAX_TICKETS_PER_ORDER, { error: `Max ${MAX_TICKETS_PER_ORDER} per order.` }),
+    ),
     buyerName: personName('your full name'),
     buyerEmail: z
       .string({ error: 'Enter a complete email address.' })
@@ -109,8 +118,8 @@ const TRX_ID_PATTERN = /^[A-Z0-9]{10}$/;
 export const paymentFormSchema = z.object({
   trxId: z
     .string({ error: 'Enter the transaction ID from your bKash history.' })
-    .trim()
-    .toUpperCase()
+    .transform(normaliseDigits)
+    .transform((v) => v.trim().toUpperCase())
     .transform((v) => v.replace(/\s+/g, ''))
     .superRefine((v, ctx) => {
       if (!TRX_ID_PATTERN.test(v)) {
@@ -140,8 +149,7 @@ export function paymentFormValues(formData: FormData): Record<string, unknown> {
 export const findOrderSchema = z.object({
   reference: z
     .string({ error: 'Enter your order reference.' })
-    .trim()
-    .toUpperCase()
+    .transform((v) => normaliseDigits(v).trim().toUpperCase())
     // Accept "EA-7K3M9Q", "EA7K3M9Q", "7K3M9Q" and any case; store form is EA-XXXXXX.
     .transform((v) => `EA-${v.replace(/^EA-?/, '')}`)
     .pipe(

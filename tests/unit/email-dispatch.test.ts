@@ -230,12 +230,12 @@ describe('emailDispatcher.dispatch', () => {
     const row = db.state.events.find(
       (e) => e.orderId === order.id && e.action === 'order.comp_issued',
     )!;
-    row.createdAt = new Date('2026-09-14T08:30:00Z'); // Mon 14 Sep, 14:30 Dhaka
+    row.createdAt = new Date('2026-09-14T08:30:00Z'); // Mon 14 Sep, 2:30 PM Dhaka
 
     await dispatcher.dispatch('tickets-issued', order.id);
     expect(sent[0]?.to).toBe('tahmina@dhakapress.com');
     const html = sent[0]!.html.replace(/<!-- -->/g, '');
-    expect(html).toContain('Mon 14 Sep 2026, 14:30');
+    expect(html).toContain('Mon 14 Sep 2026, 2:30 PM');
     expect(html).not.toContain('Payment confirmed');
     expect(html).not.toContain('Press');
   });

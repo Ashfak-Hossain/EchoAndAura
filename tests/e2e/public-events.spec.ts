@@ -69,7 +69,7 @@ test.describe('upcoming events (/events)', () => {
     await expect(card).toHaveAttribute('href', `/events/${slug}`);
     await expect(card.getByRole('heading', { level: 2 })).toHaveText(title);
     await expect(card.getByText('On sale', { exact: true })).toBeVisible();
-    await expect(card).toContainText('1 Nov 2030, 19:00 (Dhaka)');
+    await expect(card).toContainText('1 Nov 2030, 7:00 PM (Dhaka)');
     await expect(card).toContainText('Bayside Hall, Khulshi, Chattogram');
     await expect(card).toContainText('From ৳600.00');
     // Through the optimizer (ADR-033): the stored cover, in several widths.

@@ -1,3 +1,4 @@
+import { normaliseDigits } from '@/server/lib/digits';
 import { formatBDT, multiplyPaisa, percentOfPaisa } from '@/server/lib/money';
 
 /**
@@ -30,7 +31,7 @@ export const PROMO_CODE_MAX = 24;
 
 /** Buyers type codes any way they like; stored and compared upper-cased, no spaces. */
 export function normalisePromoCode(raw: string): string {
-  return raw.replace(/\s+/g, '').toUpperCase();
+  return normaliseDigits(raw).replace(/\s+/g, '').toUpperCase();
 }
 
 export function promoAppliesTo(

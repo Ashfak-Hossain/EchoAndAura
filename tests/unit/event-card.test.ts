@@ -24,7 +24,7 @@ const item = (over: Partial<HomeEvent> = {}): HomeEvent => ({
     slug: 'late-set-chattogram',
     title: 'Late Set — Chattogram',
     venue: 'Bayside Hall, Khulshi, Chattogram',
-    // Fri 6 Nov 2026, 20:00 in Dhaka.
+    // Fri 6 Nov 2026, 8:00 PM in Dhaka.
     startsAt: new Date('2026-11-06T14:00:00Z'),
     registrationOpensAt: new Date('2026-10-17T14:00:00Z'),
   }),
@@ -44,7 +44,7 @@ describe('EventCard (N8)', () => {
     expect(out).toContain('href="/events/late-set-chattogram"');
     expect(out).toContain('On sale');
     expect(out).toMatch(/<h3[^>]*>Late Set — Chattogram<\/h3>/);
-    expect(out).toContain('Fri 6 Nov 2026, 20:00 (Dhaka)');
+    expect(out).toContain('Fri 6 Nov 2026, 8:00 PM (Dhaka)');
     expect(out).toContain('Bayside Hall, Khulshi, Chattogram');
     expect(out).toContain('From ৳600.00');
     expect(out).toMatch(/<img[^>]*loading="lazy"/);

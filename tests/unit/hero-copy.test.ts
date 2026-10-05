@@ -40,7 +40,7 @@ describe('heroCopy', () => {
     const now = at('2026-10-05T06:00:00Z');
     expect(copy({ phase: 'open', now })).toEqual({
       phaseWord: 'On sale.',
-      sentence: 'Registration is open until Mon 12 Oct, 23:59 (Dhaka).',
+      sentence: 'Registration is open until Mon 12 Oct, 11:59 PM (Dhaka).',
       countdown: { label: 'Registration closes in', target: event.registrationClosesAt },
       priceLabel: 'From ৳1,200.00',
       leftLabel: '112 tickets left',
@@ -58,7 +58,7 @@ describe('heroCopy', () => {
     const now = at('2026-09-25T12:00:00Z');
     expect(copy({ phase: 'closing_soon', event: chattogram, availableTotal: 38, now })).toEqual({
       phaseWord: 'Closing soon.',
-      sentence: 'Registration closes Sat 26 Sep, 23:59 (Dhaka), 5 days before the show.',
+      sentence: 'Registration closes Sat 26 Sep, 11:59 PM (Dhaka), 5 days before the show.',
       countdown: { label: 'Registration closes in', target: chattogram.registrationClosesAt },
       priceLabel: 'From ৳1,200.00',
       leftLabel: '38 tickets left',
@@ -72,13 +72,13 @@ describe('heroCopy', () => {
       copy({ phase: 'closing_soon', event: { ...event, registrationClosesAt }, now }).sentence;
     // 00:30 on Tue 13 Oct in Dhaka is still Mon 12 Oct in UTC: 4 days, not 5.
     expect(closing(at('2026-10-12T18:30:00Z'))).toBe(
-      'Registration closes Tue 13 Oct, 00:30 (Dhaka), 4 days before the show.',
+      'Registration closes Tue 13 Oct, 12:30 AM (Dhaka), 4 days before the show.',
     );
     expect(closing(at('2026-10-16T17:59:00Z'))).toBe(
-      'Registration closes Fri 16 Oct, 23:59 (Dhaka), 1 day before the show.',
+      'Registration closes Fri 16 Oct, 11:59 PM (Dhaka), 1 day before the show.',
     );
     expect(closing(at('2026-10-17T06:00:00Z'))).toBe(
-      'Registration closes Sat 17 Oct, 12:00 (Dhaka).',
+      'Registration closes Sat 17 Oct, 12:00 PM (Dhaka).',
     );
   });
 
@@ -96,7 +96,7 @@ describe('heroCopy', () => {
       {
         phaseWord: 'Not on sale yet.',
         sentence:
-          'Tickets go on sale Thu 1 Oct, 10:00 (Dhaka). Early Bird runs until Sun 4 Oct, 23:59.',
+          'Tickets go on sale Thu 1 Oct, 10:00 AM (Dhaka). Early Bird runs until Sun 4 Oct, 11:59 PM.',
         countdown: { label: 'Tickets go on sale in', target: opensLater.registrationOpensAt },
         priceLabel: 'From ৳600.00 · Early Bird',
         leftLabel: null,
@@ -119,12 +119,12 @@ describe('heroCopy', () => {
       now,
     });
     expect(named.sentence).toBe(
-      'Tickets go on sale Sun 27 Sep, 10:00 (Dhaka). Early-bird (first 50) runs until Sun 4 Oct, 23:59.',
+      'Tickets go on sale Sun 27 Sep, 10:00 AM (Dhaka). Early-bird (first 50) runs until Sun 4 Oct, 11:59 PM.',
     );
     expect(named.priceLabel).toBe('From ৳600.00 · Early-bird (first 50)');
 
     const plain = copy({ phase: 'not_open', now });
-    expect(plain.sentence).toBe('Tickets go on sale Sun 27 Sep, 10:00 (Dhaka).');
+    expect(plain.sentence).toBe('Tickets go on sale Sun 27 Sep, 10:00 AM (Dhaka).');
     expect(plain.priceLabel).toBe('From ৳1,200.00');
   });
 
@@ -157,7 +157,7 @@ describe('heroCopy', () => {
     const now = at('2026-10-14T06:00:00Z');
     expect(copy({ phase: 'closed', availableTotal: 30, now })).toEqual({
       phaseWord: 'Closed.',
-      sentence: 'Registration for this show has closed. It starts Sat 17 Oct, 19:00 (Dhaka).',
+      sentence: 'Registration for this show has closed. It starts Sat 17 Oct, 7:00 PM (Dhaka).',
       countdown: null,
       priceLabel: null,
       leftLabel: null,
@@ -169,7 +169,7 @@ describe('heroCopy', () => {
     const now = at('2026-10-20T06:00:00Z');
     expect(copy({ phase: 'past', now })).toEqual({
       phaseWord: 'Past.',
-      sentence: 'This show was on Sat 17 Oct, 19:00 (Dhaka).',
+      sentence: 'This show was on Sat 17 Oct, 7:00 PM (Dhaka).',
       countdown: null,
       priceLabel: null,
       leftLabel: null,

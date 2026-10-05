@@ -78,6 +78,12 @@ test('the camera reads a real ticket QR and admits it, with either reader', asyn
           delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector;
         });
       }
+      // Chromium reports this machine's real battery: a laptop at 49 % and
+      // unplugged would fail the pre-doors test's battery row. Fix it here.
+      await context.addInitScript(() => {
+        const battery = Object.assign(new EventTarget(), { level: 1, charging: true });
+        Object.defineProperty(navigator, 'getBattery', { value: () => Promise.resolve(battery) });
+      });
       const phone = await context.newPage();
       await phone.goto(`/door#code=${gate}`);
       if (zxing) {
@@ -87,7 +93,7 @@ test('the camera reads a real ticket QR and admits it, with either reader', asyn
         // not admitted while the test covers the viewfinder.
         await phone.getByRole('button', { name: 'Run pre-doors test' }).click();
         const selfTest = phone.getByTestId('door-selftest');
-        for (const key of ['camera', 'speed', 'list', 'offline']) {
+        for (const key of ['camera', 'speed', 'list', 'battery', 'offline']) {
           await expect(selfTest.locator(`[data-check="${key}"]`)).toHaveAttribute(
             'data-level',
             'ok',

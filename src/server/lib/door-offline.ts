@@ -145,7 +145,7 @@ export function judgeOffline(input: {
 /**
  * The server's side of an offline admit's time: the phone's corrected
  * clock, never before doors opened and never in the future. The phone's
- * clock is advisory — this only keeps "admitted 20:41" close to the truth
+ * clock is advisory — this only keeps "admitted 8:41 PM" close to the truth
  * instead of stamping the moment signal came back.
  */
 export function clampOfflineTime(scannedAt: Date, validFrom: Date, now: Date): Date {

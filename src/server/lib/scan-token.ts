@@ -1,3 +1,4 @@
+import { normaliseDigits } from './digits';
 import { SCAN_INPUT_MAX } from './door-rules';
 import { TICKET_CODE_PATTERN } from './ticket-code-format';
 
@@ -10,7 +11,7 @@ import { TICKET_CODE_PATTERN } from './ticket-code-format';
  */
 export function parseScanToken(raw: string): string | null {
   if (raw.length === 0 || raw.length > SCAN_INPUT_MAX) return null;
-  let s = raw.trim();
+  let s = normaliseDigits(raw).trim();
   const inUrl = /\/tickets\/([A-Za-z0-9-]+)/.exec(s);
   if (inUrl) s = inUrl[1]!;
   const upper = s.toUpperCase().replace(/[\s]+/g, '');

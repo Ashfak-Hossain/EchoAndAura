@@ -111,7 +111,7 @@ describe('email templates', () => {
       '৳2,400.00',
       '01712 345678',
       'EA-7K3M9Q',
-      '18 Sep 2026, 07:08 (Dhaka)',
+      '18 Sep 2026, 7:08 AM (Dhaka)',
       'https://echoandaura.com/orders/o1',
     ]) {
       expect(joined(r.html)).toContain(s);
@@ -242,7 +242,7 @@ describe('email templates', () => {
     const r = await renderEmail('expired', view({ order: { ...view().order, status: 'expired' } }));
     expect(r.subject).toBe('Your ticket hold has expired — EA-7K3M9Q');
     for (const s of [
-      '18 Sep 2026, 07:08 (Dhaka)',
+      '18 Sep 2026, 7:08 AM (Dhaka)',
       '৳2,400.00 unpaid',
       '124 General tickets',
       'Do not send it again',

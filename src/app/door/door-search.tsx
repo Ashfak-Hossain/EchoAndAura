@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatDhakaClock } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { normaliseDigits } from '@/server/lib/digits';
 import { type WireSearchResult, doorApi } from './door-api';
 
 /**
@@ -119,7 +120,9 @@ export function DoorSearch({
                 </span>
                 <input
                   value={digits}
-                  onChange={(e) => setDigits(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                  onChange={(e) =>
+                    setDigits(normaliseDigits(e.target.value).replace(/\D/g, '').slice(0, 3))
+                  }
                   autoFocus
                   inputMode="numeric"
                   autoComplete="off"
