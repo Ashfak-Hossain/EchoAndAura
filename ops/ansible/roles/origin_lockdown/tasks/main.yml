@@ -1,7 +1,9 @@
 # SERVER.md § 20, ADR-045: only Cloudflare may open connections to the web
-# ports. Docker publishes Traefik's ports around ufw, so the rules live in
-# the DOCKER-USER chain; the service applies them at boot and again
-# whenever Docker restarts (PartOf=docker.service).
+# ports, and nobody to 3000 (the Dokploy dashboard, § 9). Docker publishes
+# ports around ufw, so the rules live in the DOCKER-USER chain; the service
+# applies them at boot and again whenever Docker restarts
+# (PartOf=docker.service). Runs before the dokploy role: enabled here, it
+# starts with Docker's very first start, inside Dokploy's install script.
 #
 # The Cloudflare ranges in files/origin-lockdown are the source of truth:
 # tests/unit/origin-lockdown.test.ts keeps them equal to src/lib/client-ip.ts,
@@ -14,6 +16,15 @@
     owner: root
     group: root
     mode: '0755'
+  notify: Re-apply origin lockdown
+
+- name: Tell it which interface the internet arrives on
+  ansible.builtin.template:
+    src: origin-lockdown.default.j2
+    dest: /etc/default/origin-lockdown
+    owner: root
+    group: root
+    mode: '0644'
   notify: Re-apply origin lockdown
 
 - name: Install its service

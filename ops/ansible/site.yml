@@ -14,12 +14,16 @@
       tags: [firewall]
     - role: docker_config
       tags: [docker]
+    # Before dokploy: its rules must be waiting when the install script
+    # first starts Docker and publishes port 3000.
+    - role: origin_lockdown
+      tags: [origin_lockdown]
+    - role: dokploy
+      tags: [dokploy]
     - role: sysctl
       tags: [sysctl]
     - role: apt_clean
       tags: [apt]
-    - role: origin_lockdown
-      tags: [origin_lockdown]
     - role: disk_alert
       tags: [disk_alert]
     - role: traefik

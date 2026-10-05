@@ -39,3 +39,32 @@ describe('origin-lockdown ranges', () => {
     for (const r of v6) expect(isIP(r.split('/')[0] ?? ''), r).toBe(6);
   });
 });
+
+describe('origin-lockdown hooks', () => {
+  const script = readFileSync('ops/ansible/roles/origin_lockdown/files/origin-lockdown', 'utf8');
+  const hooks = [
+    ...(script.match(/^hooks\(\) \{\n([\s\S]*?)\n\}/m)?.[1] ?? '').matchAll(/echo "(.*)"/g),
+  ].map((m) => m[1] ?? '');
+
+  it('send 80/443 (TCP and QUIC) through the Cloudflare-only chain', () => {
+    expect(hooks).toContain(
+      '-i $IFACE -p tcp -m multiport --dports 80,443 -m conntrack --ctdir ORIGINAL -j $CHAIN',
+    );
+    expect(hooks).toContain('-i $IFACE -p udp --dport 443 -m conntrack --ctdir ORIGINAL -j $CHAIN');
+  });
+
+  // SERVER.md section 9: the Dokploy dashboard's port. Never through the
+  // Cloudflare chain (Cloudflare can't reach 3000 anyway, and an allow there
+  // would make the dashboard public to anyone behind Cloudflare).
+  it('drop 3000 from the internet for everyone', () => {
+    const port3000 = hooks.filter((h) => /\b3000\b/.test(h));
+    expect(port3000).toEqual([
+      '-i $IFACE -p tcp --dport 3000 -m conntrack --ctdir ORIGINAL -j DROP',
+    ]);
+  });
+
+  it('only ever match the internet-facing interface, so the SSH tunnel (loopback) still works', () => {
+    expect(hooks).toHaveLength(3);
+    for (const h of hooks) expect(h.startsWith('-i $IFACE ')).toBe(true);
+  });
+});
