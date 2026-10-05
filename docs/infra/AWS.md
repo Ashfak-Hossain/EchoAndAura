@@ -9,10 +9,12 @@ database backups ([S3 off-site backups](#s3-off-site-backups), ADR-051).
 Everything else on the account exists to keep those safe and cheap: IAM
 principals, three budgets, one send-only key, one upload-only key, and
 one SNS topic that tells the developer about bounces and complaints.
-The SES side was set up once by hand and this page is the record
-(`pnpm infra:check` proves it is still true); the S3 side is
-CloudFormation, `ops/aws/offsite-backups.yaml`. Both are moving into
-Terraform (ADR-062, `ops/terraform/aws/`); its state lives in one more
+The SES side was set up by hand and is now **Terraform**
+(`ops/terraform/aws/`, ADR-062, since 2026-10-05): change it in code,
+never in the console ([TERRAFORM.md](TERRAFORM.md)). Account-level SES
+settings stay manual (see [SES](#ses)) and `pnpm infra:check` guards
+them. The S3 side is still CloudFormation, `ops/aws/offsite-backups.yaml`,
+until it moves into Terraform too. Terraform's state lives in one more
 bucket, [Terraform state](#terraform-state).
 
 How email flows through SES, and what to do when a message does not
@@ -73,6 +75,10 @@ flowchart LR
 | `echoandaura-worker`                  | IAM user | inline `ses-send-only` (below)                                                 | 1 access key → `AWS_SES_*` in `.env` | the worker process sends email      |
 | `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (CloudFormation)                                          | 1 access key → Dokploy `aws-offsite` | Dokploy uploads the off-site backup |
 | `BudgetsActionsRole`                  | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com` | —                                    | lets the hard-stop budget act       |
+
+**Terraform** (`iam.tf`): `echoandaura-worker` and `ses-send-only`. Not
+its access key (made by hand, so the secret never reaches state), and not
+root, `ash-admin` or the offsite user (CloudFormation, for now).
 
 ### `ses-send-only` (inline policy on `echoandaura-worker`)
 
@@ -201,6 +207,15 @@ aws sesv2 put-account-suppression-attributes --region ap-south-1 \
 | Mail type          | Transactional                                                                                                                                                                                                                                          |
 | Production access  | **Denied 2026-09-21**, **reopened 2026-09-28** on the same case (case id in Bitwarden `AWS ash-admin`). Sandbox until re-granted — 200 msgs/day, 1/s, verified recipients only. Reopen after the domain is live: see the runbook below                 |
 | Sending in the app | `MAILER=ses`, `EMAIL_FROM="echoandaura <tickets@echoandaura.com>"`, `EMAIL_REPLY_TO=hello@echoandaura.com` — see [../ENVIRONMENT.md](../ENVIRONMENT.md)                                                                                                |
+
+**Terraform** (`ses.tf`): the domain identity (Easy DKIM), MAIL FROM,
+feedback forwarding off, the Bounce and Complaint topics with headers,
+the SNS topic, its policy and the email subscription (address from `.env`,
+`TF_VAR_ses_feedback_email`). **Manual on purpose:** the account's
+suppression list, VDM and Auto Validation (the provider can't express Auto
+Validation and its suppression resource writes without it, which could
+switch it back on), the two Gmail identities (private; sandbox only), and
+production access (a support case).
 
 What each DNS record does for SES, and the authoritative record list, is
 in [CLOUDFLARE.md](CLOUDFLARE.md). The worker sends raw MIME through the
@@ -410,3 +425,4 @@ pnpm email:test <verified address>                            # "SES accepted th
 | 2026-09-28 | VDM and Auto Validation off; SNS topic `ses-feedback` for bounces + complaints on the domain identity, forwarding off, simulator-tested (ADR-039); production access case reopened with the live site                                                                                                     |
 | 2026-10-03 | Off-site backups (ADR-051): stack `echoandaura-offsite-backups` from `ops/aws/offsite-backups.yaml` (bucket, upload-only user); key made by hand → Dokploy `aws-offsite`; updated the same day to allow `GetObject` (rclone's upload check). S4 check: root and `ash-admin` MFA on, 0 access keys on both |
 | 2026-10-05 | Terraform state (ADR-062): stack `echoandaura-terraform-state` from `ops/aws/terraform-state.yaml`. Checked: CREATE_COMPLETE, versioning Enabled, 4 public-access blocks on, SSE AES256, HTTPS-only policy, `ap-south-1`                                                                                  |
+| 2026-10-05 | SES, SNS feedback and the worker user under Terraform (ADR-062, `ses.tf`, `iam.tf`): 10 imported; only change was Terraform-side (subscription address marked sensitive, value unchanged; two Terraform-only defaults). Plan = No changes. Account SES settings and the Gmail identities stay manual      |

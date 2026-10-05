@@ -16,7 +16,7 @@
     "email:render": "dotenv -e .env -- tsx scripts/render-emails.ts",
     "email:test": "dotenv -e .env -- tsx scripts/send-test-email.ts",
     "infra:check": "dotenv -e .env -- tsx scripts/infra-check.ts",
-    "tf:aws": "terraform -chdir=ops/terraform/aws",
+    "tf:aws": "dotenv -e .env -- terraform -chdir=ops/terraform/aws",
     "tf:cloudflare": "dotenv -e .env -- terraform -chdir=ops/terraform/cloudflare",
     "typecheck": "NEXT_DIST_DIR=.next-build next typegen && tsc --noEmit && tsc --noEmit -p relay",
     "lint": "eslint",
