@@ -61,7 +61,7 @@ Postgres and Redis.
 | [docs/README.md](docs/README.md)             | the index of every document                          |
 | [CLAUDE.md](CLAUDE.md)                       | the payment model and the invariants                 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | how the system fits together                         |
-| [docs/DECISIONS.md](docs/DECISIONS.md)       | why it is built this way (ADRs)                      |
+| [docs/decisions/](docs/decisions/README.md)  | why it is built this way (ADRs)                      |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md)           | what to do when something breaks, and on event night |
 | [CHANGELOG.md](CHANGELOG.md)                 | what each release changed                            |
 

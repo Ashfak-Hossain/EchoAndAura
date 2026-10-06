@@ -76,7 +76,7 @@ English and Bangla (/bn). Drag images in here. -->
       and actions stay thin
 - [ ] User-facing text is in `src/messages/en.ts` **and** `bn.ts`
 - [ ] Docs match the code (ARCHITECTURE, ENVIRONMENT, infra/, RUNBOOK),
-      with an ADR for any non-obvious choice
+      with an ADR in `docs/decisions/` for any non-obvious choice
 - [ ] No secrets, personal data or `.env` values in the code, the
       screenshots or this description
 

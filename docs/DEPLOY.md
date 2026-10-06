@@ -1,6 +1,7 @@
 # Deploying
 
-Status: ACTIVE · Last updated: 2026-10-02 · Decision: [ADR-036](DECISIONS.md)
+Status: ACTIVE · Last updated: 2026-10-02 · Decision:
+[ADR-036](decisions/036-deployment-dokploy.md)
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
 server itself (Dokploy, backups, disk, monitoring) is recorded in
