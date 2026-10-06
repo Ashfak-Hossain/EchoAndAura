@@ -70,7 +70,8 @@ A fuller narrative of the state machine summarized in `CLAUDE.md`:
    sees the organizer's bKash number and is prompted for a trxID and
    sending number. The 20-minute hold clock starts at order creation and is
    shown as a live countdown; the server still accepts a trxID for 2
-   minutes after it reaches zero (see [DECISIONS.md — ADR-054](DECISIONS.md)).
+   minutes after it reaches zero (see
+   [ADR-054](decisions/054-inventory-hold-20-minutes.md)).
 3. **Submission** — buyer pastes trxID (normalised uppercase/trimmed) and
    sending number; the order moves to `pending_verification`. The UNIQUE
    index on `orders.bkash_trx_id` (`CLAUDE.md`, Invariant 3) rejects reuse
@@ -94,7 +95,7 @@ Invariant 6) — that table, not application logs, is the audit trail.
 
 Events have their own, smaller state machine, validated in code the same
 way (`src/server/lib/event-status.ts`; see
-[DECISIONS.md — ADR-006](DECISIONS.md)):
+[ADR-006](decisions/006-event-status.md)):
 
 ```
 draft ⇄ published
@@ -170,7 +171,7 @@ are drawn with a plain `<img>`.
   The events vertical (`repositories/events.repository.ts` →
   `services/events.service.ts` → `app/admin/(protected)/events/actions.ts`)
   is the reference implementation — see
-  [DECISIONS.md — ADR-005](DECISIONS.md).
+  [ADR-005](decisions/005-service-repository-shape.md).
 - **The door phone is the only offline client.** `src/app/door/offline/`
   holds the phone-side pieces: the ticket list and outbox in IndexedDB
   (ADR-034), and a service worker scoped to `/door` that reopens a saved
@@ -186,7 +187,7 @@ Full project structure: [DEVELOPMENT.md § Project structure](DEVELOPMENT.md).
 
 One VPS (BengalCloud, Dhaka: 2 vCPU, 4 GB RAM, 25 GB disk) running
 [Dokploy](https://dokploy.com), behind Cloudflare (DNS, TLS, proxy)
-([ADR-036](DECISIONS.md)):
+([ADR-036](decisions/036-deployment-dokploy.md)):
 
 ```
 GitHub ── merge to main ──► Actions: verify → build web + worker images

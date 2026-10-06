@@ -7,7 +7,8 @@ Read these files in order, then report status. Do not write any code.
 1. `CLAUDE.md` — the invariants
 2. `notes/PHASES.md` — the plan
 3. `notes/PROGRESS.md` — where we left off
-4. `docs/DECISIONS.md` — past architectural choices
+4. `docs/decisions/README.md` — past architectural choices, by area; then the
+   three newest ADRs in that folder, in full
 5. `git log --oneline -10` and `git status`
 
 Then output exactly:

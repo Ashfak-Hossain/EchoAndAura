@@ -10,7 +10,7 @@ detailed history.
 ## [Unreleased]
 
 Everything before go-live, released together as **1.0.0**. The build log
-is `docs/DECISIONS.md` (ADR-001 onwards) and the pull requests.
+is `docs/decisions/` (ADR-001 onwards) and the pull requests.
 
 - Event pages, registration and bKash payment with manual verification.
 - Tickets by email, with a PDF and a web ticket page.

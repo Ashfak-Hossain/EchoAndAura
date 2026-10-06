@@ -19,7 +19,7 @@ values are set in Dokploy's Environment tab (copied from Bitwarden), and
 go to the worker only, the Turnstile keys to the web only. `APP_ENV=production`
 is fixed there, and `MAILER` defaults to `ses` until Dokploy sets it. `R2_PUBLIC_URL` is also a GitHub repo
 variable, because the image build needs it (ADR-033). See
-[DEPLOY.md](DEPLOY.md) and [ADR-036](DECISIONS.md).
+[DEPLOY.md](DEPLOY.md) and [ADR-036](decisions/036-deployment-dokploy.md).
 
 ## Quick reference
 
@@ -256,16 +256,16 @@ any origin by default, so no CORS setup is needed locally.
 Event cover uploads never pass through the Next.js server: the server
 presigns a PUT bound to the validated type and size, the browser uploads,
 and the server verifies the stored object before recording its key
-(see [DECISIONS.md — ADR-007](DECISIONS.md)). Sponsor logos are the
-exception ([ADR-032](DECISIONS.md)): SVG or PNG files of at most 512 KB,
-which the server receives, inspects and writes itself with
-`ObjectStorage.put`, under an immutable key and served as an attachment.
-The same Object Read & Write token covers those writes; the CORS policy
-above is only needed for the browser's cover PUT.
+(see [ADR-007](decisions/007-cover-image-uploads.md)). Sponsor logos are
+the exception ([ADR-032](decisions/032-home-navigation-sponsors.md)): SVG
+or PNG files of at most 512 KB, which the server receives, inspects and
+writes itself with `ObjectStorage.put`, under an immutable key and served
+as an attachment. The same Object Read & Write token covers those writes;
+the CORS policy above is only needed for the browser's cover PUT.
 
 **Covers are displayed through Next's image optimizer**
-([ADR-033](DECISIONS.md)). The optimizer's allow-list is built from
-`R2_PUBLIC_URL`, so:
+([ADR-033](decisions/033-covers-through-next-image.md)). The optimizer's
+allow-list is built from `R2_PUBLIC_URL`, so:
 
 - `R2_PUBLIC_URL` must be set **at build time** (`pnpm build`), not only at
   runtime. The allow-list is baked into the build, so changing the bucket or
@@ -280,8 +280,9 @@ above is only needed for the browser's cover PUT.
 ### Manual bKash — Phase 3
 
 - `BKASH_RECEIVE_NUMBER`: the organizer's bKash number, shown to buyers on the
-  payment page. There is **no bKash API** (see [ADR-001](DECISIONS.md)) — this is
-  the only bKash configuration.
+  payment page. There is **no bKash API** (see
+  [ADR-001](decisions/001-manual-bkash-verification.md)) — this is the only
+  bKash configuration.
 
 ### Organizer settings — since Phase 6 (B14), env is only the fallback
 
@@ -293,7 +294,7 @@ and a saved value wins over the environment field by field. A fresh
 database with nothing saved behaves exactly as the env describes, so these
 variables stay useful for local and CI. The worker reads the settings row
 per email job — no restart after a change. Migration `0011` must be applied
-before the app boots ([ADR-025](DECISIONS.md)).
+before the app boots ([ADR-025](decisions/025-settings.md)).
 
 ### Public site — Phase 2
 

@@ -16,7 +16,8 @@ Drizzle 0.45 (postgres-js driver) · Redis 7 + BullMQ · Zod · better-auth (adm
 password login; optional passwordless buyer sign-in) · pino · Amazon SES + React Email · shadcn/ui + Tailwind 4 · Vitest 5 +
 Playwright · Docker · Timezone `Asia/Dhaka`
 
-> Latest majors were adopted at scaffold time — see [ADR-003](docs/DECISIONS.md).
+> Latest majors were adopted at scaffold time — see
+> [ADR-003](docs/decisions/003-latest-major-versions.md).
 > Drizzle stays on stable 0.45 (1.0 is still pre-release).
 
 ---
@@ -140,7 +141,8 @@ covering the failure path, not just the happy path.
 - **Start every task in plan mode.** Present the plan, get approval, then write.
 - Run `pnpm verify` before saying a task is done. If it fails, it is not done.
 - Update `notes/PROGRESS.md` at the end of every session.
-- Record non-obvious choices in `docs/DECISIONS.md` as a short ADR.
+- Record non-obvious choices as a short ADR: one file in `docs/decisions/`,
+  copied from `TEMPLATE.md` and listed in that folder's `README.md`.
 - Pin dependency versions exactly. No `^` ranges.
 - Comment the WHY on money, inventory, and state-machine code.
 

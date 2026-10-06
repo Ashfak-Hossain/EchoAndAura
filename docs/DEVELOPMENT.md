@@ -116,7 +116,8 @@ failure path, not just the happy path.
 
 ### The gate scanner on a real phone
 
-The door page (`/door`, [ADR-030](DECISIONS.md)) needs the camera, and
+The door page (`/door`,
+[ADR-030](decisions/030-gate-scanner-slice-a.md)) needs the camera, and
 phones only allow it on HTTPS with a real certificate. `next dev
 --experimental-https` is not enough: its certificate is for `localhost`
 only, and the phone reaches your laptop by another name. Use a Cloudflare
@@ -284,6 +285,8 @@ A change is done when all of these hold:
 - [ ] Zod validation on every external input
 - [ ] Errors are handled and logged (pino) with the order reference in context
 - [ ] Loading and empty states exist in the UI, and it works at 360px wide
+- [ ] A non-obvious choice has an ADR in [decisions/](decisions/README.md)
+      (its README → Adding an ADR)
 - [ ] Code review passed (see below)
 
 ## Code review & the invariants
@@ -301,4 +304,4 @@ These are the points an "idiomatic simplification" tends to break.
 - [DIAGRAMS.md](DIAGRAMS.md) — ER, class, state, and sequence diagrams
 - [ENVIRONMENT.md](ENVIRONMENT.md) — environment variables and how to get them
 - [../CLAUDE.md](../CLAUDE.md) — the invariants, in full
-- [DECISIONS.md](DECISIONS.md) — architecture decision records
+- [decisions/](decisions/README.md) — architecture decision records

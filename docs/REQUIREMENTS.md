@@ -30,23 +30,26 @@ and this file is stale.
 - Ticket counts: the public pages show how many tickets of each type are
   left, unless the event's "Hide how many tickets are left" option is on —
   then no count is shown anywhere public (pages or buyer emails), only
-  "Sold out"; admins always see counts ([ADR-055](DECISIONS.md))
+  "Sold out"; admins always see counts
+  ([ADR-055](decisions/055-hide-tickets-left.md))
 - Promo codes: percentage or fixed, unlimited uses, restrictable by ticket type
 - Admin can cancel a ticket (releases inventory); refunds happen outside the
   system
 - Check-in at the gate: door phones scan the ticket QR with a per-gate pass
   (first scan wins, name search as a fallback); the printed/exported list is
-  the backup ([ADR-030](DECISIONS.md)). Without signal a door phone answers
-  from a downloaded ticket list and syncs its scans later; double entries
-  are shown to the organizer ([ADR-034](DECISIONS.md)). A door phone that
+  the backup ([ADR-030](decisions/030-gate-scanner-slice-a.md)). Without
+  signal a door phone answers from a downloaded ticket list and syncs its
+  scans later; double entries are shown to the organizer
+  ([ADR-034](decisions/034-gate-scanner-offline.md)). A door phone that
   opened its pass with signal can also reload the page without it (a
   service worker keeps a saved copy, deleted when the session ends;
-  [ADR-035](DECISIONS.md))
+  [ADR-035](decisions/035-gate-scanner-service-worker.md))
 - Sponsors, managed by the admin: one presenting partner, partners and
   supporters, each with an uploaded SVG or PNG logo and an optional
   website, shown on the home page ("Supported by") and in the site footer;
   hidden sponsors are kept but not shown. An event can name one presenting
-  sponsor, shown on its page as "Presented by" ([ADR-032](DECISIONS.md))
+  sponsor, shown on its page as "Presented by"
+  ([ADR-032](decisions/032-home-navigation-sponsors.md))
 
 ## Explicit out-of-scope
 
@@ -54,7 +57,7 @@ Deferred to post-launch. **Everything not explicitly in scope above is out of
 scope** for the MVP.
 
 - bKash API integration, tokens, callbacks, reconciliation jobs (see
-  [DECISIONS.md — ADR-001](DECISIONS.md))
+  [ADR-001](decisions/001-manual-bkash-verification.md))
 - Custom field builder per event
 - Bangla localisation
 - Waitlist
@@ -68,7 +71,8 @@ These are open and block their respective phases:
   domain). BLOCKING.
 - **bKash merchant account** — client currently has no merchant account;
   MVP assumes personal bKash, which has receiving limits. See
-  [DECISIONS.md — ADR-001](DECISIONS.md). BLOCKING for scale, not for launch.
+  [ADR-001](decisions/001-manual-bkash-verification.md). BLOCKING for scale,
+  not for launch.
 
 ## Stakeholders
 
@@ -77,4 +81,4 @@ These are open and block their respective phases:
 ## Change log
 
 Scope changes get an ADR, not an edit war on this file. See
-[DECISIONS.md](DECISIONS.md).
+[decisions/](decisions/README.md).

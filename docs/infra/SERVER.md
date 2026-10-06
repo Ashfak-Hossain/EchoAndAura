@@ -9,8 +9,8 @@ one. No secret is on this page: the values live in Bitwarden
 item names listed in [SECRETS.md](SECRETS.md).
 
 How code reaches the server (images, deploys, rollback) is in
-[../DEPLOY.md](../DEPLOY.md); why it is built this way is ADR-036 in
-[../DECISIONS.md](../DECISIONS.md).
+[../DEPLOY.md](../DEPLOY.md); why it is built this way is
+[ADR-036](../decisions/036-deployment-dokploy.md).
 
 **Since 2026-10-06 most of this page is code.** The sections below record
 what was done by hand and why; the Ansible playbook in `ops/ansible/` now
@@ -551,8 +551,9 @@ the app with (removed right after):
 
 So Traefik does its part. The app must then read the list **from the
 right**, skipping Cloudflare, because the left end is the visitor's own
-text: [ADR-037](../DECISIONS.md). `CF-Connecting-IP` passed a fake straight
-through when Cloudflare was skipped, so it is not trusted.
+text: [ADR-037](../decisions/037-visitor-ip-behind-cloudflare.md).
+`CF-Connecting-IP` passed a fake straight through when Cloudflare was
+skipped, so it is not trusted.
 
 To repeat the test (e.g. after changing Traefik or the ranges):
 

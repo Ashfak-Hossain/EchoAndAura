@@ -11,7 +11,7 @@ the server.
 
 Terraform ([TERRAFORM.md](TERRAFORM.md)) does the same for the Cloudflare
 and AWS accounts. Ansible is for the machine itself. Why Ansible, and the
-lines it never crosses: ADR-063 in [../DECISIONS.md](../DECISIONS.md).
+lines it never crosses: [ADR-063](../decisions/063-server-as-code-ansible.md).
 
 ---
 
