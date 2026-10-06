@@ -1,0 +1,44 @@
+{
+  "description": "Echo & Aura edit safety and formatting hooks.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/no-secrets.sh\"",
+            "timeout": 30,
+            "statusMessage": "Checking edit safety"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/.codex/hooks/format.sh\"",
+            "timeout": 30,
+            "statusMessage": "Formatting edited files"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel)/scripts/git-tidy.sh\" --hook",
+            "timeout": 30,
+            "statusMessage": "Tidying git"
+          }
+        ]
+      }
+    ]
+  }
+}

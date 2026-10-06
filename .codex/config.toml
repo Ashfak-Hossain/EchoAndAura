@@ -1,0 +1,8 @@
+# Conservative defaults for this trusted repository. Production infrastructure
+# still requires the explicit human-run gates documented in CLAUDE.md.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+writable_roots = []
+network_access = false
