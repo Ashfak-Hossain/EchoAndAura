@@ -196,10 +196,14 @@ describe('the ADR index', () => {
 
   it('draws exactly the supersedes (solid) and extends (dotted) links', () => {
     const diagram = index.match(/```mermaid\n([\s\S]*?)```/)?.[1] ?? '';
-    const edges = (arrow: string) =>
-      [...diagram.matchAll(new RegExp(`a(\\d{3}) ${arrow} a(\\d{3})`, 'g'))]
-        .map((m) => `ADR-${m[1]} → ADR-${m[2]}`)
-        .sort();
+    // An edge line is "aNNN <arrow> aMMM". Arrows are compared as plain
+    // strings: any other arrow style fails here rather than going unseen.
+    const drawn: Record<string, string[]> = {};
+    for (const line of diagram.split('\n')) {
+      const [from, arrow, to, ...rest] = line.trim().split(' ');
+      if (rest.length > 0 || !/^a\d{3}$/.test(from) || !/^a\d{3}$/.test(to ?? '')) continue;
+      (drawn[arrow] ??= []).push(`ADR-${from.slice(1)} → ADR-${to.slice(1)}`);
+    }
 
     const solid = adrs.flatMap((a) => a.supersedes.map((old) => `${old} → ${a.id}`)).sort();
     // A pair that is both superseded and extended (ADR-030 → ADR-034) is drawn once, solid.
@@ -209,8 +213,9 @@ describe('the ADR index', () => {
       )
       .sort();
 
-    expect(edges('-->')).toEqual(solid);
-    expect(edges('-\\.->')).toEqual(dotted);
+    expect(Object.keys(drawn).sort()).toEqual(['-->', '-.->']);
+    expect(drawn['-->'].sort()).toEqual(solid);
+    expect(drawn['-.->'].sort()).toEqual(dotted);
   });
 });
 
