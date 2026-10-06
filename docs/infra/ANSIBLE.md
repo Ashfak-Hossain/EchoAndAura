@@ -1,6 +1,6 @@
 # Ansible
 
-Status: IN PROGRESS (slice D of 9.2) · Owner: Evan · Last updated: 2026-10-06
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-06
 
 Ansible keeps the **production server's own settings** as code in
 `ops/ansible/`. [SERVER.md](SERVER.md) records 21 steps that were typed
@@ -10,9 +10,60 @@ changing anything, and it can turn a fresh Ubuntu machine into a copy of
 the server.
 
 Terraform ([TERRAFORM.md](TERRAFORM.md)) does the same for the Cloudflare
-and AWS accounts. Ansible is for the machine itself.
+and AWS accounts. Ansible is for the machine itself. Why Ansible, and the
+lines it never crosses: ADR-063 in [../DECISIONS.md](../DECISIONS.md).
 
 ---
+
+## Where Ansible fits
+
+Four tools own the infrastructure. Each has a clear edge:
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 260}}}%%
+flowchart LR
+    subgraph repo ["In this repository · changed by pull request"]
+        direction TB
+        tf["`**Terraform**
+        ops/terraform/`"]
+        an["`**Ansible**
+        ops/ansible/`"]
+        gha["`**GitHub Actions**
+        .github/workflows/`"]
+    end
+
+    subgraph live ["What runs"]
+        direction TB
+        cf["`**Cloudflare**
+        DNS · WAF · cache · Access`"]
+        aws["`**AWS**
+        SES · IAM · budgets · backups`"]
+        subgraph vps ["The VPS"]
+            direction TB
+            os["`**The machine**
+            SSH · firewall · lockdown
+            swap · Docker · disk alert`"]
+            dok["`**Dokploy**
+            Postgres · Redis · the app
+            its settings · backup schedules`"]
+        end
+    end
+
+    you(["`A person, in the dashboard`"])
+
+    tf -->|plan, then apply| cf
+    tf -->|plan, then apply| aws
+    an -->|check, then apply| os
+    an -->|installs once| dok
+    gha -->|new images, deploy| dok
+    you -.->|by hand| dok
+
+    classDef manual stroke-dasharray: 6 4
+    class dok,you manual
+```
+
+Dashed: changed by hand, in Dokploy's dashboard. Everything else changes
+only through a pull request.
 
 ## Words you need
 
@@ -45,43 +96,83 @@ The tools install into `ops/ansible/.venv` with `uv` (no global
 install), and the collections into `ops/ansible/collections`. Both are
 git-ignored and appear on the first run.
 
-## What is managed
+## What is code, and what stays by hand
 
-| Role              | SERVER.md  | What                                                                                                                                                                                                                                                                                                                                                              | Since      |
-| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `base`            | § 4, § 5   | hostname, `/etc/hosts`, cloud-init keeps the name, UTC, automatic security updates                                                                                                                                                                                                                                                                                | 2026-10-06 |
-| `ssh`             | § 2        | your public key for root; keys only (`00-hardening.conf`, checked by `sshd -t` before saving)                                                                                                                                                                                                                                                                     | 2026-10-06 |
-| `swap`            | § 3        | 2 GB `/swapfile` (created only if missing), in fstab, swappiness 10                                                                                                                                                                                                                                                                                               | 2026-10-06 |
-| `firewall`        | § 6, 9, 20 | ufw: SSH allowed **first**, deny incoming/routed, allow outgoing, 80/443/3000 kept closed, logging low, on                                                                                                                                                                                                                                                        | 2026-10-06 |
-| `docker_config`   | § 7        | `/etc/docker/daemon.json`: container logs capped at 3 × 10 MB. **Never restarts Docker** (that stops the site): it prints a reminder to restart at a quiet time                                                                                                                                                                                                   | 2026-10-06 |
-| `sysctl`          | § 10       | `vm.overcommit_memory = 1`, so Redis can fork for its snapshots                                                                                                                                                                                                                                                                                                   | 2026-10-06 |
-| `apt_clean`       | § 17       | apt cache cleaned every 7 days (Docker images: Dokploy's daily cleanup, not here)                                                                                                                                                                                                                                                                                 | 2026-10-06 |
-| `origin_lockdown` | § 9, § 20  | the Cloudflare-only script + service; **3000 dropped for everyone**. Runs **before** `dokploy`: enabled everywhere, it starts with Docker's first start. Interface from Ansible's facts (`eth0` in production). **Its Cloudflare list is the one source**: a unit test keeps it equal to `src/lib/client-ip.ts`, and the `traefik` role checks Traefik against it |
-| `dokploy`         | § 8        | installs Dokploy **once** with its own script, kept in the repo (hash-pinned, `dokploy_version` pinned). Never upgrades (Dokploy updates itself; the role says when to bump the pin). Every run checks `dokploy` + `dokploy-postgres` 1/1 and Traefik running; stops on a half-finished install                                                                   | 2026-10-06 |
-| `disk_alert`      | § 18       | hourly disk check → Telegram; `alerts.env` written from `.env` with `no_log` and no diff (the token never shows)                                                                                                                                                                                                                                                  | 2026-10-06 |
-| `traefik`         | § 13, § 21 | owns `dynamic/inflight.yml` (100 in flight). **Only checks** Dokploy's `traefik.yml`: both `trustedIPs` lists equal the Cloudflare ranges, and `inflight-cap@file` is on `websecure`. Never edits it                                                                                                                                                              | 2026-10-06 |
+Every section of [SERVER.md](SERVER.md), and who owns it today:
 
-The web ports are closed in ufw, but ufw is **not** what keeps them
-Cloudflare-only: Docker's published ports bypass ufw. That is
-`origin_lockdown`'s job (§ 20, the `DOCKER-USER` chain).
+| §   | Topic                                     | Owner                                                                                       |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | Ubuntu 24.04, the VPS itself              | By hand: the provider's panel                                                               |
+| 2   | SSH: keys only                            | `ssh`                                                                                       |
+| 3   | Swap                                      | `swap`                                                                                      |
+| 4   | Automatic security updates                | `base`                                                                                      |
+| 5   | Hostname and clock                        | `base`                                                                                      |
+| 6   | Firewall (ufw)                            | `firewall`                                                                                  |
+| 7   | Docker's log limits                       | `docker_config`                                                                             |
+| 8   | Dokploy                                   | `dokploy` installs it; the owner account by hand                                            |
+| 9   | The dashboard's address, port 3000 closed | `origin_lockdown` drops 3000; the address, in Dokploy, by hand                              |
+| 10  | The app's Postgres and Redis              | In Dokploy, by hand; `sysctl` sets what Redis needs from the kernel                         |
+| 11  | The app (Dokploy Compose)                 | In Dokploy, by hand; the compose file is in the repository                                  |
+| 12  | First deploy                              | History. Deploys are GitHub Actions now ([../DEPLOY.md](../DEPLOY.md))                      |
+| 13  | Cloudflare in front                       | Cloudflare: Terraform. Traefik's trusted IPs: by hand, checked by `traefik`                 |
+| 14  | Admin accounts                            | By hand, with the `create-admin` script ([../DEPLOY.md](../DEPLOY.md))                      |
+| 15  | Test data removed                         | History, done once                                                                          |
+| 16  | Nightly backups                           | The schedules, in Dokploy, by hand. The buckets: off-site S3 by Terraform, R2 by hand       |
+| 17  | Disk hygiene                              | `apt_clean`; Docker's image cleanup is a Dokploy setting                                    |
+| 18  | Monitoring and alerts                     | `disk_alert`; the outside checks live in Better Stack                                       |
+| 19  | The app's database role                   | By hand: it needs the database password                                                     |
+| 20  | Only Cloudflare reaches the web ports     | `origin_lockdown`, with `firewall`                                                          |
+| 21  | A cap on requests in flight               | `traefik` owns the middleware file; the line that applies it: by hand, checked by `traefik` |
 
-**`traefik.yml` belongs to Dokploy**, which rewrites it when its web
-server settings change. If a check fails with "traefik.yml lost a hand
-edit", put back what the message names (SERVER.md § 13 / § 21), restart
-Traefik, and check again.
+What stays by hand stays by hand on purpose. Dokploy keeps its settings
+in its own database, so a file-based tool can't own them. Traefik's
+`traefik.yml` belongs to Dokploy, which rewrites it. The database role
+needs a password that must never reach the repository.
 
-**The disk alert needs two values in `.env`** (Bitwarden: Telegram alert
-bot): `ALERTS_TELEGRAM_BOT_TOKEN` and `ALERTS_TELEGRAM_CHAT_ID`. Without
-them, a production run stops at the `disk_alert` role rather than write
-empty values; `--skip-tags alerts_secret` skips just that file. The lab
-gets placeholders.
+## The roles
 
-**Never** in Ansible: Dokploy's own settings (the owner account,
-projects, databases, the compose app, its environment, backup schedules
-live in Dokploy's database), the two hand edits in Traefik's
-`traefik.yml` (Dokploy's file; the `traefik` role only checks them) and
-the app's database role (needs the DB password). SERVER.md keeps those
-as manual steps; its "Rebuilding from scratch" lists them in order.
+In the order the playbook runs them. Each role's tasks name their
+SERVER.md section.
+
+| Role              | §        | What it does                                                                         |
+| ----------------- | -------- | ------------------------------------------------------------------------------------ |
+| `base`            | 4, 5     | hostname and `/etc/hosts`, UTC, automatic security updates                           |
+| `ssh`             | 2        | your public key for root; keys only, checked by `sshd -t` before saving              |
+| `swap`            | 3        | a 2 GB `/swapfile` (created only if missing), swappiness 10                          |
+| `firewall`        | 6, 9, 20 | ufw: SSH allowed **first**, then deny incoming; 80, 443, 3000 kept closed            |
+| `docker_config`   | 7        | container logs capped at 3 × 10 MB. **Never restarts Docker**: it prints a reminder  |
+| `origin_lockdown` | 9, 20    | only Cloudflare reaches 80 and 443; **nobody reaches 3000**. Armed before Docker     |
+| `dokploy`         | 8        | installs Dokploy **once**, from its reviewed script; never upgrades; checks health   |
+| `sysctl`          | 10       | `vm.overcommit_memory = 1`, so Redis can save its snapshots                          |
+| `apt_clean`       | 17       | apt's cache cleaned every 7 days                                                     |
+| `disk_alert`      | 18       | an hourly disk check that messages Telegram above 80 %                               |
+| `traefik`         | 13, 21   | owns the in-flight cap file; **only checks** Dokploy's `traefik.yml`, never edits it |
+
+Details worth knowing:
+
+- **ufw does not protect the web ports.** Docker publishes ports around
+  it. `origin_lockdown` does, in Docker's `DOCKER-USER` chain. Its
+  Cloudflare list is the one source: a unit test keeps it equal to
+  `src/lib/client-ip.ts`, and the `traefik` role checks Traefik against
+  it. It reads the internet-facing interface from
+  `/etc/default/origin-lockdown`, written from the server's facts (`eth0`
+  in production).
+- **Dokploy installs itself, once.** The role runs Dokploy's own install
+  script, kept in `roles/dokploy/files/` exactly as reviewed and pinned
+  by checksum (a unit test fails on any edit), pinned to
+  `dokploy_version`. Dokploy then updates itself from its dashboard; when
+  production moves past the pin, a run says so. Every run checks that
+  `dokploy` and `dokploy-postgres` are running (1/1) and Traefik is up,
+  and stops with the fix on an install that ended half way.
+- **`traefik.yml` belongs to Dokploy**, which rewrites it when its web
+  server settings change. If a check fails with "traefik.yml lost a hand
+  edit", put back what the message names (SERVER.md § 13 / § 21), restart
+  Traefik, and check again.
+- **The disk alert needs two values in `.env`** (Bitwarden: Telegram
+  alert bot): `ALERTS_TELEGRAM_BOT_TOKEN` and `ALERTS_TELEGRAM_CHAT_ID`.
+  Without them, a production run stops at `disk_alert` rather than write
+  empty values; `--skip-tags alerts_secret` skips just that file. The lab
+  gets placeholders.
 
 ## Before you start (once per laptop)
 
@@ -112,6 +203,47 @@ the roles don't care, and production check mode is the final word.
 
 ## Making a change to the server
 
+Three stages, and production is touched only in the last:
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 260}}}%%
+flowchart TB
+    subgraph mac ["1 · On your Mac: nothing real is touched"]
+        direction LR
+        edit["`**Edit a role**
+        on a branch`"] --> lint["`**Lint**
+        pnpm ansible lint`"] --> lab["`**Lab VM**
+        reset, run twice`"]
+        lab -. "second run changed something" .-> edit
+    end
+
+    subgraph look ["2 · Production, read-only"]
+        direction LR
+        check["`**Check**
+        pnpm ansible check production`"]
+    end
+
+    subgraph real ["3 · Production, for real"]
+        direction LR
+        pr["`**Pull request**
+        CI lints · review · merge`"] --> apply["`**Apply**
+        pnpm ansible apply production`"] --> verify["`**Check again**
+        must say changed=0`"] --> record["`**Record it**
+        SERVER.md History`"]
+    end
+
+    mac -- "second run: changed=0" --> look
+    look -- "the diff shows only what you meant" --> real
+    look -. "something else changed: the server drifted" .-> drift["`**Stop and ask why.**
+    The code is right: apply.
+    The server is right: edit the role.`"]
+
+    classDef stop stroke-dasharray: 6 4
+    class drift stop
+```
+
+Step by step:
+
 1. Edit the role on a branch.
 2. `pnpm ansible lint`.
 3. `pnpm ansible:lab reset`, then `pnpm ansible:lab test`: must end with
@@ -128,6 +260,13 @@ the roles don't care, and production check mode is the final word.
 **Never change a managed setting by hand over SSH.** The next apply puts
 it back. In an emergency, change it by hand, then copy the change into
 the role the same day; check mode shows `changed=0` once they match.
+
+## Rebuilding a server
+
+From a blank Ubuntu to the site answering: the playbook (about 7
+minutes), a few steps by hand, then the app and its data. The diagram and
+the exact steps are in SERVER.md → [Rebuilding from scratch](SERVER.md#rebuilding-from-scratch).
+Rehearsed on the lab VM on 2026-10-06.
 
 ## When something goes wrong
 
@@ -150,3 +289,4 @@ the role the same day; check mode shows `changed=0` once they match.
 | 2026-10-06 | Slice B: roles `firewall`, `docker_config`, `sysctl`, `apt_clean`. Production check mode: **ok=25 changed=0**. Lab from `fresh`: changed=21, then the second run changed=0 (SSH still reachable with ufw on); 45 s including the reset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 2026-10-06 | Slice C: roles `origin_lockdown`, `disk_alert`, `traefik` (scripts moved from `ops/server/`; unit test path updated). Production check (alerts secret skipped until `.env` has it): **ok=37 changed=0**. Traefik guard tested on broken copies: a missing range and a missing middleware both fail. Lab: changed=29, then changed=0                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-10-06 | Slice D: role `dokploy` (installs once with the reviewed script kept in the repo, hash-pinned, `dokploy_version` v0.30.8; checks dokploy/postgres 1/1 + Traefik on every run; stops on a half install). `origin_lockdown` runs before it, drops 3000 for everyone, and reads its interface from `/etc/default/origin-lockdown`. **Rebuild rehearsal** on the lab from `fresh`: full run 7 min 23 s, stopped at the `traefik` guard as expected; 3000/80/443 closed from the Mac, open with the lockdown removed (control); tunnel to 3000 works; hand edits → `lab test` changed=0; snapshot `with-dokploy`. A cut-short install (Traefik missing) fails with its fix. Production check: **changed=4**, all the lockdown (script, `/etc/default`, unit, re-apply); `dokploy` all ok |
+| 2026-10-06 | Slice D applied to production: changed=4 (the lockdown), then check changed=0. Slice E: ADR-063; this page restructured (where Ansible fits, what is code and what stays by hand, the change and rebuild diagrams). **9.2 done**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
