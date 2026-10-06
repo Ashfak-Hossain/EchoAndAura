@@ -24,7 +24,16 @@ overrides:
   # Patched transitive versions, inside the ranges their parents already
   # accept: ip-address GHSA-j6r3-76f7-8jcv + GHSA-h3mg-xc3c-68pw (via shadcn,
   # now dev-only), brace-expansion 1.x (via eslint's minimatch 3). braces
-  # GHSA-vfj7-8cjw-p6xm has no published fix yet (3.0.3 is the latest) and
-  # only reaches dev tools; re-check `pnpm audit` when 3.0.4 ships.
+  # GHSA-vfj7-8cjw-p6xm declares 3.0.4 as patched, but npm still has no 3.0.4;
+  # it only reaches dev tools. Re-check `pnpm audit` when 3.0.4 is published.
   'ip-address@10': 10.7.3
   'brace-expansion@1': 1.1.21
+  # Patched transitive releases for the GitHub security alerts published in
+  # October 2026: proxy-addr IP spoofing (GHSA-jqcg-44mw-7w3h) and
+  # source-map-js event-loop denial of service (GHSA-68fv-2mgg-jv7q).
+  proxy-addr: 2.0.8
+  source-map-js: 1.2.2
+  # Additional high-severity advisories found by the registry audit: the MCP
+  # SDK OAuth client (via shadcn) and sharp's librsvg build (via Miniflare).
+  '@modelcontextprotocol/sdk': 1.31.0
+  sharp: 0.35.5
