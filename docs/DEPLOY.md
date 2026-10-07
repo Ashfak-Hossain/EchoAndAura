@@ -1,7 +1,11 @@
 # Deploying
 
-Status: ACTIVE · Last updated: 2026-10-02 · Decision:
-[ADR-036](decisions/036-deployment-dokploy.md)
+Status: ACTIVE · Last updated: 2026-10-08 · Decisions:
+[ADR-036](decisions/036-deployment-dokploy.md), [ADR-066](decisions/066-confirmed-app-deployments.md)
+
+**D3B1 rollout:** the confirmation changes below are prepared in this slice;
+the first live run has not been verified. D3B2 docs-only filtering remains
+separate. A docs-only merge still requests an application deployment.
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
 server itself (Dokploy, backups, disk, monitoring) is recorded in
@@ -36,18 +40,51 @@ branch → PR → CI green → merge to main → (automatic) images built → de
       `echoandaura-web` (the site) and `echoandaura-worker` (emails, hold
       expiry, and the migrate/admin scripts);
    2. **smoke-tests them**: every migration on an empty database, the site
-      answering `/api/health` and `/`, the worker staying up;
+      answering `/api/health` and `/`, the worker staying up, and
+      `/api/deployment` confirming the full revision of both images;
    3. pushes them to GHCR (GitHub's container registry) tagged `main` and
       `sha-<commit>`;
    4. calls Dokploy, which pulls the new images and runs
       `docker-compose.prod.yml`:
-      **migrate** first; **web** and **worker** start only if it succeeded.
+      **migrate** first; **web** and **worker** start only if it succeeded;
+   5. waits up to five minutes for the exact healthy web/worker revision to
+      answer at `/api/deployment`. A timeout fails the workflow rather than
+      reporting that a deployment request was a successful rollout.
 3. The site is down for a few seconds while `web` restarts (until its
    health check passes; the image checks every 2 s while booting). Deploy outside
    the busy hours of a sale, and never on event night unless something is
    broken.
 
 A failed migration leaves the old version running: nothing new starts.
+
+## Requested versus confirmed (D3B1)
+
+The two images contain a build-owned full Git commit in
+`deployment-revision.json`. GitHub supplies `SOURCE_REVISION` from the checked-out
+commit; **do not add it to Dokploy's Environment tab**. It is not a new secret.
+If building images locally, supply `--build-arg SOURCE_REVISION=<full-commit>`
+to both targets as well as the existing `R2_PUBLIC_URL` build argument.
+
+The public `/api/deployment` response contains only the public commit and a
+readiness boolean. `200` with `ready: true` means dependencies are healthy and
+both worker queues have fresh evidence matching the web image. `503` means the
+revision is unknown, mixed, unhealthy, stale or unavailable. Existing health
+and liveness responses are unchanged; local dev without an image manifest is
+deliberately unconfirmed. This evidence covers the present single-web and
+single-worker topology, not every instance in a scaled fleet.
+
+After requesting Dokploy, GitHub confirms the **expected full commit**, not
+just any ready response. That read-only step has no deployment credentials,
+refuses redirects and cached/unexpected data, and never logs response bodies.
+If it times out, check the Dokploy deployment, migration result, container
+health, queue heartbeat and any `IMAGE_TAG` rollback pin privately. Do not reset
+a pin, repeat a deploy, rotate a key or change the database merely to make the
+check green. It cannot tell whether a timeout was an actual failure or a slow
+rollout; verify before deciding what to do next.
+
+The CI smoke test checks both image revisions before pushing. After the owner
+merges D3B1, confirm the first real workflow and live revision before starting
+D3B2. No Terraform apply or additional environment secret is required.
 
 ## Rolling back
 

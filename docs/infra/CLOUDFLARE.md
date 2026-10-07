@@ -218,8 +218,10 @@ does not build the site and has no app credentials or runtime bindings.
 Production hosting and live HTTPS/browser checks were confirmed on 2026-10-08.
 The owner applied both reviewed hosting stages and explicitly confirmed
 `No changes` plans. Keep `TF_VAR_docs_custom_domain_enabled=true` locally after
-attachment. The first approved PR preview remains to be checked; D3B app-deploy
-filtering is still separate. See [Publishing the developer docs](DOCS_PUBLICATION.md)
+attachment. PR #71's approved preview and post-merge production publication
+passed live checks; older history entries precede that preview evidence.
+D3B1 prepares application revision confirmation; docs-only app-deploy filtering
+remains separate in D3B2. See [Publishing the developer docs](DOCS_PUBLICATION.md)
 for evidence, protected environment setup and rollback instructions.
 
 ## Cloudflare Access (ADR-050)

@@ -7,6 +7,7 @@ node_modules
 .next
 .next-build
 docs-site/.source
+docs-site/.next
 docs-site/out
 docs-site/test-results
 docs-site/playwright-report
@@ -26,4 +27,13 @@ vitest.config.mts
 next-env.d.ts
 .DS_Store
 .claude
+.codex
+.agents
+.aws
+# Infrastructure working copies may contain state, inventories and provider caches.
+# Neither production image needs these directories.
+ops/terraform
+ops/ansible
 .vscode
+# D3B: always regenerated from the checked-out commit in the build stage.
+deployment-revision.json

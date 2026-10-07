@@ -79,3 +79,5 @@ crash.log
 ops/ansible/.venv/
 ops/ansible/collections/
 ops/ansible/inventory/lab.yml
+# D3B: generated inside images, never operator-supplied release evidence.
+/deployment-revision.json

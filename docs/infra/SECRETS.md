@@ -59,7 +59,9 @@ Rules:
 The two Pages item names are the intended Bitwarden inventory entries; their
 storage is not yet confirmed, hence unchecked above. GitHub checks confirmed
 both secret names exist in both protected environments; no values were read.
-Production upload succeeded, while first preview validation is pending. Exact
+Production and PR #71 preview uploads passed live checks on 2026-10-08;
+older history entries precede that preview evidence. D3B1's read-only revision
+confirmation adds no credential or environment change. Exact
 token expiry dates were not recorded. Keep separate token values, use the same
 intended account identifier, and never substitute the broad Terraform token.
 
