@@ -1,6 +1,7 @@
 import type IORedis from 'ioredis';
 import { createRedisConnection } from './connection';
 import { ORDERS_WORKER_HEARTBEAT_KEY, WORKER_HEARTBEAT_KEY, assertWorkerAlive } from './heartbeat';
+import { assertWorkerRevision } from './deployment-revision';
 
 /**
  * ADR-036: the health check's Redis probes. Their own connection: the
@@ -26,4 +27,8 @@ export async function probeWorker(): Promise<void> {
     assertWorkerAlive(redis, now, WORKER_HEARTBEAT_KEY),
     assertWorkerAlive(redis, now, ORDERS_WORKER_HEARTBEAT_KEY),
   ]);
+}
+
+export async function probeWorkerRevision(revision: string): Promise<void> {
+  await assertWorkerRevision(probeConnection(), revision);
 }

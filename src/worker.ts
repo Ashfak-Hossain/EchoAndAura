@@ -24,6 +24,8 @@ import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
 import { createRedisConnection } from '@/server/queue/connection';
 import { ORDERS_WORKER_HEARTBEAT_KEY, recordWorkerHeartbeat } from '@/server/queue/heartbeat';
+import { createRevisionRecorder } from '@/server/queue/deployment-revision';
+import { readImageRevision } from '@/server/lib/image-revision';
 import { renderSignInEmail } from '@/server/email/templates/sign-in';
 import { renderAccountEmail } from '@/server/email/templates/account';
 import { EMAIL_CHANGE_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from '@/server/auth/account-emails';
@@ -79,6 +81,9 @@ async function main(): Promise<void> {
     throw new Error(`ticket fonts missing in ${FONT_DIR}: ${missing.join(', ')}`);
   }
   const connection = createRedisConnection();
+  const recordRevision = createRevisionRecorder(connection, readImageRevision(), () =>
+    logger.warn('deployment revision evidence not recorded'),
+  );
   const queue = new Queue(ORDERS_QUEUE, { connection });
   const mailer = selectMailer();
   const env = { siteUrl: siteUrl(), settings: () => settingsService.get() };
@@ -111,6 +116,7 @@ async function main(): Promise<void> {
     // picks up its jobs"; a Postgres outage is reported by the health
     // check's own database probe.
     await recordWorkerHeartbeat(connection);
+    recordRevision('holds');
     const { expired, failed } = await ordersService.expireLapsedHolds();
     if (expired > 0 || failed > 0) logger.info({ expired, failed }, 'expire-holds run');
     // Skipped orders are logged individually; failing the job makes the
@@ -165,6 +171,7 @@ async function main(): Promise<void> {
       if (job.name === EXPIRE_HOLDS_JOB) return expireHolds();
       if (job.name === WORKER_PING_JOB) {
         await recordWorkerHeartbeat(connection, Date.now(), ORDERS_WORKER_HEARTBEAT_KEY);
+        recordRevision('orders');
         return { ok: true };
       }
 
@@ -293,6 +300,8 @@ async function main(): Promise<void> {
     recordWorkerHeartbeat(connection),
     recordWorkerHeartbeat(connection, Date.now(), ORDERS_WORKER_HEARTBEAT_KEY),
   ]);
+  recordRevision('holds');
+  recordRevision('orders');
   logger.info(
     { queues: [ORDERS_QUEUE, HOLDS_QUEUE, ...(relayWorker ? [RELAY_QUEUE] : [])] },
     'worker started',

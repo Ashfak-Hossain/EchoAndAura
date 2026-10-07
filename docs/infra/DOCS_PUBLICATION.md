@@ -1,14 +1,15 @@
 # Publishing the developer docs
 
-Status: PRODUCTION LIVE, PR PREVIEW CHECK PENDING · Owner: Evan · Last updated: 2026-10-08
+Status: PRODUCTION AND PR PREVIEW VERIFIED · Owner: Evan · Last updated: 2026-10-08
 
 D3A production hosting is active at `docs.echoandaura.com`. The owner applied
 both reviewed Terraform stages and confirmed `No changes` afterwards. The
-protected production upload and live HTTPS/browser checks passed; the first
-same-repository PR preview still needs its own approval and verification.
+protected production upload and live HTTPS/browser checks passed, including the
+first owner-approved same-repository PR preview and the post-merge main upload.
 History separates owner-supplied Terraform results from read-only live checks.
-Application deployment filtering is D3B, a separate slice. The existing Dokploy
-workflow is unchanged: a docs merge still triggers an application deployment.
+Application deployment filtering is D3B2, a separate slice. D3B1 prepares app
+revision confirmation (ADR-066), not filtering; a docs merge still triggers an
+application deployment. No live D3B1 confirmation is claimed yet.
 
 This is an operational guide, **not part of the public docs-site collection**.
 There are no secret values here. Never paste a full Terraform plan, `.env`,
@@ -316,7 +317,24 @@ change, 0 to destroy`: create the Pages project and narrowly exclude the docs
   A proxied DNS record need not expose its raw CNAME publicly; the final
   owner-confirmed provider-refresh plan establishes configuration consistency.
 
-**Remaining closeout:** approve and verify a current same-repository PR preview
-in `docs-preview`: it must use `pr-N`, retain `noindex` and leave production
-unchanged. Preview credentials and uploads are not yet claimed as tested.
-D3B application deployment filtering remains a separate, unimplemented slice.
+### Preview and post-merge upload confirmed on 2026-10-08
+
+PR #71's owner-approved preview publisher [run 37675528133](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37675528133)
+succeeded. Non-secret uploader metadata confirmed `pr-71` at PR revision
+`b22c4b3`, rather than mistaking the trusted-main workflow SHA for its artifact.
+All five existing browser tests passed on the preview without skips; six public
+pages and 180 internal links/assets passed. HTTPS, search, themes, narrow
+layouts, metadata, headers and real 404 behavior worked; preview remained
+`noindex` and production remained healthy.
+
+After PR #71 merged as `94a6d5c`, the owner approved `docs-production`.
+[Publisher run 37676563915](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37676563915)
+and all validation/recheck/upload steps succeeded, with no pending approvals.
+Fresh production browser checks passed all five tests, six pages and 180 links.
+HTTPS/header/indexing checks passed on production, default Pages and preview;
+internal-only operational/local-note paths returned 404. The custom production
+hostname has no `noindex` header; both Pages addresses do. No secret values were
+retrieved. New Bitwarden entries and exact token expiries remain unconfirmed.
+
+D3A hosting/publication validation is complete. D3B1 confirmation is prepared
+separately; D3B2 application deployment filtering is still unimplemented.

@@ -30,7 +30,9 @@ import { createDoorService } from '@/server/services/door.service';
 import { readRelayConfig, signRelayTicket, toWire } from '@/server/relay/relay';
 import { createHealthService } from '@/server/services/health.service';
 import { healthRepository } from '@/server/repositories/health.repository';
-import { pingRedis, probeWorker } from '@/server/queue/probe';
+import { pingRedis, probeWorker, probeWorkerRevision } from '@/server/queue/probe';
+import { readImageRevision } from '@/server/lib/image-revision';
+import { createDeploymentService } from '@/server/services/deployment.service';
 import { doorRepository } from '@/server/repositories/door.repository';
 import { createSettingsService } from '@/server/services/settings.service';
 import { createSponsorsService } from '@/server/services/sponsors.service';
@@ -159,6 +161,13 @@ export const healthService = createHealthService({
   database: healthRepository.ping,
   queue: pingRedis,
   worker: probeWorker,
+});
+
+const imageRevision = readImageRevision();
+export const deploymentService = createDeploymentService({
+  revision: () => imageRevision,
+  health: () => healthService.check(),
+  worker: probeWorkerRevision,
 });
 
 export type { PromoCheck } from '@/server/services/orders.service';

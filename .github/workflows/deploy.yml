@@ -74,7 +74,13 @@ jobs:
 
       - name: Tags
         id: tags
-        run: echo "sha=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
 
       - uses: docker/setup-buildx-action@v4
 
@@ -90,7 +96,9 @@ jobs:
           context: .
           target: web
           load: true
-          build-args: R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+          build-args: |
+            R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+            SOURCE_REVISION=${{ steps.tags.outputs.revision }}
           tags: |
             ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
             ${{ env.REGISTRY }}/echoandaura-web:main
@@ -103,7 +111,9 @@ jobs:
           context: .
           target: worker
           load: true
-          build-args: R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+          build-args: |
+            R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
+            SOURCE_REVISION=${{ steps.tags.outputs.revision }}
           tags: |
             ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
             ${{ env.REGISTRY }}/echoandaura-worker:main
@@ -152,6 +162,9 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:3000/door/sw.js
           sleep 5
           test "$(docker inspect -f '{{.State.Running}}' worker)" = true
+          DEPLOYMENT_URL=http://127.0.0.1:3000/api/deployment \
+          DEPLOYMENT_REVISION="${{ steps.tags.outputs.revision }}" \
+          DEPLOYMENT_TIMEOUT_MS=90000 node .github/scripts/deploy-confirm.mjs
         # The worker boots with the production mailer (it refuses any other)
         # on AWS's documented example keys: the right shape (the worker checks
         # it at boot), valid nowhere. An empty database queues no email, so
@@ -171,6 +184,7 @@ jobs:
           done
 
       - name: Deploy
+        id: deploy
         env:
           DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
           DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
@@ -178,6 +192,7 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
+          echo "requested=false" >> "$GITHUB_OUTPUT"
           if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$DOKPLOY_COMPOSE_ID" ]; then
             echo "::notice::Images pushed; Dokploy is not configured yet, so nothing was deployed."
             exit 0
@@ -188,9 +203,19 @@ jobs:
           if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
             access=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
           fi
-          curl -fsS -X POST "$DOKPLOY_URL/api/compose.deploy" \
+          curl -fsS -o /dev/null -X POST "$DOKPLOY_URL/api/compose.deploy" \
             "${access[@]}" \
             -H "x-api-key: $DOKPLOY_API_KEY" \
             -H 'Content-Type: application/json' \
             -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}"
           echo "::notice::Deploy of ${{ steps.tags.outputs.sha }} requested — watch it in Dokploy."
+          echo "requested=true" >> "$GITHUB_OUTPUT"
+
+      # No deployment credentials in this read-only step. A green HTTP request
+      # to Dokploy is not proof that the expected images actually started.
+      - name: Confirm the running web and worker revision
+        if: steps.deploy.outputs.requested == 'true'
+        run: node .github/scripts/deploy-confirm.mjs
+        env:
+          DEPLOYMENT_URL: https://echoandaura.com/api/deployment
+          DEPLOYMENT_REVISION: ${{ steps.tags.outputs.revision }}

@@ -23,8 +23,14 @@ browser checks passed at `docs.echoandaura.com`. Keep
 `TF_VAR_docs_custom_domain_enabled=true` in ignored local configuration; setting
 it false is not rollback. See [Publishing the developer docs](DOCS_PUBLICATION.md)
 for the Terraform walkthrough, owner-confirmed plan summaries, protected CI
-credentials and the still-pending PR-preview check. Upload tokens remain
+credentials and the verified PR-preview check. Upload tokens remain
 manually managed outside Terraform, separate from the laptop's broad token.
+
+Follow-up on 2026-10-08: PR #71's approved preview and post-merge production
+publication passed live checks. Earlier rollout-history entries below describe
+the evidence available before that preview. D3B1 adds application revision
+confirmation only; it requires no Terraform apply. Docs-only deployment
+filtering remains D3B2.
 
 ---
 

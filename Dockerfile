@@ -7,10 +7,10 @@
 # Built by GitHub Actions (.github/workflows/deploy.yml), never on the VPS:
 # a Next build needs more RAM and disk than the server should give it.
 #
-#   docker build --target web    --build-arg R2_PUBLIC_URL=https://… -t echoandaura-web .
-#   docker build --target worker --build-arg R2_PUBLIC_URL=https://… -t echoandaura-worker .
+#   docker build --target web    --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" --build-arg R2_PUBLIC_URL=https://… -t echoandaura-web .
+#   docker build --target worker --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" --build-arg R2_PUBLIC_URL=https://… -t echoandaura-worker .
 #
-# Both targets need the arg: they share the build stage, which runs
+# Both targets need SOURCE_REVISION (the full Git commit) and the URL: they share the build stage, which runs
 # `next build`, and the same value lets the second build reuse the first's.
 #
 # No secret is ever baked in. R2_PUBLIC_URL is public (every cover URL starts
@@ -46,6 +46,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 FROM deps AS build
 COPY . .
 ARG R2_PUBLIC_URL
+ARG SOURCE_REVISION
+# Image-owned, root-readable metadata: runtime variables cannot claim a new revision.
+RUN node -e "const revision=process.env.SOURCE_REVISION; if(!/^[a-f0-9]{40}$/.test(revision)) throw new Error('SOURCE_REVISION must be a full Git commit'); require('node:fs').writeFileSync('deployment-revision.json', JSON.stringify({ revision }));"
 # APP_ENV=production makes a missing R2_PUBLIC_URL fail the build here,
 # instead of a site whose covers never load (src/lib/image-config.ts).
 ENV NEXT_OUTPUT=standalone APP_ENV=production R2_PUBLIC_URL=${R2_PUBLIC_URL}
@@ -66,8 +69,10 @@ RUN pnpm build && pnpm worker:build && pnpm ops:build && \
 
 # ---- web -----------------------------------------------------------------
 FROM ${NODE_IMAGE} AS web
+ARG SOURCE_REVISION
 # Links the GHCR package to the repo, so it inherits the repo's access.
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 # distDir is .next-build (next.config.ts), so the standalone server looks
@@ -75,6 +80,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node:node /app/.next-build/standalone ./
 COPY --from=build --chown=node:node /app/.next-build/static ./.next-build/static
 COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # The image optimizer's cache (ADR-033): a volume in production, so resized
 # covers survive a deploy. Created here so the node user owns it.
 RUN mkdir -p .next-build/cache/images && chown -R node:node .next-build/cache
@@ -89,13 +95,16 @@ CMD ["node", "server.js"]
 
 # ---- worker (and ops scripts) --------------------------------------------
 FROM ${NODE_IMAGE} AS worker
+ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
+COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # The ticket PDF's fonts, read from <cwd>/src/server/pdf/fonts. The web image
 # gets them through Next's file tracing; the worker bundle has no tracing, so
 # without this line every ticket email failed (2026-09-28). The worker

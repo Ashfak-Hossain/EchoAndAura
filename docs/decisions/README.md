@@ -63,6 +63,19 @@ flowchart LR
         a064 -.-> a065
         a062 -.-> a065
     end
+    subgraph deployment ["Confirmed application deployment"]
+        direction LR
+        a036["`**ADR-036**
+        Production images`"]
+        a040["`**ADR-040**
+        Worker health`"]
+        a066["`**ADR-066**
+        Running revision proof`"]
+        a036 -.-> a066
+        a040 -.-> a066
+        a054 -.-> a066
+        a065 -.-> a066
+    end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph backups ["Backups as code"]
         direction LR
@@ -258,6 +271,7 @@ flowchart LR
 | 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)         | Accepted                                         | 2026-10-05 |
 | 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                      | Accepted                                         | 2026-10-06 |
 | 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                         | 2026-10-07 |
+| 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                         | 2026-10-08 |
 
 ### Code structure and tooling
 
