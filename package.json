@@ -36,7 +36,11 @@
     "admin:create": "dotenv -e .env -- tsx scripts/create-admin.ts",
     "admin:promote": "dotenv -e .env -- tsx scripts/promote-admin.ts",
     "admin:reset-2fa": "dotenv -e .env -- tsx scripts/admin-reset-2fa.ts",
-    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "docs:dev": "pnpm --filter @echoandaura/docs dev",
+    "docs:build": "pnpm --filter @echoandaura/docs build",
+    "docs:verify": "pnpm --filter @echoandaura/docs verify",
+    "docs:test": "pnpm --filter @echoandaura/docs test:browser",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm docs:verify"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",

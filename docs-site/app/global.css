@@ -1,0 +1,184 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@source '../node_modules/fumadocs-ui/dist';
+
+:root {
+  --color-fd-primary: #84510f;
+  --color-fd-primary-foreground: #fff;
+}
+.dark {
+  --color-fd-primary: #e9b764;
+  --color-fd-primary-foreground: #241b0c;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.wordmark {
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
+.wordmark > span {
+  color: var(--color-fd-primary);
+}
+.wordmark small {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--color-fd-muted-foreground);
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  color: var(--color-fd-primary);
+}
+.welcome {
+  max-width: 900px;
+  padding: 100px 32px;
+  margin: auto;
+}
+.welcome h1 {
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  font-weight: 750;
+  margin: 24px 0;
+}
+.welcome > p:not(.eyebrow) {
+  font-size: 20px;
+  line-height: 1.7;
+  max-width: 650px;
+  color: var(--color-fd-muted-foreground);
+}
+.welcome a {
+  display: inline-block;
+  margin-top: 32px;
+  border-radius: 8px;
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+  padding: 14px 22px;
+  font-weight: 600;
+}
+.system-map {
+  border: 1px solid var(--color-fd-border);
+  border-radius: 14px;
+  background: var(--color-fd-card);
+  margin: 28px 0;
+  padding: 22px;
+}
+.system-nodes {
+  list-style: none;
+  display: flex;
+  padding: 0;
+  margin: 24px 0;
+}
+.system-nodes li {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.system-node {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 10px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  width: 100%;
+  min-height: 138px;
+}
+.system-node strong {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.system-node span {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.connector {
+  margin: 0 6px;
+  color: var(--color-fd-muted-foreground);
+}
+.blue {
+  background: #edf5ff;
+  color: #235a9f;
+}
+.violet {
+  background: #f2efff;
+  color: #65449d;
+}
+.teal {
+  background: #eaf7f3;
+  color: #20715c;
+}
+.amber {
+  background: #fff6e5;
+  color: #895400;
+}
+.rose {
+  background: #fff0f2;
+  color: #a13d56;
+}
+.dark .blue {
+  background: #17283d;
+  color: #9dc8ff;
+}
+.dark .violet {
+  background: #2a203d;
+  color: #c7aff0;
+}
+.dark .teal {
+  background: #16322b;
+  color: #96d8c4;
+}
+.dark .amber {
+  background: #342915;
+  color: #efc780;
+}
+.dark .rose {
+  background: #391f29;
+  color: #f1a4b8;
+}
+.system-map figcaption,
+.source-revision {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--color-fd-muted-foreground);
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-fd-primary);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .system-map {
+    padding: 16px;
+  }
+  .system-nodes {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .system-nodes li {
+    flex-direction: column;
+    width: 100%;
+  }
+  .system-node {
+    min-height: 0;
+  }
+  .connector {
+    transform: rotate(90deg);
+    margin-top: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

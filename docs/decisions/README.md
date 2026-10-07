@@ -251,12 +251,13 @@ flowchart LR
 
 ### Code structure and tooling
 
-| ADR | Decision                                                                                                        | Status   | Date       |
-| --- | --------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
-| 003 | [Adopt latest major versions at scaffold time](003-latest-major-versions.md)                                    | Accepted | 2026-09-15 |
-| 004 | [Auth instance lives outside `src/server/`](004-auth-outside-server.md)                                         | Accepted | 2026-09-15 |
-| 005 | [Service/repository shape: factories, a composition root, typed domain errors](005-service-repository-shape.md) | Accepted | 2026-09-16 |
-| 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)          | Accepted | 2026-09-29 |
+| ADR | Decision                                                                                                         | Status   | Date       |
+| --- | ---------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| 003 | [Adopt latest major versions at scaffold time](003-latest-major-versions.md)                                     | Accepted | 2026-09-15 |
+| 004 | [Auth instance lives outside `src/server/`](004-auth-outside-server.md)                                          | Accepted | 2026-09-15 |
+| 005 | [Service/repository shape: factories, a composition root, typed domain errors](005-service-repository-shape.md)  | Accepted | 2026-09-16 |
+| 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)           | Accepted | 2026-09-29 |
+| 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted | 2026-10-07 |
 
 ## Adding an ADR
 

@@ -1,3 +1,6 @@
+packages:
+  - docs-site
+
 allowBuilds:
   # next-intl's optional message extractor (unused): their binaries come as
   # optional dependencies, the install scripts only re-check them.

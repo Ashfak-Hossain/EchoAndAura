@@ -6,6 +6,10 @@
 node_modules
 .next
 .next-build
+docs-site/.source
+docs-site/out
+docs-site/test-results
+docs-site/playwright-report
 dist
 public/door
 coverage

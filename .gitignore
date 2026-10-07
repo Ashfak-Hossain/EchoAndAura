@@ -17,6 +17,12 @@
 /.next/
 /.next-build/
 /out/
+/docs-site/node_modules/
+/docs-site/.next/
+/docs-site/.source/
+/docs-site/out/
+/docs-site/test-results/
+/docs-site/playwright-report/
 
 # production
 /build
