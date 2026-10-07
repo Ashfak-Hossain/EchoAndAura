@@ -1,6 +1,6 @@
 # Terraform
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-05
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-08
 
 Terraform keeps the Cloudflare and AWS set-up as code in
 `ops/terraform/` (ADR-062). Before Terraform, every setting was a click in
@@ -9,19 +9,22 @@ the real thing match them. This page is how to use it day to day. It is
 written for someone who has never used Terraform.
 
 What it manages, and what it deliberately does not, is in ADR-062. In
-short: DNS, zone rules and settings, Access, SES, IAM, budgets. Not R2 or
+short: DNS, Pages projects and domain associations, zone rules and settings,
+Access, SES, IAM, budgets. Not R2 or
 Email Routing (the token would need rights over the backups; ADR-062
 addendum). **Never** anything
 whose creation produces a secret (access keys, API tokens, the Turnstile
 widget). Those stay hand-made and listed in [SECRETS.md](SECRETS.md).
 
-**D3A prepared, not applied:** Pages hosting is declared in `pages.tf`, with
-staged hostname attachment in `dns.tf` and a narrow docs-host rate-limit
-exception. These are not yet confirmed live resources. See
-[Publishing the developer docs](DOCS_PUBLICATION.md) for a line-by-line Terraform
-walkthrough, the two expected plans, required Pages token permission and
-separate protected CI upload credentials. The permission is a required owner
-setup step, not a claim that the existing token has already been changed.
+**D3A production hosting is live:** the owner applied the Pages project and
+narrow rate-limit exception, then the Pages hostname association and DNS CNAME.
+Both final plans were explicitly confirmed as `No changes`. Live HTTPS and
+browser checks passed at `docs.echoandaura.com`. Keep
+`TF_VAR_docs_custom_domain_enabled=true` in ignored local configuration; setting
+it false is not rollback. See [Publishing the developer docs](DOCS_PUBLICATION.md)
+for the Terraform walkthrough, owner-confirmed plan summaries, protected CI
+credentials and the still-pending PR-preview check. Upload tokens remain
+manually managed outside Terraform, separate from the laptop's broad token.
 
 ---
 
@@ -32,7 +35,7 @@ setup step, not a claim that the existing token has already been changed.
 | **Provider**   | A plug-in that talks to one service. `aws` talks to AWS, `cloudflare` to Cloudflare.                                                                            |
 | **Resource**   | One thing Terraform looks after: a DNS record, a bucket, an IAM user.                                                                                           |
 | **State**      | Terraform's notebook: which real things belong to which resource in the code. Kept in S3 ([AWS.md](AWS.md#terraform-state)), never in this repo or on a laptop. |
-| **Plan**       | A preview. Reads the real world, compares it with the code, lists what it would change. Changes nothing. Always safe.                                           |
+| **Plan**       | A preview. Reads live resources and lists proposed changes without applying them. Its output can contain private identifiers: share only reviewed summaries.    |
 | **Apply**      | Makes the changes. Shows the plan again and waits for you to type `yes`.                                                                                        |
 | **Import**     | "This thing already exists; it is yours now." How the hand-made set-up came under Terraform without being rebuilt.                                              |
 | **No changes** | The plan's best answer: code and reality match.                                                                                                                 |
@@ -43,7 +46,7 @@ setup step, not a claim that the existing token has already been changed.
 ```
 ops/aws/terraform-state.yaml     the S3 bucket for the state (CloudFormation, made once)
 ops/terraform/aws/               AWS: SES, SNS, IAM, budgets, the off-site bucket
-ops/terraform/cloudflare/        Cloudflare: DNS, zone rules and settings, Access
+ops/terraform/cloudflare/        Cloudflare: DNS, Pages, zone rules and settings, Access
 ops/terraform/.tflint.hcl        lint rules for both folders
 ```
 
@@ -105,19 +108,21 @@ permissions keeps its value, so `.env` does not change.
 | Specified domain `echoandaura.com` | Single Redirect → Edit                      | `rules.tf`: `redirect`                 |
 | Specified domain `echoandaura.com` | Zone Settings → Edit                        | `zone.tf`: email obfuscation, DNSSEC   |
 | Entire account                     | Access (Cloudflare One / Zero Trust) → Edit | `access.tf`: apps and policies         |
+| Intended account                   | Cloudflare Pages → Edit                     | `pages.tf`: project and domain         |
 
 ## What is managed
 
-| Folder        | File                 | Resources                                                                                                                                  | Since      |
-| ------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| `cloudflare/` | `dns.tf`             | the 11 DNS records we own ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                        | 2026-10-05 |
-| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                      | 2026-10-05 |
-| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                       | 2026-10-05 |
-| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                            | 2026-10-05 |
-| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription       | 2026-10-05 |
-| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                   | 2026-10-05 |
-| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                        | 2026-10-05 |
-| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation | 2026-10-06 |
+| Folder        | File                 | Resources                                                                                                                                  | Since               |
+| ------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `cloudflare/` | `dns.tf`             | 12 owned DNS records: the original 11 plus the docs CNAME ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))        | 2026-10-05          |
+| `cloudflare/` | `pages.tf`           | Static Direct Upload project `echoandaura-docs` and custom domain `docs.echoandaura.com`; destruction guards on both                       | 2026-10-08 verified |
+| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                      | 2026-10-05          |
+| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                       | 2026-10-05          |
+| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                            | 2026-10-05          |
+| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription       | 2026-10-05          |
+| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                   | 2026-10-05          |
+| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                        | 2026-10-05          |
+| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation | 2026-10-06          |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -187,14 +192,15 @@ Dependabot: upgrade all three together, by hand, in their own PR.
 
 ## History
 
-| Date       | Change                                                                                                                                                                                             |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                                                      |
-| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                                                      |
-| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                             |
-| 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed |
-| 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                           |
-| 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                          |
-| 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                 |
-| 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                   |
-| 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                   |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                                                                                                                                                                                                                                                    |
+| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                                                                                                                                                                                                                                                    |
+| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                                                                                                                                                                                                                           |
+| 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed                                                                                                                                                                                               |
+| 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                                                                                                                                                                                                                         |
+| 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                                                                                                                                                                                                                        |
+| 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                                                                                                                                                                                                               |
+| 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                                                                                                                                                                                                                 |
+| 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                                                                                                                                                                                                                 |
+| 2026-10-08 | D3A production rollout confirmed (ADR-065). Local token gained account Pages Edit. Owner reviewed/applied Stage A (1 add, 1 change, 0 destroy) and Stage B (2 add, 0 change, 0 destroy), then explicitly confirmed No changes after each. Static Pages upload and live custom-domain checks passed; PR preview remains pending. No new Terraform apply is required for this documentation record |
