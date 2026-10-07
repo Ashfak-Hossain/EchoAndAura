@@ -244,8 +244,7 @@ depending on them in a tour.
 `docs-site/` now contains the Fumadocs foundation: a landing page, a substantive
 system overview, a code-reading guide, static search, and themed architecture
 cards. Source links validate local files and use the checkout's commit. The
-public collection is only `docs-site/content/docs/`. Source excerpts, Twoslash,
-and the race interaction remain in D2.
+public collection is only `docs-site/content/docs/`.
 
 `pnpm docs:dev` starts the docs on port 3001. `pnpm verify` includes docs type
 checking, a static export, and checks for internal links, anchors, and assets.
@@ -263,6 +262,28 @@ Local validation: the full `pnpm verify` passed. Browser checks cover direct
 navigation, search results and empty results, focus restoration, dark theme,
 320px/390px layouts, the real 404, and browser errors. Light, dark, and mobile
 screenshots are generated under the ignored `docs-site/test-results/`.
+
+### First learning journey (D2)
+
+The Buy a ticket tour now connects registration, manual payment, atomic approval,
+and after-commit email delivery. A supporting order-state reference distinguishes
+the intermediate `paid` audit step from committed `issued` state, and delivery
+failures from transaction failures. The last-ticket concept has a user-controlled
+four-step model with either buyer winning, reset, and keyboard controls. Its
+written explanation and source/test links remain the evidence, not the simulation.
+
+Selected source excerpts are extracted by symbol with the TypeScript syntax tree,
+not copied or pinned to line ranges. Missing/ambiguous symbols and invalid fences
+fail the build. MDX tracks source dependencies for invalidation. The quantity
+teaching sample compiles the real pure module as a virtual Twoslash file without
+executing application code. See [authoring conventions](../../docs-site/README.md).
+Twoslash's native TypeScript 7 is limited to teaching samples; the application's
+existing TypeScript 5.9.3 toolchain is unchanged.
+
+The colorful journey cards and race states work in light/dark themes. The
+icon-rich infrastructure poster choice remains open; this slice does not publish
+the site or change production infrastructure. Local verification covers six
+source-plugin tests, three browser tests, and the full repository quality gate.
 
 | Slice                | Deliverable                                                                                    | Completion evidence                                                        |
 | -------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
