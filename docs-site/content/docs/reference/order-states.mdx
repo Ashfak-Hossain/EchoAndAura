@@ -1,0 +1,70 @@
+---
+title: Order states
+description: Find the status contract, inventory ownership, and the boundary between issuance and delivery.
+---
+
+An order status describes its business state. Email delivery is tracked
+separately through jobs and audit events; there is no `email_delivered` order
+status.
+
+| Status                 | Meaning                                                 | Inventory                                        |
+| ---------------------- | ------------------------------------------------------- | ------------------------------------------------ |
+| `pending_payment`      | Registered, awaiting the buyer's transaction ID         | Reserved until the unpaid hold lapses            |
+| `pending_verification` | Payment details submitted, awaiting a person's decision | Reserved; automatic expiry does not release it   |
+| `paid`                 | Payment approved, inside the approval transaction       | Converted to sold during that transaction        |
+| `issued`               | Ticket rows created and approval committed              | Sold, subject to ticket cancellation             |
+| `rejected`             | Admin rejected the payment claim                        | Hold released                                    |
+| `expired`              | Unpaid hold expired through the expiry service          | Hold released                                    |
+| `cancelled`            | All tickets on the issued order have been cancelled     | Sold inventory released as tickets are cancelled |
+
+## Legal transitions and exposed operations
+
+This table is extracted from the application's transition validator:
+
+```ts source="src/server/lib/order-status.ts#ORDER_TRANSITIONS" title="order-status.ts · actual transition table"
+
+```
+
+The table defines allowed transitions; a service must also check the operation's
+preconditions. Its `pending_verification → expired` entry does not permit the
+automatic expiry job to take that transition. `expireLapsedHolds` selects only
+`pending_payment` orders. Normal admin verification approves or rejects.
+
+Approval records `pending_verification → paid → issued` in one transaction.
+Other requests do not observe an intermediate committed `paid` order from that
+operation. A repeat approval is refused because the row is no longer pending
+verification.
+
+## Hold cutoff
+
+The displayed hold is 20 minutes. The server allows a two-minute submission
+grace, then refuses a late transaction ID under the order lock. A stored
+`pending_payment` row can already be lapsed before the expiry job processes it.
+
+```ts source="src/server/lib/hold.ts#holdLapsed" title="hold.ts · actual unpaid-hold predicate"
+
+```
+
+## Failure behavior
+
+| Trigger                                            | Outcome                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Stock condition fails during registration          | Sold-out error; no new order or hold commits                                  |
+| Transaction ID already belongs to another order    | Unique constraint refuses submission; its audit/update transaction rolls back |
+| Buyer edits the ID before approval locks the order | Changed-ID error; admin must verify the current details                       |
+| A database write fails during approval             | Approval transaction rolls back, including sold counters and ticket rows      |
+| Email hook fails after approval commits            | Order remains `issued`; service logs the failure                              |
+| An accepted email job fails to send                | Worker rejects the job for the configured retry policy                        |
+
+## Source and tests
+
+- <SourceLink path="src/server/lib/order-status.ts">Status validator</SourceLink> and
+  <SourceLink path="tests/unit/order-status.test.ts">transition tests</SourceLink>
+- <SourceLink path="src/server/services/orders.service.ts">Order service</SourceLink> and
+  <SourceLink path="tests/integration/orders.service.test.ts">submission/expiry tests</SourceLink>
+- <SourceLink path="src/server/services/fulfilment.service.ts">Fulfilment service</SourceLink> and
+  <SourceLink path="tests/unit/fulfilment.service.test.ts">approval/rejection tests</SourceLink>
+- <SourceLink path="src/server/email/dispatch.ts">Email dispatcher</SourceLink> and
+  <SourceLink path="tests/unit/email-dispatch.test.ts">delivery failure tests</SourceLink>
+
+For the explanation behind these contracts, follow [Buy a ticket](/docs/tours/buy-a-ticket/).

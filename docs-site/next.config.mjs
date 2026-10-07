@@ -7,5 +7,6 @@ const withMDX = createMDX();
 export default withMDX({
   output: 'export',
   trailingSlash: true,
+  serverExternalPackages: ['typescript'],
   env: { DOCS_SOURCE_REVISION: revision },
 });

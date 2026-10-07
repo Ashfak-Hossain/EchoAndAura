@@ -31,7 +31,15 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
   const Content = page.data.body;
   return (
     <DocsPage toc={page.data.toc}>
-      <p className="eyebrow">START HERE</p>
+      <p className="eyebrow">
+        {slug?.[0] === 'tours'
+          ? 'GUIDED TOUR'
+          : slug?.[0] === 'concepts'
+            ? 'CONCEPT'
+            : slug?.[0] === 'reference'
+              ? 'REFERENCE'
+              : 'START HERE'}
+      </p>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>

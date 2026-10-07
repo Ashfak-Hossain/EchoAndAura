@@ -1,0 +1,58 @@
+---
+title: Who gets the last ticket?
+description: Explore why a conditional UPDATE admits one competing reservation and refuses the other.
+---
+
+Two buyers can see one available ticket on the event page. That count is a
+snapshot. The reservation UPDATE decides whether each request succeeds.
+
+Choose which buyer reaches the row first, then step through the requests.
+Either buyer can win; the guarantee is that both cannot hold the same last
+ticket. This illustration assumes both request one ticket and no unrelated
+transaction fails.
+
+<TicketRace />
+
+## What the query guarantees
+
+The availability condition and counter update are part of the same SQL
+statement. At Postgres's default Read Committed isolation, a competing UPDATE
+waits for the earlier transaction, then checks its condition against the
+updated row. After the first reservation commits, there is no remaining stock
+for the second request.
+
+This is the actual repository method, extracted from source at build time:
+
+```ts source="src/server/repositories/inventory.repository.ts#inventoryRepository.reserve" title="inventory.repository.ts · actual source"
+
+```
+
+`true` means one row was updated. `false` means the reservation did not qualify.
+The order service turns the refused hold into a sold-out error, inside the
+transaction. No second order is created.
+
+For the database behavior behind the illustration, read
+[Postgres 17's Read Committed explanation](https://www.postgresql.org/docs/17/transaction-iso.html#XACT-READ-COMMITTED).
+
+## What if the first transaction rolls back?
+
+The provisional hold rolls back with the order and audit writes. The waiting
+request can then evaluate the row without that hold. The walkthrough above
+shows a successful commit, not this alternative. The written rule still
+applies: the database evaluates the current row, not the buyer's earlier page.
+
+## Follow the evidence
+
+The <SourceLink path="tests/integration/inventory.concurrency.test.ts">real-Postgres
+concurrency test</SourceLink> starts 50 competing one-ticket reservations against
+20 available tickets. It checks that exactly 20 succeed and the stored
+availability never becomes negative. That checks the same guarantee at a
+larger scale; this browser model is an explanation, not a substitute for it.
+
+Also see the <SourceLink path="tests/integration/inventory.repository.test.ts">repository
+integration tests</SourceLink>, <SourceLink path="tests/integration/orders.service.test.ts">order
+transaction tests</SourceLink>, and <SourceLink path="docs/decisions/011-inventory-primitives.md">inventory
+decision</SourceLink>.
+
+Continue the [Buy a ticket tour](/docs/tours/buy-a-ticket/) to see the reservation
+become a verified payment and issued tickets.

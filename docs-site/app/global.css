@@ -1,7 +1,9 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-twoslash/twoslash.css';
 @source '../node_modules/fumadocs-ui/dist';
+@source '../node_modules/fumadocs-twoslash/dist';
 
 :root {
   --color-fd-primary: #84510f;
@@ -171,6 +173,107 @@ a:focus-visible {
   .connector {
     transform: rotate(90deg);
     margin-top: 10px;
+  }
+}
+.ticket-race {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 16px;
+  background: var(--color-fd-card);
+}
+.race-scenario,
+.race-controls,
+.race-controls > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ticket-race button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ticket-race button[aria-pressed='true'] {
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+}
+.ticket-race button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.race-counters,
+.race-buyers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.race-counters div {
+  padding: 12px;
+  background: var(--color-fd-muted);
+  border-radius: 10px;
+}
+.race-counters dt {
+  font-size: 12px;
+  color: var(--color-fd-muted-foreground);
+}
+.race-counters dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.race-buyers {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.race-buyers div {
+  padding: 14px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.race-buyers span,
+.simulation-note {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.simulation-note {
+  color: var(--color-fd-muted-foreground);
+}
+.race-controls {
+  justify-content: space-between;
+}
+@media (max-width: 600px) {
+  .ticket-race {
+    padding: 14px;
+  }
+  .race-counters {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .race-counters div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .race-counters dd {
+    margin: 0;
+  }
+  .race-buyers {
+    gap: 8px;
+  }
+  .race-controls > div {
+    width: 100%;
+  }
+  .race-controls > div button {
+    flex: 1;
+    padding: 8px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

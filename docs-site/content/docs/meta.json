@@ -1,1 +1,4 @@
-{ "title": "Start here", "pages": ["index", "reading-the-code"] }
+{
+  "title": "Learn the system",
+  "pages": ["---Start here---", "index", "reading-the-code", "tours", "concepts", "reference"]
+}
