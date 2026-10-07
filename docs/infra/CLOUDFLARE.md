@@ -1,11 +1,12 @@
 # Cloudflare
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-05
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-08
 
 Cloudflare holds the **domain** (registrar + authoritative DNS), receives
 mail for `hello@` (**Email Routing**), holds event cover images
 (**R2**), and checks for bots on the public forms
-(**Turnstile**, ADR-048). It does not run the app. Every DNS record that
+(**Turnstile**, ADR-048). Pages serves the static developer docs (ADR-065);
+Cloudflare does not run the ticketing app. Every DNS record that
 exists is in the table below — if a record is not here, it should not be
 in the zone. `pnpm infra:check` resolves each one.
 
@@ -63,6 +64,7 @@ Encrypt certificate: the HTTP challenge arrives through Cloudflare.
 | A     | `deploy`                                      | `160.25.226.166`                                                       | Proxied  | **TF**. the Dokploy dashboard and its API (GitHub's Deploy workflow calls it). Added 2026-09-27; proxied 2026-09-29 (ADR-045)                 |
 | R2    | `media`                                       | the `echoandaura-media` bucket                                         | Proxied  | public covers and sponsor logos (`R2_PUBLIC_URL`). Created and managed by R2's Custom Domains; edit it there, not in DNS. Added 2026-09-27    |
 | AAAA  | `relay`                                       | `100::` (a Worker route)                                               | Proxied  | the gate relay Worker (ADR-058). Created by `wrangler`'s custom domain; read-only here                                                        |
+| CNAME | `docs`                                        | `echoandaura-docs.pages.dev`                                           | Proxied  | **TF**. Static developer docs; Pages association and CNAME owner-applied, live HTTPS verified on 2026-10-08 (ADR-065)                         |
 
 Cloudflare also keeps a hidden `_cf-…` TXT for Email Routing ownership;
 leave it.
@@ -181,18 +183,18 @@ be skipped for a path, and it would challenge the deploy call.
 
 ### Rate limiting (ADR-047)
 
-Security → WAF → Rate limiting rules. Free plan: **one** rule, matching
-on the URL path only (not the method or host), counted per IP over 10
-seconds, blocking for 10 seconds.
+Security → WAF → Rate limiting rules. The configured rule matches host and
+URL path, is counted per IP over 10 seconds, and blocks for 10 seconds.
 
 **Terraform** (ADR-062): `ops/terraform/cloudflare/rules.tf → `rate_limit``. Change it there and apply; a change made in the dashboard is undone by the next apply.
 
-| Rule                   | Expression                                            | Rate                        | Action         | Why                                                                                                                                     |
-| ---------------------- | ----------------------------------------------------- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `requests per address` | `(not starts_with(http.request.uri.path, "/_next/"))` | 150 requests / 10 s, per IP | Block for 10 s | One address flooding the site would take the server's in-flight budget (SERVER.md § 21) from everyone else; this refuses it at the edge |
+| Rule                   | Expression                                                                                    | Rate                        | Action         | Why                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------- | --------------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `requests per address` | `(http.host ne "docs.echoandaura.com" and not starts_with(http.request.uri.path, "/_next/"))` | 150 requests / 10 s, per IP | Block for 10 s | Protects the origin's in-flight budget without counting static docs served by Pages (ADR-065) |
 
 - **What counts:** pages, link prefetches, form posts, `/api/*`, `/door`
-  calls, on both hostnames. Everything under `/_next/` is left out:
+  calls on matched hosts. The exact `docs.echoandaura.com` host is excluded;
+  other hosts keep the existing budget and action. Everything under `/_next/` is left out:
   scripts and styles Cloudflare serves from cache, and resized covers
   Next serves from its own disk cache.
 - **Why 150:** a person browsing makes a page request plus a few
@@ -204,6 +206,21 @@ seconds, blocking for 10 seconds.
   are let back in.
 - **Event night:** door phones and admins at the venue may share one
   address; scanning is about one request per scan, far under the limit.
+
+## Developer docs (ADR-065)
+
+`docs.echoandaura.com` serves the public learning collection from the static
+Direct Upload project `echoandaura-docs`, not the VPS. Terraform owns the
+project, its Pages domain association and the proxied DNS CNAME. GitHub's
+separate **Publish docs** workflow uploads a checked CI export; Cloudflare
+does not build the site and has no app credentials or runtime bindings.
+
+Production hosting and live HTTPS/browser checks were confirmed on 2026-10-08.
+The owner applied both reviewed hosting stages and explicitly confirmed
+`No changes` plans. Keep `TF_VAR_docs_custom_domain_enabled=true` locally after
+attachment. The first approved PR preview remains to be checked; D3B app-deploy
+filtering is still separate. See [Publishing the developer docs](DOCS_PUBLICATION.md)
+for evidence, protected environment setup and rollback instructions.
 
 ## Cloudflare Access (ADR-050)
 
@@ -568,3 +585,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-05 | DNS under Terraform (ADR-062): 11 records imported into `ops/terraform/cloudflare/dns.tf` with no change (plan: 11 imported, 0 changed); then `plan` = No changes. Table corrected: `@` A and `www` CNAME existed since Phase 6; `relay` AAAA and `cf2024-1._domainkey` added                                                                                                                                                                                                      |
 | 2026-10-05 | Rules and settings under Terraform (ADR-062): WAF custom rules, rate limit, cache rule, the www→root redirect (found undocumented, now in [Redirect rules](#redirect-rules)), email obfuscation, DNSSEC. Token gained Zone WAF, Cache Rules, Zone Settings, Single Redirect (Edit). 6 imported, 0 changed; plan = No changes                                                                                                                                                       |
 | 2026-10-05 | Access under Terraform (ADR-062): apps `Admin`, `Dokploy` and policies `admins`, `developer`, `github deploy` imported (`access.tf`); emails from `.env`, sensitive. Only change: Terraform marking the email lists sensitive, values unchanged. Plan = No changes. Checked: `/admin` and `deploy` (incl. `/api/*`) 302 to the Access login from outside; Admin gate passed in a private window. Token gained Access: Edit (account)                                               |
+| 2026-10-08 | D3A production hosting confirmed (ADR-065): owner-applied Pages project, narrow docs-host rate-limit exclusion, Pages domain association and proxied docs CNAME. Owner confirmed No changes after both stages. Protected static upload and live HTTPS/search/links/themes/mobile/headers/404 checks passed on Pages and the custom hostname. First same-repository preview remains pending                                                                                         |

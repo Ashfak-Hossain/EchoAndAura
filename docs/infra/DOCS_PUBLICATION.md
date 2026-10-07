@@ -1,10 +1,12 @@
 # Publishing the developer docs
 
-Status: PREPARED, NOT APPLIED · Owner: Evan · Last updated: 2026-10-07
+Status: PRODUCTION LIVE, PR PREVIEW CHECK PENDING · Owner: Evan · Last updated: 2026-10-08
 
-D3A adds hosting for `docs.echoandaura.com`. The repository configuration is
-reviewable; no Pages project, DNS change, token or live publication is confirmed
-by this document. Update this status and History only after read-only verification.
+D3A production hosting is active at `docs.echoandaura.com`. The owner applied
+both reviewed Terraform stages and confirmed `No changes` afterwards. The
+protected production upload and live HTTPS/browser checks passed; the first
+same-repository PR preview still needs its own approval and verification.
+History separates owner-supplied Terraform results from read-only live checks.
 Application deployment filtering is D3B, a separate slice. The existing Dokploy
 workflow is unchanged: a docs merge still triggers an application deployment.
 
@@ -103,7 +105,7 @@ the same rule, stable `ref`, 150-request/10-second budget and block duration.
 This is **one in-place change** to the existing rate-limit ruleset. It is not
 an all-new-resources plan. Do not change its `ref`, other rules or thresholds.
 
-## Expected plans, not yet live results
+## Plan expectations and confirmed rollout
 
 | Stage                          | Intended resources                                                                  | Expected summary if there is no unrelated drift |
 | ------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -111,8 +113,10 @@ an all-new-resources plan. Do not change its `ref`, other rules or thresholds.
 | B: after a checked main upload | Create `cloudflare_pages_domain.docs[0]` and `cloudflare_dns_record.cname_docs[0]`  | `2 to add, 0 to change, 0 to destroy`           |
 | After either approved apply    | Compare code and live resources again                                               | `No changes`                                    |
 
-These are expectations, not an observed plan. Provider defaults or existing
-drift can differ. Stop for any unexpected resource, deletion, replacement or
+These remain review expectations for a new setup, not instructions to repeat
+the completed rollout. Both stage summaries and final `No changes` plans were
+confirmed by the owner; see History. Provider defaults or unrelated drift can
+differ on a later run. Stop for any unexpected resource, deletion, replacement or
 unexplained change. Never use `-target` to hide unrelated changes from review.
 `prevent_destroy` does not prevent a harmful in-place change; read every diff.
 
@@ -146,6 +150,23 @@ the publisher itself runs on main. Require a reviewer for previews, and for
 initial production activation. Do not move these tokens into repository-wide
 secrets or into the unprivileged CI workflow. Confirm protection availability
 in the repository's GitHub settings before enabling publication.
+
+### Confirmed GitHub setup
+
+Read-only GitHub checks on 2026-10-08 confirmed:
+
+- Both `docs-production` and `docs-preview` allow only the exact `main` branch,
+  require the owner as reviewer, allow self-review for this solo-owner workflow,
+  and prevent administrators from bypassing protection. The publisher runs on
+  trusted main code even when selecting a PR artifact.
+- Both environments contain secret names `CLOUDFLARE_PAGES_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID`. Values were not retrieved. The production credential
+  worked for the first upload; presence alone does not prove the preview token.
+- Repository variable `DOCS_PUBLISH_ENABLED` is `true`.
+
+The owner created separately named production and preview Pages tokens.
+Bitwarden storage and their exact expiry dates were not independently confirmed;
+do not mark them verified or copy values into the inventory.
 
 ## Publication checks and limitations
 
@@ -204,10 +225,15 @@ verify the non-secret result before the next round.
 3. After review, the owner applies Stage A and runs another plan. Require
    `No changes`. Record verified resources, not merely a successful request.
 4. Merge reviewed code, configure both protected GitHub environments and their
-   secrets, and set repository variable `DOCS_PUBLISH_ENABLED` to `true`. Re-run
-   the latest main CI if it finished while publication was disabled. The exact
-   successful run must have this slice's artifact format. First test the default
-   `echoandaura-docs.pages.dev` production deployment: HTTPS, pages, search,
+   secrets, and set repository variable `DOCS_PUBLISH_ENABLED` to `true`. If the
+   latest current main CI already succeeded while publishing was disabled,
+   re-run its corresponding skipped **Publish docs** run, not CI. Leave debug
+   logging off and approve only `docs-production` after checking the selection.
+   Re-running main CI can also trigger the unchanged application Deploy workflow.
+   The source CI attempt must still match and its checked artifact must exist
+   and be unexpired; otherwise stop and review a new CI run separately.
+   First test the default `echoandaura-docs.pages.dev` production deployment:
+   HTTPS, pages, search,
    links, themes, mobile layout, headers, missing-page HTTP 404 and noindex.
 5. Only after that works, set local `TF_VAR_docs_custom_domain_enabled=true`
    yourself. Review Stage B's plan separately, then apply after approval.
@@ -256,8 +282,41 @@ exposure must be revoked/rotated in the dashboard, not printed for diagnosis.
 - [Static headers](https://developers.cloudflare.com/pages/configuration/headers/)
 - [Preview deployments](https://developers.cloudflare.com/pages/configuration/preview-deployments/)
 - [Rollbacks](https://developers.cloudflare.com/pages/configuration/rollbacks/)
+- [GitHub workflow reruns](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)
+- [GitHub deployment reviews](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/review-deployments)
 
 ## History
 
-No production changes confirmed yet. D3A configuration and its local checks
-do not establish a live deployment. Keep this distinction when handing off.
+### Production rollout confirmed on 2026-10-08
+
+- **Terraform, owner-supplied evidence:** Stage A reviewed as `1 to add, 1 to
+change, 0 to destroy`: create the Pages project and narrowly exclude the docs
+  host from the existing rate limit. Stage B reviewed as `2 to add, 0 to change,
+0 to destroy`: `cloudflare_pages_domain.docs[0]` and
+  `cloudflare_dns_record.cname_docs[0]`. The owner applied both stages and
+  explicitly confirmed a fresh `No changes` plan after each. Plans and applies
+  remained owner-operated; these Terraform results were not independently
+  reproduced.
+- **Hosting check:** a read-only Cloudflare check validated the existing static
+  Direct Upload project `echoandaura-docs`, production branch `main`, and no
+  project environment secrets or runtime bindings before the first upload.
+- **Production upload:** [Publish docs run 37612098200, attempt 2](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37612098200)
+  succeeded at main revision `6ed6799`, using the checked artifact from
+  [CI run 37611573321, attempt 1](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37611573321).
+  Only the publisher was re-run; the owner approved `docs-production`.
+- **Live checks:** valid HTTPS, direct routes, static search, source links,
+  robots/sitemap, expected security headers and real missing-page HTTP 404
+  passed on both `echoandaura-docs.pages.dev` and `docs.echoandaura.com`.
+  Pages-hosted addresses have `noindex`; the custom production hostname does not.
+  This describes the indexing policy, not proof that a search engine indexed it.
+- **Browser and link checks:** all five existing browser tests passed against
+  each live hostname, with no skips. Search/focus, type popovers, the last-ticket
+  walkthrough, light/dark themes and 320/390px layouts worked. Each hostname's
+  crawl checked six public pages and 180 internal links/assets, including anchors.
+  A proxied DNS record need not expose its raw CNAME publicly; the final
+  owner-confirmed provider-refresh plan establishes configuration consistency.
+
+**Remaining closeout:** approve and verify a current same-repository PR preview
+in `docs-preview`: it must use `pr-N`, retain `noindex` and leave production
+unchanged. Preview credentials and uploads are not yet claimed as tested.
+D3B application deployment filtering remains a separate, unimplemented slice.
