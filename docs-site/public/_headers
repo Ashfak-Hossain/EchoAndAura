@@ -1,0 +1,14 @@
+# Next's static export has no response server; Pages applies these rules.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: base-uri 'none'; object-src 'none'; frame-ancestors 'none'
+
+# Only the custom production hostname should be indexed. This is NOT access control.
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex

@@ -293,6 +293,22 @@ source-plugin tests, three browser tests, and the full repository quality gate.
 | D3: publication      | Pages project, custom domain, previews, deployment configuration                               | Reviewed infrastructure plan, person-applied change, live read-only checks |
 | Following slices     | One useful concept, reference page, or tour extension at a time                                | Same content and build checks                                              |
 
+### Publication configuration (D3A)
+
+D3A prepares a Terraform Direct Upload Pages project, staged domain/CNAME
+attachment, sitemap/robots and static hosting headers. CI packages its tested
+export; a separate disabled-until-configured publisher validates artifacts with
+trusted default-branch code, selects current main for production and current
+same-repository PRs for `pr-N` previews, and exposes Pages-only credentials only
+to the uploader. Previews are public; noindex is not access control.
+
+[ADR-065](../decisions/065-docs-publication.md) records the trust boundary and
+account-scoped token limitation. The
+[publication walkthrough](../infra/DOCS_PUBLICATION.md) teaches the Terraform
+changes and expected plans. No production apply or live DNS/TLS verification is
+claimed yet. D3B will address reliable application-deploy filtering separately;
+D3A leaves the existing Dokploy workflow unchanged.
+
 Publication can follow D1 if its overview is ready to share; D2 is the first
 complete learning journey. There is no dependency on the deferred restore
 drill or on tagging the application `v1.0.0`.

@@ -47,4 +47,23 @@ Postgres integration test. `docs:verify` includes source-plugin failure tests;
 
 Dependencies are pinned. The docs use webpack because it is the bundler verified
 by the design spike. Generated `.source/`, `.next/`, and `out/` are ignored.
-No app `.env` is loaded by these commands. Deployment is a separate slice.
+No app `.env` is loaded by these commands.
+
+## Publication (D3A, prepared but not activated)
+
+The export includes a collection-derived sitemap, robots rules and reviewed
+Pages `_headers`. `pnpm verify` also runs publication policy/artifact tests.
+`DOCS_PREVIEW_MODE=pages pnpm docs:test` runs the browser suite against the
+local Pages emulator and checks response headers; it needs no Cloudflare token.
+The plain preview remains useful for fast local work.
+
+CI packages only the checked export after its full gates. A separate publisher
+uses trusted main-branch code to validate and upload the exact artifact, never
+executing PR code with deployment credentials. It stays inactive until the owner
+configures protected GitHub environments and `DOCS_PUBLISH_ENABLED=true`.
+Forks do not publish. Same-repository previews are public `pr-N` deployments;
+noindex is not privacy. Only current green main CI can select production.
+
+The configuration is not evidence of live Pages/DNS/TLS. Follow the staged,
+owner-operated [publication guide](../docs/infra/DOCS_PUBLICATION.md).
+Application deployment filtering is D3B; the existing app workflow is unchanged.
