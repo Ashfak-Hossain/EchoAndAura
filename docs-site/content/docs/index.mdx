@@ -1,0 +1,65 @@
+---
+title: How the system fits together
+description: Follow the boundaries that protect a ticket reservation, payment, and delivery.
+---
+
+Echo & Aura is an event ticketing application for one organizer. Buyers register
+for tickets and transfer money through bKash. An admin checks the payment
+statement before the application issues tickets and sends them by email.
+
+The engineering problem is keeping the order consistent while those actions
+happen at different times. A reservation must survive a slow payment, two
+buyers must not claim the same last ticket, and an email failure must not
+undo an approved order.
+
+## Begin with the boundaries
+
+<SystemMap />
+
+The **application** receives a request and coordinates the work. A service
+defines the business operation; repositories perform its database reads and
+writes. **Postgres** owns durable state: orders, reservations, tickets, and
+audit history. **Redis and BullMQ** hold background jobs. The **worker** renders
+and delivers emails outside the buyer's request.
+
+A database transaction groups related writes so they either all commit or all
+roll back. Registration reserves inventory, creates the order, and records the
+audit event in one transaction. The application queues the order-created email
+after that transaction commits.
+
+## Follow an order
+
+1. **Register.** The buyer chooses a ticket type and quantity. The server reads
+   the price and calculates the total in integer paisa; 100 paisa equals ৳1.
+2. **Reserve.** A conditional database UPDATE holds available inventory for
+   20 minutes. If no row qualifies, the request is sold out. The order starts
+   as `pending_payment`.
+3. **Submit payment.** The buyer transfers money through bKash and submits the
+   transaction ID and sending phone number. The order becomes
+   `pending_verification`. The database enforces transaction ID uniqueness.
+4. **Verify and issue.** The admin checks the statement and approves or rejects.
+   Approval converts held inventory to sold and creates the tickets. A
+   submitted payment awaits this decision; the unpaid-hold expiry does not
+   expire an order awaiting verification.
+5. **Deliver.** After approval commits, the application queues delivery for the
+   worker. A failed email can retry without repeating payment approval.
+
+Manual bKash payment happens outside the application. The application records
+the buyer's claim and the admin's decision; it does not call a payment API.
+
+## Find the implementation and its evidence
+
+| Question                             | Source                                                                                               | Test or decision                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| How does registration reserve stock? | <SourceLink path="src/server/services/orders.service.ts">Order service</SourceLink>                  | <SourceLink path="tests/integration/inventory.concurrency.test.ts">Real-Postgres concurrency test</SourceLink> |
+| What prevents overselling?           | <SourceLink path="src/server/repositories/inventory.repository.ts">Inventory repository</SourceLink> | <SourceLink path="docs/decisions/011-inventory-primitives.md">Atomic inventory decision</SourceLink>           |
+| Who can approve and issue tickets?   | <SourceLink path="src/server/services/fulfilment.service.ts">Fulfilment service</SourceLink>         | <SourceLink path="docs/decisions/014-fulfilment.md">Single fulfilment path</SourceLink>                        |
+
+These links use the source revision shown below the page. They let you read
+the implementation that corresponds to this docs build.
+
+## Read the code with a purpose
+
+Continue with [reading the codebase](/docs/reading-the-code/). It shows where
+requests, services, repositories, and background work live, and how to connect
+an explanation to its test.

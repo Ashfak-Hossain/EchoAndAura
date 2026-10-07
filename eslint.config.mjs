@@ -13,6 +13,11 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    '**/node_modules/**',
+    'docs-site/.source/**',
+    'docs-site/.next/**',
+    'docs-site/out/**',
+    'docs-site/next-env.d.ts',
     // Personal working notes (git-ignored) may contain third-party exports.
     'notes/**',
     // Wrangler's local state and bundles (the gate relay, ADR-058).

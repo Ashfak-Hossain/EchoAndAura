@@ -1,0 +1,48 @@
+---
+title: Reading the codebase
+description: Start at a business operation, then follow its input, storage, and evidence.
+---
+
+Choose one question before opening files: “What happens when a buyer registers?”
+is more useful than trying to read the whole repository from top to bottom.
+
+## Follow the request into a service
+
+`src/app/` contains pages, route handlers, and server actions. These translate a
+web request into validated inputs and a service call. `src/server/services/`
+defines business operations. Services are independent of Next.js so the worker
+can call the same operations.
+
+Start with the <SourceLink path="src/server/services/orders.service.ts">order
+service</SourceLink>. Read its exported operations, then follow the repositories
+they call. `src/server/repositories/` owns database access; `src/db/`
+defines the database schema.
+
+## Read the rule beside its test
+
+The <SourceLink path="src/server/repositories/inventory.repository.ts">inventory
+repository</SourceLink> reserves stock with one conditional UPDATE. Reading the
+available count and then writing a new count would allow competing requests to
+act on the same old value.
+
+The <SourceLink path="tests/integration/inventory.concurrency.test.ts">inventory
+concurrency test</SourceLink> sends competing requests to real Postgres. Unit
+tests cover small rules and failures; integration tests check behavior across
+real boundaries. A diagram explains the behavior, while the test checks it.
+
+## Look for the commit boundary
+
+A transaction can roll back database changes. It cannot unsend an email.
+Follow database writes until they commit, then find the queued work. This
+boundary explains why delivery retries can run independently of registration
+or approval.
+
+## Keep a decision within reach
+
+The <SourceLink path="docs/decisions/011-inventory-primitives.md">atomic
+inventory decision</SourceLink> explains the chosen approach and its tradeoffs.
+Read the decision when you need the reason behind a rule, then return to the
+source to see how the current implementation enforces it.
+
+Return to the [system overview](/docs/) to connect these files to the buyer's
+journey.

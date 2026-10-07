@@ -29,6 +29,7 @@ WORKDIR /app
 # ---- every dependency, for the build -------------------------------------
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY docs-site/package.json ./docs-site/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
   pnpm install --frozen-lockfile
@@ -36,6 +37,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 # ---- runtime dependencies only, for the worker ---------------------------
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY docs-site/package.json ./docs-site/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
   pnpm install --frozen-lockfile --prod

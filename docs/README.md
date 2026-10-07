@@ -23,6 +23,7 @@ New to the codebase? Read in this order:
 | [systems/EMAIL.md](systems/EMAIL.md)               | How an order becomes an email: hooks → queue → worker → SES; retries, audit rows, the "no email arrived" procedure.                         |
 | [systems/LOCALISATION.md](systems/LOCALISATION.md) | Bangla at `/bn` and 12-hour time: the design, and each slice as it is built.                                                                |
 | [systems/WAITLIST.md](systems/WAITLIST.md)         | Seats that come back go to the next person in line, with 60 minutes to claim (proposed).                                                    |
+| [systems/DOCS_SITE.md](systems/DOCS_SITE.md)       | Public developer docs: reading paths, colorful diagrams, selected interactions, static Fumadocs architecture, and delivery slices.          |
 | [../CHANGELOG.md](../CHANGELOG.md)                 | What shipped in each tagged release.                                                                                                        |
 | [RUNBOOK.md](RUNBOOK.md)                           | When something breaks: where alerts come from, site down, restore from backup, leaked secret, email, disk, the event-night checklist.       |
 | [LOAD-TEST.md](LOAD-TEST.md)                       | How much traffic production takes (measured 2026-09-30), the on-sale rush with no oversell, and how to run the test again.                  |

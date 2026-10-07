@@ -6,5 +6,10 @@ src/components/ui/
 .next-build/
 notes/
 pnpm-lock.yaml
+docs-site/.source/
+docs-site/.next/
+docs-site/out/
+docs-site/test-results/
+docs-site/playwright-report/
 # Go templates Traefik renders before parsing the YAML ({{ env … }}).
 ops/load/traefik/
