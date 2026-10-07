@@ -15,6 +15,14 @@ addendum). **Never** anything
 whose creation produces a secret (access keys, API tokens, the Turnstile
 widget). Those stay hand-made and listed in [SECRETS.md](SECRETS.md).
 
+**D3A prepared, not applied:** Pages hosting is declared in `pages.tf`, with
+staged hostname attachment in `dns.tf` and a narrow docs-host rate-limit
+exception. These are not yet confirmed live resources. See
+[Publishing the developer docs](DOCS_PUBLICATION.md) for a line-by-line Terraform
+walkthrough, the two expected plans, required Pages token permission and
+separate protected CI upload credentials. The permission is a required owner
+setup step, not a claim that the existing token has already been changed.
+
 ---
 
 ## Words you need

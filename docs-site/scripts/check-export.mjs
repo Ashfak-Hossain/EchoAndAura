@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, join, sep } from 'node:path';
 import { parse } from 'parse5';
+import { validateSite } from '../../.github/scripts/docs-artifact.mjs';
 
 const root = resolve('out');
 async function files(dir) {
@@ -55,4 +56,6 @@ for (const [file, { links }] of pages) {
 // A top-level 404 keeps Cloudflare Pages from treating the export as an SPA.
 await stat(join(root, '404.html'));
 await stat(join(root, 'api/search'));
+// Check the REAL export as part of pnpm verify, not just synthetic fixtures.
+await validateSite(root, await readFile('public/_headers', 'utf8'));
 console.log(`Export checked: ${html.length} HTML files, ${checked} internal links/assets.`);

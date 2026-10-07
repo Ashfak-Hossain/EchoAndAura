@@ -10,6 +10,14 @@ variable "cloudflare_zone_id" {
   type        = string
 }
 
+# Two-stage publication, not a routine on/off switch. Once enabled, keep it
+# true: prevent_destroy deliberately refuses to remove the live hostname.
+variable "docs_custom_domain_enabled" {
+  description = "Attach the docs hostname after verifying the first Pages production upload."
+  type        = bool
+  default     = false
+}
+
 # Who may pass Cloudflare Access (ADR-050). Real addresses: kept out of the
 # public repo, set in .env as JSON lists, e.g.
 #   TF_VAR_access_admin_emails='["dev@example.com","raj@example.com"]'

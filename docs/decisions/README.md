@@ -54,6 +54,15 @@ from an older ADR to the later one.
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 260}}}%%
 flowchart LR
+    subgraph publication ["Developer docs publication"]
+        direction LR
+        a064["`**ADR-064**
+        Static learning docs`"]
+        a065["`**ADR-065**
+        Checked Pages uploads`"]
+        a064 -.-> a065
+        a062 -.-> a065
+    end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph backups ["Backups as code"]
         direction LR
@@ -248,6 +257,7 @@ flowchart LR
 | 051 | [Off-site backup copy in AWS S3, and hourly backups during an event's sales window](051-off-site-backups.md) | Partly superseded by [ADR-062](062-terraform.md) | 2026-10-03 |
 | 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)         | Accepted                                         | 2026-10-05 |
 | 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                      | Accepted                                         | 2026-10-06 |
+| 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                         | 2026-10-07 |
 
 ### Code structure and tooling
 

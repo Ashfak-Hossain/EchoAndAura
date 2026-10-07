@@ -44,6 +44,24 @@ resource "cloudflare_dns_record" "cname_www" {
   }
 }
 
+# Pages' domain API does not create DNS. Associate the hostname first;
+# pointing a CNAME at Pages without that association can return HTTP 522.
+resource "cloudflare_dns_record" "cname_docs" {
+  count   = var.docs_custom_domain_enabled ? 1 : 0
+  zone_id = var.cloudflare_zone_id
+  name    = "docs.${local.zone}"
+  type    = "CNAME"
+  content = cloudflare_pages_project.docs.subdomain
+  ttl     = 1
+  proxied = true
+
+  depends_on = [cloudflare_pages_domain.docs]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 # The Dokploy dashboard and its API (GitHub's deploy call). Behind
 # Cloudflare Access (ADR-050) and a WAF skip rule for /api/*.
 resource "cloudflare_dns_record" "a_deploy" {

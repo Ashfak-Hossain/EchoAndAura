@@ -71,8 +71,10 @@ resource "cloudflare_ruleset" "rate_limit" {
     {
       ref         = "447e5eb3e18943dda0ad2894e1ee2a2f"
       description = "requests per address"
-      expression  = "(not starts_with(http.request.uri.path, \"/_next/\"))"
-      action      = "block"
+      # Static docs run on Pages, not the VPS this rule protects. Exclude
+      # only this exact host; keep all other hosts and the existing budget.
+      expression = "(http.host ne \"docs.echoandaura.com\" and not starts_with(http.request.uri.path, \"/_next/\"))"
+      action     = "block"
       ratelimit = {
         characteristics     = ["ip.src", "cf.colo.id"]
         period              = 10

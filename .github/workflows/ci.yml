@@ -71,11 +71,31 @@ jobs:
 
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm docs:test
+      - name: Test Pages static hosting behavior locally
+        run: pnpm docs:test
+        env:
+          DOCS_PREVIEW_MODE: pages
+          WRANGLER_SEND_METRICS: 'false'
 
       # THE most important test in the repo (CLAUDE.md § Testing) runs here,
       # with the gate check-in race tests (ADR-030) — both need only Postgres.
       - run: pnpm db:migrate
       - run: pnpm test:integration:db
+
+      # Only checked static output, never the repo, .env or app build. No
+      # Cloudflare credentials in CI. The publisher treats this as data.
+      - name: Package docs export
+        run: node .github/scripts/docs-artifact.mjs package "$RUNNER_TEMP/docs-artifact"
+        env:
+          DOCS_RUN_ID: ${{ github.run_id }}
+          DOCS_RUN_ATTEMPT: ${{ github.run_attempt }}
+          DOCS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-site-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/docs-artifact
+          if-no-files-found: error
+          retention-days: 7
 
   # Terraform (ADR-062): format, validity and lint for both root modules.
   # No credentials and no backend: it reads the code only, so it can never

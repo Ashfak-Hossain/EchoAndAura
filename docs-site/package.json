@@ -8,7 +8,8 @@
     "build": "next build --webpack && node scripts/check-export.mjs",
     "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
     "test:source": "node --test tests/source-excerpts.test.ts",
-    "verify": "pnpm test:source && pnpm typecheck && pnpm build",
+    "test:publication": "node --test ../.github/scripts/docs-publication.test.mjs",
+    "verify": "pnpm test:source && pnpm test:publication && pnpm typecheck && pnpm build",
     "preview": "node scripts/preview.mjs",
     "test:browser": "playwright test"
   },
