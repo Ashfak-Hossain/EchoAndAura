@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/button';
 import { ErrorPage, errorReference, randomReference } from '@/components/error-page';
+import { reportBoundaryError } from '@/lib/error-tracking/client';
 import './globals.css';
 
 /**
@@ -19,6 +20,10 @@ export default function GlobalError({
 }) {
   const [fallback] = useState(randomReference);
   const reference = errorReference(error.digest, () => fallback);
+
+  useEffect(() => {
+    reportBoundaryError(error);
+  }, [error]);
 
   return (
     <html lang="en" className="h-full font-sans antialiased">

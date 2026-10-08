@@ -9,6 +9,7 @@ import {
   TrxIdAlreadyUsedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
+import { reportError } from '@/server/lib/error-tracking';
 import { paymentFormSchema, paymentFormValues } from '@/lib/validation/orders';
 
 export interface PaymentFormState {
@@ -71,6 +72,8 @@ export async function submitPaymentAction(
       return { submitted: true };
     }
     logger.error({ orderId, err }, 'submit payment action: unexpected error');
+    // The service's transaction has unwound before any report is sent.
+    reportError(err, 'payment.submit', { route: '/orders/[id]' });
     return {
       banner: {
         title: 'We could not save your transaction ID',

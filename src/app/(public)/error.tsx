@@ -5,6 +5,7 @@ import Link from '@/i18n/link';
 import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/button';
 import { ErrorPage, errorReference, randomReference } from '@/components/error-page';
+import { reportBoundaryError } from '@/lib/error-tracking/client';
 
 /**
  * A8 — the public site's error boundary. Rendered inside the public shell
@@ -25,6 +26,7 @@ export default function PublicError({
   const reference = errorReference(error.digest, () => fallback);
 
   useEffect(() => {
+    reportBoundaryError(error);
     console.error(`[${reference}]`, error);
   }, [error, reference]);
 

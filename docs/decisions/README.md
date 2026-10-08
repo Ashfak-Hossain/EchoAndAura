@@ -278,6 +278,7 @@ flowchart LR
 | 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                                                   | 2026-10-07 |
 | 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                                                   | 2026-10-08 |
 | 067 | [Skip application deploys from a confirmed non-runtime diff](067-confirmed-baseline-deploy-filtering.md)     | Accepted                                                                   | 2026-10-08 |
+| 068 | [Error-only Sentry reporting with an outbound privacy allowlist](068-private-error-tracking.md)              | Accepted                                                                   | 2026-10-08 |
 
 ### Code structure and tooling
 

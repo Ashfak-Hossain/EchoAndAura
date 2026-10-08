@@ -22,6 +22,10 @@ server itself (Dokploy, backups, disk, monitoring) is recorded in
 
 ## The short version
 
+Optional error tracking has separate public build settings and a private BuildKit
+upload credential. See [ERROR-TRACKING.md](ERROR-TRACKING.md) before enabling it.
+An empty DSN keeps reporting off; source-map upload failure stops the image build.
+
 ```
 branch → PR → CI green → merge to main → compare with running revision
                                         ├─ runtime change → images → deploy

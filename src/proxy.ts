@@ -8,6 +8,7 @@ import {
   type AccessVerifier,
 } from '@/lib/cf-access';
 import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
+import { sentryDsn } from '@/lib/error-tracking/privacy';
 import {
   LOCALE_COOKIE,
   LOCALE_HEADER,
@@ -89,6 +90,7 @@ export async function proxy(request: NextRequest) {
     uploadOrigin: admin ? originFrom(process.env.R2_ENDPOINT) : null,
     door: pathname === '/door' || pathname.startsWith('/door/'),
     relayOrigin: wsOriginFrom(process.env.RELAY_URL),
+    errorOrigin: sentryDsn(process.env.NEXT_PUBLIC_SENTRY_DSN)?.origin ?? null,
     dev: process.env.NODE_ENV === 'development',
   });
   requestHeaders.set('Content-Security-Policy', csp);
