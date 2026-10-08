@@ -4,6 +4,7 @@
 .git
 .github
 node_modules
+.pnpm-store
 .next
 .next-build
 docs-site/.source

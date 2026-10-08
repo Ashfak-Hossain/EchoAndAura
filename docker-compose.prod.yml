@@ -29,6 +29,9 @@ x-logging: &logging
 x-app-env: &app-env
   APP_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Optional error-only reporting. Browser DSN belongs to the image build,
+  # not runtime. Upload credentials never belong in Dokploy or these images.
+  SENTRY_DSN: ${SENTRY_DSN:-}
   DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy}
   REDIS_URL: ${REDIS_URL:?Set REDIS_URL in Dokploy}
   SITE_URL: ${SITE_URL:?Set SITE_URL in Dokploy}

@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { coverImagesConfig } from './src/lib/image-config';
 
 const covers = coverImagesConfig();
@@ -8,6 +10,20 @@ if (covers.remotePatterns.length === 0) {
 }
 
 const nextConfig: NextConfig = {
+  // Generated only in the explicitly opted-in image build; uploaded and
+  // removed before the static assets or standalone server leave that stage.
+  productionBrowserSourceMaps: process.env.SENTRY_BUILD_SOURCEMAPS === '1',
+  compiler: {
+    runAfterProductionCompile: async ({ distDir, projectDir }) => {
+      if (process.env.SENTRY_BUILD_SOURCEMAPS === '1') {
+        execFileSync(
+          process.execPath,
+          [join(projectDir, 'scripts/error-tracking-build.mjs'), 'inject-next', distDir],
+          { cwd: projectDir, stdio: 'inherit' },
+        );
+      }
+    },
+  },
   // `next dev` and `next build` must never share a folder: a build (verify,
   // Playwright) running beside the dev server corrupts Turbopack's cache and
   // the dev typegen. The build/start/typegen scripts set NEXT_DIST_DIR to

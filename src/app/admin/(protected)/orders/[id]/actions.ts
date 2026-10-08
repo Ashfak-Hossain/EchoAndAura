@@ -17,6 +17,7 @@ import {
   TrxIdChangedError,
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
+import { reportError } from '@/server/lib/error-tracking';
 import { requireAdmin } from '@/lib/session';
 import { formatDhakaClock } from '@/lib/time';
 import { checkInUndoFormSchema } from '@/lib/validation/door';
@@ -163,20 +164,26 @@ function toMessage(err: unknown): string {
   }
   if (err instanceof TicketNotFoundError) return 'This ticket is not on this order.';
   if (err instanceof InventoryStateError) {
+    reportError(err, 'admin.order', { route: '/admin/orders/[id]' });
     return 'The ticket type’s sold count does not match its tickets. Nothing was changed — this needs looking at.';
   }
   if (err instanceof TrxIdChangedError) {
     return 'The buyer changed the transaction ID after you opened this page — reload and check the new one against the statement.';
   }
   if (err instanceof AttendeeNamesMismatchError) {
+    reportError(err, 'admin.order', { route: '/admin/orders/[id]' });
     return 'This order’s attendee names do not match its quantity. Do not approve — this needs looking at.';
   }
   if (err instanceof OrderNotFoundError) return 'This order no longer exists.';
   if (err instanceof InvalidRejectionReasonError) return 'Choose a reason from the list.';
-  if (err instanceof TicketCodeCollisionError) return 'Could not allocate ticket codes; try again.';
+  if (err instanceof TicketCodeCollisionError) {
+    reportError(err, 'admin.order', { route: '/admin/orders/[id]' });
+    return 'Could not allocate ticket codes; try again.';
+  }
   // Shape only: a PostgresError carries the query and its parameters.
   const shape =
     err instanceof Error ? { name: err.name, message: err.message } : { value: String(err) };
   logger.error({ err: shape }, 'verification action: unexpected error');
+  reportError(err, 'admin.order', { route: '/admin/orders/[id]' });
   return 'Something went wrong on our side. Nothing was changed — please try again.';
 }

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.10
 #
 # ADR-036: two production images from one build.
 #   web    — the Next.js standalone server (the site, /admin, /door)
@@ -47,11 +47,17 @@ FROM deps AS build
 COPY . .
 ARG R2_PUBLIC_URL
 ARG SOURCE_REVISION
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+ARG SENTRY_BUILD_SOURCEMAPS=0
 # Image-owned, root-readable metadata: runtime variables cannot claim a new revision.
 RUN node -e "const revision=process.env.SOURCE_REVISION; if(!/^[a-f0-9]{40}$/.test(revision)) throw new Error('SOURCE_REVISION must be a full Git commit'); require('node:fs').writeFileSync('deployment-revision.json', JSON.stringify({ revision }));"
 # APP_ENV=production makes a missing R2_PUBLIC_URL fail the build here,
 # instead of a site whose covers never load (src/lib/image-config.ts).
 ENV NEXT_OUTPUT=standalone APP_ENV=production R2_PUBLIC_URL=${R2_PUBLIC_URL}
+ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} NEXT_PUBLIC_SOURCE_REVISION=${SOURCE_REVISION} \
+  SENTRY_ORG=${SENTRY_ORG} SENTRY_PROJECT=${SENTRY_PROJECT} SENTRY_BUILD_SOURCEMAPS=${SENTRY_BUILD_SOURCEMAPS}
 # `next build` loads every route to read its config, and the database and
 # auth modules refuse to load without their settings (fail fast at boot).
 # Nothing connects or signs at build time — every page renders per request —
@@ -62,7 +68,9 @@ ENV DATABASE_URL=postgresql://build:build@127.0.0.1:1/not-a-database \
   BETTER_AUTH_SECRET=build-placeholder-never-used-at-runtime-0000000000
 # ...and proven not to have leaked into anything that ships: a page
 # prerendered with the placeholder origin would point people nowhere.
-RUN pnpm build && pnpm worker:build && pnpm ops:build && \
+RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
+  pnpm build && pnpm worker:build && pnpm ops:build && \
+  node scripts/error-tracking-build.mjs finish-image && \
   if grep -rlE "build-placeholder" .next-build/standalone .next-build/static public dist; then \
   echo "A build placeholder was baked into the output (files above)." >&2; exit 1; \
   fi

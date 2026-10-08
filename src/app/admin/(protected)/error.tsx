@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button, buttonVariants } from '@/components/button';
 import { ErrorPage, errorReference, randomReference } from '@/components/error-page';
+import { reportBoundaryError } from '@/lib/error-tracking/client';
 
 /** A8 for the admin: same page, admin wording and ways out. */
 export default function AdminError({
@@ -17,6 +18,7 @@ export default function AdminError({
   const reference = errorReference(error.digest, () => fallback);
 
   useEffect(() => {
+    reportBoundaryError(error);
     console.error(`[${reference}]`, error);
   }, [error, reference]);
 

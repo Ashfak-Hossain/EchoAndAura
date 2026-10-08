@@ -22,6 +22,13 @@ import { createEmailDispatcher, EmailSkippedError, emailSender } from '@/server/
 import { MailerPermanentError, MailerThrottledError } from '@/server/email/mailer';
 import { emailKindOf, selectMailer } from '@/server/email/select';
 import { logger } from '@/server/lib/logger';
+import {
+  initializeErrorTracking,
+  reportError,
+  flushErrorTracking,
+} from '@/server/lib/error-tracking';
+import { reportJobFailure } from '@/server/queue/error-tracking';
+import { startShutdownDeadline } from '@/server/queue/shutdown-deadline';
 import { createRedisConnection } from '@/server/queue/connection';
 import { ORDERS_WORKER_HEARTBEAT_KEY, recordWorkerHeartbeat } from '@/server/queue/heartbeat';
 import { createRevisionRecorder } from '@/server/queue/deployment-revision';
@@ -72,6 +79,7 @@ const accountEmailJobData = z.discriminatedUnion('kind', [
 ]);
 
 async function main(): Promise<void> {
+  initializeErrorTracking('worker');
   // Fail at boot, not at the first ticket email: the deploy's smoke test
   // checks that the worker stays up, so this stops a bad image or
   // environment before it reaches production. selectMailer() below does the
@@ -156,13 +164,17 @@ async function main(): Promise<void> {
         { connection, concurrency: 1 },
       )
     : null;
-  relayWorker?.on('failed', (job, err) =>
+  relayWorker?.on('failed', (job, err) => {
+    reportJobFailure('relay', job, err);
     logger.warn(
       { jobId: job?.id, attempt: job?.attemptsMade, err: err.message },
       'relay: announcement failed',
-    ),
-  );
-  relayWorker?.on('error', (err) => logger.error({ err }, 'worker error'));
+    );
+  });
+  relayWorker?.on('error', (err) => {
+    reportError(err, 'queue.error', { queue: 'relay' });
+    logger.error({ err }, 'worker error');
+  });
 
   const worker = new Worker(
     ORDERS_QUEUE,
@@ -257,6 +269,7 @@ async function main(): Promise<void> {
   );
 
   worker.on('failed', (job, err) => {
+    reportJobFailure('orders', job, err);
     const throttled = err instanceof MailerThrottledError;
     logger[throttled ? 'warn' : 'error'](
       { jobId: job?.id, name: job?.name, attempt: job?.attemptsMade, err },
@@ -282,13 +295,26 @@ async function main(): Promise<void> {
     }
   });
   // Without listeners BullMQ swallows these to console.error — outside pino.
-  worker.on('error', (err) => logger.error({ err }, 'worker error'));
-  queue.on('error', (err) => logger.error({ err }, 'queue error'));
-  holdsWorker.on('failed', (job, err) =>
-    logger.error({ jobId: job?.id, name: job?.name, err }, 'job failed'),
-  );
-  holdsWorker.on('error', (err) => logger.error({ err }, 'worker error'));
-  holdsQueue.on('error', (err) => logger.error({ err }, 'queue error'));
+  worker.on('error', (err) => {
+    reportError(err, 'queue.error', { queue: 'orders' });
+    logger.error({ err }, 'worker error');
+  });
+  queue.on('error', (err) => {
+    reportError(err, 'queue.error', { queue: 'orders' });
+    logger.error({ err }, 'queue error');
+  });
+  holdsWorker.on('failed', (job, err) => {
+    reportJobFailure('holds', job, err);
+    logger.error({ jobId: job?.id, name: job?.name, err }, 'job failed');
+  });
+  holdsWorker.on('error', (err) => {
+    reportError(err, 'queue.error', { queue: 'holds' });
+    logger.error({ err }, 'worker error');
+  });
+  holdsQueue.on('error', (err) => {
+    reportError(err, 'queue.error', { queue: 'holds' });
+    logger.error({ err }, 'queue error');
+  });
   // At boot too, so /api/health is green within seconds of a deploy rather
   // than after the first scheduled run (the deploy smoke test waits for it).
   await Promise.all([
@@ -309,18 +335,23 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'worker shutting down');
-    // If Redis is down, close() would wait forever; the supervisor gets a
-    // clean exit code either way.
-    const deadline = setTimeout(() => process.exit(1), 10_000);
-    deadline.unref();
+    // If Redis is down, close() would wait forever; bound the supervisor's wait
+    // and keep a failure exit unless all required closes finish successfully.
+    const markCleanShutdown = startShutdownDeadline((code) => process.exit(code));
     try {
       await Promise.all([worker.close(), holdsWorker.close(), relayWorker?.close()]);
       await Promise.all([queue.close(), holdsQueue.close()]);
       await closeProducer(); // this process enqueues too (expiry → C4)
       await connection.quit();
+      // Once required work is closed, an unavailable reporter must not change
+      // the clean exit status even if it uses the last of the ten-second bound.
+      markCleanShutdown();
+      await flushErrorTracking();
       process.exit(0);
     } catch (err: unknown) {
       logger.error({ err }, 'shutdown failed');
+      reportError(err, 'shutdown');
+      await flushErrorTracking();
       process.exit(1);
     }
   };
@@ -332,7 +363,24 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err: unknown) => {
+// Preserve fatal exit status: reporting gets at most two seconds, never a
+// restart/retry policy of its own. Node would otherwise exit without a report.
+const fatal = async (err: unknown): Promise<void> => {
+  logger.fatal({ err }, 'worker fatal error');
+  reportError(err, 'fatal');
+  await flushErrorTracking();
+  process.exit(1);
+};
+process.once('uncaughtException', (err) => {
+  void fatal(err);
+});
+process.once('unhandledRejection', (err: unknown) => {
+  void fatal(err);
+});
+
+main().catch(async (err: unknown) => {
   logger.error({ err }, 'worker failed to start');
+  reportError(err, 'startup');
+  await flushErrorTracking();
   process.exit(1);
 });

@@ -133,6 +133,12 @@ jobs:
           build-args: |
             R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
             SOURCE_REVISION=${{ steps.tags.outputs.revision }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+            SENTRY_BUILD_SOURCEMAPS=${{ vars.SENTRY_BUILD_SOURCEMAPS || '0' }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           tags: |
             ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
             ${{ env.REGISTRY }}/echoandaura-web:main
@@ -148,6 +154,12 @@ jobs:
           build-args: |
             R2_PUBLIC_URL=${{ vars.R2_PUBLIC_URL }}
             SOURCE_REVISION=${{ steps.tags.outputs.revision }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+            SENTRY_BUILD_SOURCEMAPS=${{ vars.SENTRY_BUILD_SOURCEMAPS || '0' }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           tags: |
             ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
             ${{ env.REGISTRY }}/echoandaura-worker:main

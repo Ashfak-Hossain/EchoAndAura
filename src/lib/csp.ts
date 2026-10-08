@@ -27,6 +27,8 @@ export interface CspOptions {
    * `wss://relay.echoandaura.com`. Door pages only.
    */
   relayOrigin?: string | null;
+  /** Exact, validated hosted Sentry ingest origin; no wildcard or script exception. */
+  errorOrigin?: string | null;
   /** `next dev`: React rebuilds server error stacks with eval. */
   dev: boolean;
 }
@@ -37,6 +39,7 @@ export function buildCsp({
   uploadOrigin,
   door,
   relayOrigin = null,
+  errorOrigin = null,
   dev,
 }: CspOptions): string {
   const script = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
@@ -50,6 +53,7 @@ export function buildCsp({
   const connect = ["'self'"];
   if (uploadOrigin) connect.push(uploadOrigin);
   if (door && relayOrigin) connect.push(relayOrigin);
+  if (errorOrigin) connect.push(errorOrigin);
 
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],
