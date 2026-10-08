@@ -1,11 +1,14 @@
 # Deploying
 
 Status: ACTIVE · Last updated: 2026-10-08 · Decisions:
-[ADR-036](decisions/036-deployment-dokploy.md), [ADR-066](decisions/066-confirmed-app-deployments.md)
+[ADR-036](decisions/036-deployment-dokploy.md),
+[ADR-066](decisions/066-confirmed-app-deployments.md),
+[ADR-067](decisions/067-confirmed-baseline-deploy-filtering.md)
 
-**D3B1 rollout:** the confirmation changes below are prepared in this slice;
-the first live run has not been verified. D3B2 docs-only filtering remains
-separate. A docs-only merge still requests an application deployment.
+**D3B rollout:** D3B1's first live run confirmed web and both worker queues at
+merge `89f0ac2`. D3B2 adds the non-runtime filter below. Its first real skipped
+image job remains a post-merge verification gate; until then, do not claim the
+filter is active in production automation.
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
 server itself (Dokploy, backups, disk, monitoring) is recorded in
@@ -17,7 +20,9 @@ server itself (Dokploy, backups, disk, monitoring) is recorded in
 ## The short version
 
 ```
-branch → PR → CI green → merge to main → (automatic) images built → deployed
+branch → PR → CI green → merge to main → compare with running revision
+                                        ├─ runtime change → images → deploy
+                                        └─ known non-runtime only → no app restart
 ```
 
 - **`main` is production.** Whatever is merged there goes live within a few
@@ -36,18 +41,22 @@ branch → PR → CI green → merge to main → (automatic) images built → de
    integration tests (the inventory race included). Red stops everything.
 2. **Deploy** (`.github/workflows/deploy.yml`), only after a green CI run
    of a push to `main`:
-   1. builds two images from the `Dockerfile` on GitHub's machines —
+   1. reads the exact healthy production revision and compares every changed
+      path from that commit to current `main`;
+   2. stops successfully when every change is explicitly non-runtime, leaving
+      the currently confirmed application images running;
+   3. otherwise builds two images from the `Dockerfile` on GitHub's machines —
       `echoandaura-web` (the site) and `echoandaura-worker` (emails, hold
       expiry, and the migrate/admin scripts);
-   2. **smoke-tests them**: every migration on an empty database, the site
+   4. **smoke-tests them**: every migration on an empty database, the site
       answering `/api/health` and `/`, the worker staying up, and
       `/api/deployment` confirming the full revision of both images;
-   3. pushes them to GHCR (GitHub's container registry) tagged `main` and
+   5. pushes them to GHCR (GitHub's container registry) tagged `main` and
       `sha-<commit>`;
-   4. calls Dokploy, which pulls the new images and runs
+   6. calls Dokploy, which pulls the new images and runs
       `docker-compose.prod.yml`:
       **migrate** first; **web** and **worker** start only if it succeeded;
-   5. waits up to five minutes for the exact healthy web/worker revision to
+   7. waits up to five minutes for the exact healthy web/worker revision to
       answer at `/api/deployment`. A timeout fails the workflow rather than
       reporting that a deployment request was a successful rollout.
 3. The site is down for a few seconds while `web` restarts (until its
@@ -82,9 +91,32 @@ a pin, repeat a deploy, rotate a key or change the database merely to make the
 check green. It cannot tell whether a timeout was an actual failure or a slow
 rollout; verify before deciding what to do next.
 
-The CI smoke test checks both image revisions before pushing. After the owner
-merges D3B1, confirm the first real workflow and live revision before starting
-D3B2. No Terraform apply or additional environment secret is required.
+The CI smoke test checks both image revisions before pushing. The first D3B1
+production workflow and live revision were confirmed at `89f0ac2`. No Terraform
+apply or additional environment secret is required.
+
+## When application deployment is skipped (D3B2)
+
+The selector compares from what is **actually healthy in production**, not from
+the previous commit or PR. That matters when several docs merges follow the last
+application deployment: the next application change still sees the complete
+range and deploys it.
+
+The allowlist is intentionally narrow: `docs/`, docs-site sources except its
+package manifest, tests, GitHub/agent instructions, Terraform, Ansible and root
+Markdown files. Any unknown path, application source, migration, dependency,
+Docker input, relay or other operations file selects a full deployment. The
+selection job has no package-write or deployment credentials.
+
+If the public evidence is unavailable, current `main` deploys as it did before
+the filter. A manual run from `main` also always deploys. A stale workflow is
+skipped; history that would move production backwards or cannot connect the
+running revision to the candidate fails visibly. The selector never clears a
+rollback pin.
+
+After a non-runtime-only merge, `main` is newer than `/api/deployment` on
+purpose. The workflow summary records the decision and the confirmed baseline.
+The separately tested docs publisher still publishes developer-site changes.
 
 ## Rolling back
 

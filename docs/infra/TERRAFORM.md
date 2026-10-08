@@ -28,9 +28,9 @@ manually managed outside Terraform, separate from the laptop's broad token.
 
 Follow-up on 2026-10-08: PR #71's approved preview and post-merge production
 publication passed live checks. Earlier rollout-history entries below describe
-the evidence available before that preview. D3B1 adds application revision
-confirmation only; it requires no Terraform apply. Docs-only deployment
-filtering remains D3B2.
+the evidence available before that preview. D3B1's first production revision
+confirmation passed at merge `89f0ac2`; D3B2 uses it for app-deploy selection.
+Neither requires a Terraform apply.
 
 ---
 

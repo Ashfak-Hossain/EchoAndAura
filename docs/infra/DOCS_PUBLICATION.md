@@ -7,9 +7,10 @@ both reviewed Terraform stages and confirmed `No changes` afterwards. The
 protected production upload and live HTTPS/browser checks passed, including the
 first owner-approved same-repository PR preview and the post-merge main upload.
 History separates owner-supplied Terraform results from read-only live checks.
-Application deployment filtering is D3B2, a separate slice. D3B1 prepares app
-revision confirmation (ADR-066), not filtering; a docs merge still triggers an
-application deployment. No live D3B1 confirmation is claimed yet.
+Application deployment filtering is D3B2, a separate slice. D3B1's first live
+run confirmed merge `89f0ac2`; D3B2 compares from that live evidence rather than
+the previous commit. Its first real skipped image job remains a post-merge gate,
+so this record does not yet claim the filter is active.
 
 This is an operational guide, **not part of the public docs-site collection**.
 There are no secret values here. Never paste a full Terraform plan, `.env`,
@@ -336,5 +337,6 @@ internal-only operational/local-note paths returned 404. The custom production
 hostname has no `noindex` header; both Pages addresses do. No secret values were
 retrieved. New Bitwarden entries and exact token expiries remain unconfirmed.
 
-D3A hosting/publication validation is complete. D3B1 confirmation is prepared
-separately; D3B2 application deployment filtering is still unimplemented.
+D3A hosting/publication validation is complete. D3B1's first production
+confirmation passed. D3B2 filtering is implemented separately and awaits its
+first post-merge workflow check; it does not alter the Pages publisher.

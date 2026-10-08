@@ -1,8 +1,10 @@
 name: Deploy
 
-# ADR-036: after CI passes on main, build the two production images on
+# ADR-036/067: after CI passes on main, compare the confirmed running revision
+# with the candidate. Runtime changes build the two production images on
 # GitHub's machines, smoke-test them, push them to GHCR, and tell Dokploy to
-# pull and restart. The VPS never builds anything.
+# pull and restart. Known non-runtime-only changes stop after selection. The
+# VPS never builds anything.
 #
 # Inert until configured (docs/DEPLOY.md § One-time setup):
 #   repo variable R2_PUBLIC_URL      — no images are built without it
@@ -26,26 +28,58 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
 
 env:
   REGISTRY: ghcr.io/ashfak-hossain
 
 jobs:
-  images:
-    # Only a green CI run of a push to main (never a PR), and only once the
-    # repo has its storage URL. A manual run must also be started from main:
-    # from any other branch it would build that branch, tag it `main` and
-    # put it live.
+  selection:
+    # The selector is deliberately credential-free. If it cannot prove that
+    # every change since the healthy running revision is non-runtime, it keeps
+    # the existing behavior and selects a full image deployment.
     if: >-
       vars.R2_PUBLIC_URL != '' &&
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
        (github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.selection.outputs.deploy }}
+      reason: ${{ steps.selection.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The live baseline can be many merges behind main. A shallow diff
+          # could falsely call an application change docs-only.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Select application deployment
+        id: selection
+        run: node .github/scripts/deploy-select.mjs
+        env:
+          DEPLOYMENT_EVENT: ${{ github.event_name }}
+          DEPLOYMENT_CANDIDATE: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DEPLOYMENT_URL: https://echoandaura.com/api/deployment
+
+  images:
+    # Only the credential-free selection job can admit this job. Manual runs
+    # from main always select it; automatic runs may skip when the complete
+    # confirmed-baseline diff contains no production-image input.
+    needs: selection
+    if: needs.selection.outputs.deploy == 'true'
     # Pinned like CI (ci.yml → verify): ubuntu-latest moves to Ubuntu 26.
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
 
     # For the smoke test: the images must boot against a real Postgres + Redis.
     services:
