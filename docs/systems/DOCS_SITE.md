@@ -253,10 +253,11 @@ restores focus when closed. Generated files are ignored by Git, linting,
 formatting, and the app's Docker build context. Docker dependency stages copy
 the docs manifest to keep workspace installs consistent with the lockfile.
 
-The existing production workflow deploys after every successful CI push to
-main. It has no docs-only path filter. Changing this needs a reliable comparison
-with the last deployed revision, rather than just the last commit; address it
-with the publication slice. D1 does not change production deployment behavior.
+The application workflow originally deployed after every successful CI push to
+main. D3B now uses a reliable comparison from the exact healthy production
+revision rather than only the last commit. Known non-runtime-only changes can
+skip application images; every unknown or runtime path still deploys. D1 itself
+did not change production deployment behavior.
 
 Local validation: the full `pnpm verify` passed. Browser checks cover direct
 navigation, search results and empty results, focus restoration, dark theme,
@@ -305,9 +306,9 @@ to the uploader. Previews are public; noindex is not access control.
 [ADR-065](../decisions/065-docs-publication.md) records the trust boundary and
 account-scoped token limitation. The
 [publication walkthrough](../infra/DOCS_PUBLICATION.md) teaches the Terraform
-changes and expected plans. No production apply or live DNS/TLS verification is
-claimed yet. D3B will address reliable application-deploy filtering separately;
-D3A leaves the existing Dokploy workflow unchanged.
+changes and expected plans. D3A left Dokploy unchanged. D3B1 subsequently added
+exact running-revision evidence, and D3B2 uses that evidence to filter known
+non-runtime-only changes; see [ADR-067](../decisions/067-confirmed-baseline-deploy-filtering.md).
 
 Publication can follow D1 if its overview is ready to share; D2 is the first
 complete learning journey. There is no dependency on the deferred restore

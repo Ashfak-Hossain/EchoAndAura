@@ -2,7 +2,7 @@
 id: ADR-036
 title: 'Deployment: Dokploy on one VPS, images built in CI, pull-only deploys'
 date: 2026-09-27
-status: accepted
+status: partly-superseded
 area: Infrastructure and deploys
 supersedes: []
 extends: []
@@ -10,7 +10,11 @@ extends: []
 
 # ADR-036 — Deployment: Dokploy on one VPS, images built in CI, pull-only deploys
 
-**Date:** 2026-09-27 · **Status:** Accepted
+**Partly superseded:** [ADR-067](067-confirmed-baseline-deploy-filtering.md)
+replaces the rule that every green `main` push builds and deploys application
+images. The image, migration, Dokploy and rollback decisions below still stand.
+
+**Date:** 2026-09-27 · **Status:** Partly superseded
 
 **Context:** Production is one BengalCloud VPS: 2 vCPU, 4 GB RAM, 25 GB
 NVMe, on a BDIX line in Dhaka. The person running it is new to server

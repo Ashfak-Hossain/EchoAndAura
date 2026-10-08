@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const shaPattern = /^[a-f0-9]{40}$/;
-export function isConfirmedDeployment(value, revision) {
+export function isHealthyDeployment(value) {
   return (
     value !== null &&
     typeof value === 'object' &&
@@ -11,9 +11,12 @@ export function isConfirmedDeployment(value, revision) {
     Object.keys(value).length === 2 &&
     value.ready === true &&
     typeof value.revision === 'string' &&
-    shaPattern.test(value.revision) &&
-    value.revision === revision
+    shaPattern.test(value.revision)
   );
+}
+
+export function isConfirmedDeployment(value, revision) {
+  return isHealthyDeployment(value) && value.revision === revision;
 }
 
 async function readReport(response) {
@@ -45,6 +48,59 @@ async function readReport(response) {
   }
 }
 
+function deploymentEndpoint(url) {
+  const endpoint = new URL(url);
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
+  if (
+    endpoint.username ||
+    endpoint.password ||
+    endpoint.search ||
+    endpoint.hash ||
+    endpoint.pathname !== '/api/deployment' ||
+    !(endpoint.protocol === 'https:' || (loopback && endpoint.protocol === 'http:'))
+  )
+    throw new Error('Invalid deployment confirmation configuration');
+  return endpoint;
+}
+
+export async function readHealthyDeploymentRevision({
+  url,
+  requestTimeoutMs = 5_000,
+  fetchImpl = fetch,
+}) {
+  const endpoint = deploymentEndpoint(url);
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0 || requestTimeoutMs > 60_000)
+    throw new Error('Invalid deployment confirmation configuration');
+
+  const controller = new AbortController();
+  let timer;
+  try {
+    const attempt = (async () => {
+      const response = await fetchImpl(endpoint.href, {
+        redirect: 'error',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      const report = await readReport(response);
+      if (!isHealthyDeployment(report)) throw new Error('Deployment evidence unavailable');
+      return report.revision;
+    })();
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Deployment evidence unavailable')),
+        requestTimeoutMs,
+      );
+    });
+    return await Promise.race([attempt, timeout]);
+  } catch {
+    throw new Error('Deployment evidence unavailable');
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+}
+
 export async function waitForDeployment({
   url,
   revision,
@@ -55,47 +111,26 @@ export async function waitForDeployment({
   now = () => performance.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }) {
-  const endpoint = new URL(url);
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
+  deploymentEndpoint(url);
   if (
     !shaPattern.test(revision) ||
-    endpoint.username ||
-    endpoint.password ||
-    endpoint.search ||
-    endpoint.hash ||
-    endpoint.pathname !== '/api/deployment' ||
-    !(endpoint.protocol === 'https:' || (loopback && endpoint.protocol === 'http:')) ||
     ![timeoutMs, intervalMs, requestTimeoutMs].every((ms) => Number.isSafeInteger(ms) && ms > 0) ||
-    timeoutMs > 600_000
+    timeoutMs > 600_000 ||
+    requestTimeoutMs > 60_000
   )
     throw new Error('Invalid deployment confirmation configuration');
   const deadline = now() + timeoutMs;
   while (now() < deadline) {
-    const controller = new AbortController();
-    let timer;
     try {
-      const attempt = (async () => {
-        const response = await fetchImpl(endpoint.href, {
-          redirect: 'error',
-          cache: 'no-store',
-          headers: { Accept: 'application/json' },
-          signal: controller.signal,
-        });
-        return isConfirmedDeployment(await readReport(response), revision);
-      })();
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('Deployment evidence unavailable')),
-          Math.max(1, Math.min(requestTimeoutMs, Math.ceil(deadline - now()))),
-        );
+      const running = await readHealthyDeploymentRevision({
+        url,
+        requestTimeoutMs: Math.max(1, Math.min(requestTimeoutMs, Math.ceil(deadline - now()))),
+        fetchImpl,
       });
-      if (await Promise.race([attempt, timeout])) return revision;
+      if (running === revision) return revision;
     } catch {
       // A rolling restart, old worker, cache or private error is never confirmation.
       // Do not print the URL, response body, request error or environment.
-    } finally {
-      clearTimeout(timer);
-      controller.abort();
     }
     await sleep(Math.max(0, Math.min(intervalMs, Math.ceil(deadline - now()))));
   }

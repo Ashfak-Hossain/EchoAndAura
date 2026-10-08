@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
-import { isConfirmedDeployment, waitForDeployment } from '../../.github/scripts/deploy-confirm.mjs';
+import {
+  isConfirmedDeployment,
+  isHealthyDeployment,
+  readHealthyDeploymentRevision,
+  waitForDeployment,
+} from '../../.github/scripts/deploy-confirm.mjs';
 
 const sha = 'a'.repeat(40);
 const url = 'https://example.com/api/deployment';
@@ -10,6 +15,22 @@ const response = (revision = sha, ready = true) =>
   new Response(JSON.stringify({ revision, ready }), { headers });
 
 describe('bounded, read-only deployment confirmation', () => {
+  it('reads a healthy revision without requiring an expected commit', async () => {
+    expect(isHealthyDeployment({ revision: sha, ready: true })).toBe(true);
+    expect(isHealthyDeployment({ revision: sha, ready: false })).toBe(false);
+    await expect(
+      readHealthyDeploymentRevision({
+        url,
+        fetchImpl: async () => response(),
+      }),
+    ).resolves.toBe(sha);
+    await expect(
+      readHealthyDeploymentRevision({
+        url,
+        fetchImpl: async () => response(sha, false),
+      }),
+    ).rejects.toThrow('evidence unavailable');
+  });
   it('accepts only the exact public contract and expected full revision', () => {
     expect(isConfirmedDeployment({ revision: sha, ready: true }, sha)).toBe(true);
     for (const value of [
@@ -133,6 +154,7 @@ describe('bounded, read-only deployment confirmation', () => {
       { timeoutMs: 0 },
       { timeoutMs: 600001 },
       { intervalMs: -1 },
+      { requestTimeoutMs: 60001 },
     ])
       await expect(waitForDeployment({ url, revision: sha, ...changes })).rejects.toThrow(
         'configuration',

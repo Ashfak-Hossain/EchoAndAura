@@ -71,10 +71,15 @@ flowchart LR
         Worker health`"]
         a066["`**ADR-066**
         Running revision proof`"]
+        a067["`**ADR-067**
+        Confirmed diff filter`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
         a065 -.-> a066
+        a036 --> a067
+        a065 -.-> a067
+        a066 -.-> a067
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph backups ["Backups as code"]
@@ -263,15 +268,16 @@ flowchart LR
 
 ### Infrastructure and deploys
 
-| ADR | Decision                                                                                                     | Status                                           | Date       |
-| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ---------- |
-| 036 | [Deployment: Dokploy on one VPS, images built in CI, pull-only deploys](036-deployment-dokploy.md)           | Accepted                                         | 2026-09-27 |
-| 040 | [Monitoring: an outside check, one alert group, a worker heartbeat](040-monitoring.md)                       | Accepted                                         | 2026-09-28 |
-| 051 | [Off-site backup copy in AWS S3, and hourly backups during an event's sales window](051-off-site-backups.md) | Partly superseded by [ADR-062](062-terraform.md) | 2026-10-03 |
-| 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)         | Accepted                                         | 2026-10-05 |
-| 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                      | Accepted                                         | 2026-10-06 |
-| 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                         | 2026-10-07 |
-| 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                         | 2026-10-08 |
+| ADR | Decision                                                                                                     | Status                                                                     | Date       |
+| --- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ---------- |
+| 036 | [Deployment: Dokploy on one VPS, images built in CI, pull-only deploys](036-deployment-dokploy.md)           | Partly superseded by [ADR-067](067-confirmed-baseline-deploy-filtering.md) | 2026-09-27 |
+| 040 | [Monitoring: an outside check, one alert group, a worker heartbeat](040-monitoring.md)                       | Accepted                                                                   | 2026-09-28 |
+| 051 | [Off-site backup copy in AWS S3, and hourly backups during an event's sales window](051-off-site-backups.md) | Partly superseded by [ADR-062](062-terraform.md)                           | 2026-10-03 |
+| 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)         | Accepted                                                                   | 2026-10-05 |
+| 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                      | Accepted                                                                   | 2026-10-06 |
+| 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                                                   | 2026-10-07 |
+| 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                                                   | 2026-10-08 |
+| 067 | [Skip application deploys from a confirmed non-runtime diff](067-confirmed-baseline-deploy-filtering.md)     | Accepted                                                                   | 2026-10-08 |
 
 ### Code structure and tooling
 

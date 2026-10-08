@@ -220,9 +220,11 @@ The owner applied both reviewed hosting stages and explicitly confirmed
 `No changes` plans. Keep `TF_VAR_docs_custom_domain_enabled=true` locally after
 attachment. PR #71's approved preview and post-merge production publication
 passed live checks; older history entries precede that preview evidence.
-D3B1 prepares application revision confirmation; docs-only app-deploy filtering
-remains separate in D3B2. See [Publishing the developer docs](DOCS_PUBLICATION.md)
-for evidence, protected environment setup and rollback instructions.
+D3B1's first production run confirmed merge `89f0ac2`. D3B2 uses that public,
+credential-free evidence to filter known non-runtime-only changes and awaits
+its first post-merge skip check. Neither slice changes Cloudflare resources.
+See [Publishing the developer docs](DOCS_PUBLICATION.md) for evidence, protected
+environment setup and rollback instructions.
 
 ## Cloudflare Access (ADR-050)
 

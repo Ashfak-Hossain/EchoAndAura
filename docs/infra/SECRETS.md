@@ -61,9 +61,10 @@ storage is not yet confirmed, hence unchecked above. GitHub checks confirmed
 both secret names exist in both protected environments; no values were read.
 Production and PR #71 preview uploads passed live checks on 2026-10-08;
 older history entries precede that preview evidence. D3B1's read-only revision
-confirmation adds no credential or environment change. Exact
-token expiry dates were not recorded. Keep separate token values, use the same
-intended account identifier, and never substitute the broad Terraform token.
+confirmation and D3B2's credential-free selector add no credential or
+environment change. Exact token expiry dates were not recorded. Keep separate
+token values, use the same intended account identifier, and never substitute
+the broad Terraform token.
 
 Not secret but kept out of this public repo: Cloudflare account/zone identifiers,
 the AWS account id
