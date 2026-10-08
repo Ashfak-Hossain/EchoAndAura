@@ -9,8 +9,10 @@ first owner-approved same-repository PR preview and the post-merge main upload.
 History separates owner-supplied Terraform results from read-only live checks.
 Application deployment filtering is D3B2, a separate slice. D3B1's first live
 run confirmed merge `89f0ac2`; D3B2 compares from that live evidence rather than
-the previous commit. Its first real skipped image job remains a post-merge gate,
-so this record does not yet claim the filter is active.
+the previous commit. Its first automatic skip passed after PR #73 merged as
+`7b5bfcc`: application images were skipped, the separate docs publisher uploaded
+that revision, and fresh public probes confirmed healthy web and worker still
+at `89f0ac2`. The filter is active; see the rollout evidence in History.
 
 This is an operational guide, **not part of the public docs-site collection**.
 There are no secret values here. Never paste a full Terraform plan, `.env`,
@@ -338,5 +340,34 @@ hostname has no `noindex` header; both Pages addresses do. No secret values were
 retrieved. New Bitwarden entries and exact token expiries remain unconfirmed.
 
 D3A hosting/publication validation is complete. D3B1's first production
-confirmation passed. D3B2 filtering is implemented separately and awaits its
-first post-merge workflow check; it does not alter the Pages publisher.
+confirmation passed. D3B2's first automatic skip and the subsequent docs upload
+are recorded below.
+
+### Application skip and docs publication confirmed on 2026-10-08
+
+[PR #73](https://github.com/Ashfak-Hossain/EchoAndAura/pull/73) merged as
+`7b5bfcc05d5e3d986e85eb5abfc83f34ed20ebd1`, with all required CI and analysis
+checks successful.
+
+- **Application automation:** [Deploy run 37752597485](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37752597485)
+  completed successfully for that merge. The credential-free `selection` job
+  succeeded and the entire `images` job was skipped.
+- **Docs upload:** the owner approved `docs-production` for
+  [Publish docs run 37752597640](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37752597640).
+  Selection, static-artifact validation, current-source recheck and upload all
+  succeeded for `7b5bfcc`; the run completed at 09:06:38 UTC.
+- **Fresh public checks:** the overview and buy-a-ticket tour returned HTTPS
+  200 and displayed source revision `7b5bfcc`. The sitemap returned 200 and a
+  missing route returned a real 404. The custom production hostname had no
+  `X-Robots-Tag` noindex header. These checks verified the new publication;
+  the earlier browser/search/theme/mobile checks remain separately recorded
+  above and were not repeated for this upload.
+- **Application baseline:** the repository's strict, credential-free
+  confirmation probe passed before and after docs publication for healthy web
+  and both worker queues at
+  `89f0ac29e1643c28ec8896ae25fe4c3f9277d566`. A newer docs source revision than
+  the running application revision is expected for a non-runtime-only merge.
+
+D3B rollout validation is complete. These checks required no Terraform apply,
+Cloudflare resource change, new credential or application deployment request.
+New Bitwarden entries and exact token expiries remain unconfirmed.
