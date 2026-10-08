@@ -6,9 +6,12 @@ Status: ACTIVE · Last updated: 2026-10-08 · Decisions:
 [ADR-067](decisions/067-confirmed-baseline-deploy-filtering.md)
 
 **D3B rollout:** D3B1's first live run confirmed web and both worker queues at
-merge `89f0ac2`. D3B2 adds the non-runtime filter below. Its first real skipped
-image job remains a post-merge verification gate; until then, do not claim the
-filter is active in production automation.
+merge `89f0ac2`. D3B2's first automatic skip passed on 2026-10-08 after
+[PR #73](https://github.com/Ashfak-Hossain/EchoAndAura/pull/73) merged as
+`7b5bfcc`: [Deploy run 37752597485](https://github.com/Ashfak-Hossain/EchoAndAura/actions/runs/37752597485)
+completed successfully, with selection successful and `images` skipped.
+Fresh public probes confirmed healthy web and worker at `89f0ac2`, including
+after the separate docs publication. The non-runtime filter is active.
 
 How code gets from a laptop to echoandaura.com, and how to undo it. The
 server itself (Dokploy, backups, disk, monitoring) is recorded in
@@ -25,8 +28,9 @@ branch → PR → CI green → merge to main → compare with running revision
                                         └─ known non-runtime only → no app restart
 ```
 
-- **`main` is production.** Whatever is merged there goes live within a few
-  minutes. Work on a branch; merge only when CI is green.
+- **`main` is the production source.** Application-affecting merges deploy after
+  green CI; known non-runtime-only merges keep the confirmed images running.
+  Work on a branch; merge only when CI is green.
 - **Never edit code on the server**, and never change the production
   database by hand. Schema changes are Drizzle migrations
   (`pnpm db:generate`), committed with the code that needs them; they run
@@ -122,8 +126,11 @@ The separately tested docs publisher still publishes developer-site changes.
 
 The app, in Dokploy → the compose app → **Environment**:
 
-1. Find the last good version: GitHub → Actions → Deploy → the last green
-   run before the bad one. Its summary says `Deploy of sha-abc1234`.
+1. Find the last good application deployment: GitHub → Actions → Deploy →
+   the last run before the bad one whose `images` job and final revision
+   confirmation succeeded. Its summary says `Deploy of sha-abc1234`.
+   A successful selection-only skip creates no new image; do not use that
+   run's commit as a rollback tag.
 2. Set `IMAGE_TAG=sha-abc1234` and click **Deploy**. Dokploy pulls that
    exact version. A released version works too: `IMAGE_TAG=v1.0.0`
    (DEVELOPMENT.md → Releases).

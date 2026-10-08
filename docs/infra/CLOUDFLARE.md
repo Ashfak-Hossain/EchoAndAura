@@ -221,8 +221,11 @@ The owner applied both reviewed hosting stages and explicitly confirmed
 attachment. PR #71's approved preview and post-merge production publication
 passed live checks; older history entries precede that preview evidence.
 D3B1's first production run confirmed merge `89f0ac2`. D3B2 uses that public,
-credential-free evidence to filter known non-runtime-only changes and awaits
-its first post-merge skip check. Neither slice changes Cloudflare resources.
+credential-free evidence to filter known non-runtime-only changes. Its first
+post-merge skip passed at PR #73's merge `7b5bfcc`: Deploy run 37752597485
+succeeded with `images` skipped, and Publish docs run 37752597640 succeeded.
+Fresh public checks confirmed docs source `7b5bfcc` and healthy application
+web/worker still at `89f0ac2`. Neither slice changes Cloudflare resources.
 See [Publishing the developer docs](DOCS_PUBLICATION.md) for evidence, protected
 environment setup and rollback instructions.
 
@@ -590,3 +593,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-05 | Rules and settings under Terraform (ADR-062): WAF custom rules, rate limit, cache rule, the www→root redirect (found undocumented, now in [Redirect rules](#redirect-rules)), email obfuscation, DNSSEC. Token gained Zone WAF, Cache Rules, Zone Settings, Single Redirect (Edit). 6 imported, 0 changed; plan = No changes                                                                                                                                                       |
 | 2026-10-05 | Access under Terraform (ADR-062): apps `Admin`, `Dokploy` and policies `admins`, `developer`, `github deploy` imported (`access.tf`); emails from `.env`, sensitive. Only change: Terraform marking the email lists sensitive, values unchanged. Plan = No changes. Checked: `/admin` and `deploy` (incl. `/api/*`) 302 to the Access login from outside; Admin gate passed in a private window. Token gained Access: Edit (account)                                               |
 | 2026-10-08 | D3A production hosting confirmed (ADR-065): owner-applied Pages project, narrow docs-host rate-limit exclusion, Pages domain association and proxied docs CNAME. Owner confirmed No changes after both stages. Protected static upload and live HTTPS/search/links/themes/mobile/headers/404 checks passed on Pages and the custom hostname. First same-repository preview remains pending                                                                                         |
+| 2026-10-08 | D3B2 rollout verified at PR #73 merge `7b5bfcc` (ADR-067): Deploy run 37752597485 skipped images; owner-approved Publish docs run 37752597640 succeeded. Public checks confirmed docs source `7b5bfcc`, 200 pages/sitemap, real 404 and healthy web/worker at `89f0ac2`. No Cloudflare resource or credential change; [rollout evidence](DOCS_PUBLICATION.md#application-skip-and-docs-publication-confirmed-on-2026-10-08)                                                        |
