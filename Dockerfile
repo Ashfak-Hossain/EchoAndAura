@@ -35,12 +35,15 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile
 
 # ---- runtime dependencies only, for the worker ---------------------------
+# Only the app's own: an unfiltered workspace install also brought the docs
+# site's packages (Fumadocs, Twoslash's native TypeScript compiler) into the
+# worker image, with critical findings in binaries it never runs (9.9).
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY docs-site/package.json ./docs-site/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
-  pnpm install --frozen-lockfile --prod
+  pnpm install --frozen-lockfile --prod --filter echoandaura
 
 # ---- build ---------------------------------------------------------------
 FROM deps AS build
@@ -113,6 +116,10 @@ COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # The image optimizer's cache (ADR-033): a volume in production, so resized
 # covers survive a deploy. Created here so the node user owns it.
 RUN mkdir -p .next-build/cache/images && chown -R node:node .next-build/cache
+# The runtimes run `node` only. npm (from the base image) ships its own
+# dependencies, the source of the image scan's findings in both images (9.9).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 EXPOSE 3000
 # Traefik routes nothing to a container until it reports healthy, and
@@ -139,5 +146,9 @@ COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # without this line every ticket email failed (2026-09-28). The worker
 # refuses to start if they are missing.
 COPY --from=build --chown=node:node /app/src/server/pdf/fonts ./src/server/pdf/fonts
+# The runtimes run `node` only. npm (from the base image) ships its own
+# dependencies, the source of the image scan's findings in both images (9.9).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 CMD ["node", "dist/worker.mjs"]
