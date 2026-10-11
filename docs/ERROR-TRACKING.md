@@ -50,6 +50,7 @@ privacy in the project before enabling browser reporting.
 | `SENTRY_AUTH_TOKEN`            | GitHub repository secret                           | Restricted build upload credential; supplied only as a BuildKit secret. Never an image ARG/ENV or Dokploy runtime value. |
 | `SENTRY_DSN`                   | Dokploy environment                                | Optional server and worker DSN. Invalid/unset values disable reporting.                                                  |
 | `NEXT_PUBLIC_SOURCE_REVISION`  | Docker build stage, derived from `SOURCE_REVISION` | Browser release; do not override it at runtime.                                                                          |
+| `ERROR_TRACKING_DIAGNOSTICS`   | Dokploy environment (web only)                     | `1` shows `/admin/diagnostics` for the synthetic-error proof. Unset/other = the page is a 404 and its actions refuse.    |
 
 Browser reporting requires `NODE_ENV=production`; server and worker reporting
 require `APP_ENV=production`. Release metadata stays absent outside a real image
@@ -99,7 +100,24 @@ event payloads into chat or repository notes.
 5. In a controlled synthetic-only round, capture one browser error, one unhandled
    web error, one caught order-action error and one terminal worker failure. Use no real customer data, no real
    payment, and no failing recurring production job. Do not add a public crash route.
-   A temporary authenticated test harness should be reviewed before this round.
+   The harness is `/admin/diagnostics`: set `ERROR_TRACKING_DIAGNOSTICS=1` in
+   Dokploy and redeploy, sign in as an admin, open the page (it is not in the
+   menu) and run each check once, a minute apart at most per kind:
+   - **Browser error** throws a `SyntheticTestError` while rendering; the admin
+     error boundary reports it (component `browser`) and shows its error screen.
+   - **Unhandled server error** throws past a server action; Next's
+     request-error hook reports it (component `web`, operation `action`).
+   - **Caught server error** reports through `reportError` as the order actions
+     do, under its own operation `diagnostics` (an `action` tag on `/admin`
+     would share the one-per-minute budget with the check above).
+   - **Worker failure** queues one `diagnostics.fail` job with a single attempt
+     and no payload; the worker fails it, and the terminal failure is reported
+     (component `worker`, operation `job.failed`, queue `orders`).
+
+   Each check touches no order, ticket or buyer and logs the admin who ran it.
+   Remove the flag (and redeploy) afterwards; keep the page for repeating this
+   proof after an SDK upgrade.
+
 6. Confirm the full expected release, component/static route or queue, readable
    mapped stack, no original message/request/user/job values, and an email alert.
    Confirm browser CSP permits only the configured ingest origin and `.map` URLs

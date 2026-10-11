@@ -28,6 +28,7 @@ import {
   flushErrorTracking,
 } from '@/server/lib/error-tracking';
 import { reportJobFailure } from '@/server/queue/error-tracking';
+import { SyntheticTestError } from '@/lib/error-tracking/synthetic';
 import { startShutdownDeadline } from '@/server/queue/shutdown-deadline';
 import { createRedisConnection } from '@/server/queue/connection';
 import { ORDERS_WORKER_HEARTBEAT_KEY, recordWorkerHeartbeat } from '@/server/queue/heartbeat';
@@ -39,6 +40,7 @@ import { EMAIL_CHANGE_TTL_SECONDS, PASSWORD_RESET_TTL_SECONDS } from '@/server/a
 import { MAGIC_LINK_TTL_SECONDS } from '@/server/auth/magic-link';
 import {
   ACCOUNT_EMAIL_JOB,
+  DIAGNOSTIC_FAILURE_JOB,
   EXPIRE_HOLDS_EVERY_MS,
   EXPIRE_HOLDS_JOB,
   HOLDS_QUEUE,
@@ -186,6 +188,8 @@ async function main(): Promise<void> {
         recordRevision('orders');
         return { ok: true };
       }
+      // Admin diagnostics (docs/ERROR-TRACKING.md): fails on purpose, once.
+      if (job.name === DIAGNOSTIC_FAILURE_JOB) throw new SyntheticTestError();
 
       if (job.name === SIGN_IN_JOB) {
         const parsed = signInJobData.safeParse(job.data);
