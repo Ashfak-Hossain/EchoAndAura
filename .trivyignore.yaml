@@ -1,0 +1,9 @@
+# Accepted image-scan findings (ADR-069). The deploy fails on any critical
+# vulnerability that has a fix, unless it is listed here. Add an entry only
+# when the fix cannot ship yet, by PR, with a reason and an expiry date no more
+# than 30 days out; an expired entry fails the scan again. Example:
+#
+#   - id: CVE-2026-12345
+#     statement: In esbuild's Go runtime; the worker never runs esbuild. Waits for 0.29.
+#     expired_at: 2026-11-15
+vulnerabilities: []

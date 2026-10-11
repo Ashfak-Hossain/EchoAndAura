@@ -265,6 +265,18 @@ purpose: one PR changing all of them, CI green, a deploy run through, and
 the Dockerfile's base image checked for the same move. Do it before GitHub
 announces the end of the 24.04 image (runner-images repository).
 
+**The image scanner is upgraded by hand** (ADR-069). The deploy runs Trivy
+as a container pinned by digest (`TRIVY_IMAGE` in `deploy.yml`), never through
+Trivy's GitHub Actions; Dependabot doesn't see it. Its vulnerability database
+updates itself, so the scanner only needs a bump every few months:
+
+1. Read the release notes of the new version on github.com/aquasecurity/trivy.
+2. `docker buildx imagetools inspect docker.io/aquasec/trivy:<version>` and
+   the same for `public.ecr.aws/aquasecurity/trivy:<version>`. Both must show
+   the **same digest**; if they differ, stop.
+3. Update `TRIVY_IMAGE` (version and digest), scan a current image locally
+   with it (DEPLOY.md → When the image scan fails), and merge.
+
 **The door scanner's decoder is upgraded by hand** (ADR-030). `barcode-detector`
 pins an exact `zxing-wasm`, the scanner runs that copy, and its `.wasm` is
 served from `public/vendor/`. Dependabot ignores `zxing-wasm`. To upgrade:
