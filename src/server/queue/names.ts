@@ -17,6 +17,12 @@ export const WORKER_PING_JOB = 'worker.ping';
 /** Email jobs: `email.<kind>` with payload `{ orderId }` (see email/dispatch.ts). */
 export const EMAIL_JOB_PREFIX = 'email.';
 
+/**
+ * Error-tracking proof (admin diagnostics, off by default): a one-attempt job
+ * the worker always fails, so its terminal-failure report can be checked.
+ */
+export const DIAGNOSTIC_FAILURE_JOB = 'diagnostics.fail';
+
 /** Magic-link sign-in email: payload `{ to, url }`. Not under `email.` — it has no order. */
 export const SIGN_IN_JOB = 'auth.sign-in';
 

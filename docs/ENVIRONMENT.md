@@ -23,8 +23,9 @@ variable, because the image build needs it (ADR-033). See
 
 ## Quick reference
 
-Optional error-only Sentry settings, their build/runtime ownership and the
-production privacy/alert gate are in [ERROR-TRACKING.md](ERROR-TRACKING.md).
+Optional error-only Sentry settings, their build/runtime ownership, the
+`ERROR_TRACKING_DIAGNOSTICS` test switch and the production privacy/alert gate
+are in [ERROR-TRACKING.md](ERROR-TRACKING.md).
 Reporting is off until explicitly configured; upload credentials never belong in
 the runtime environment.
 

@@ -20,7 +20,8 @@ export type ErrorOperation =
   | 'queue.error'
   | 'startup'
   | 'shutdown'
-  | 'fatal';
+  | 'fatal'
+  | 'diagnostics';
 const components = new Set(['browser', 'web', 'worker']);
 const operations = new Set([
   'render',
@@ -34,6 +35,7 @@ const operations = new Set([
   'startup',
   'shutdown',
   'fatal',
+  'diagnostics',
 ]);
 const queues = new Set(['orders', 'holds', 'relay']);
 const routes = new Set([
@@ -60,6 +62,7 @@ const types = new Set([
   'InventoryStateError',
   'AttendeeNamesMismatchError',
   'TicketCodeCollisionError',
+  'SyntheticTestError',
 ]);
 
 /** Hosted HTTPS ingest only. Never turn a malformed DSN into a CSP wildcard. */

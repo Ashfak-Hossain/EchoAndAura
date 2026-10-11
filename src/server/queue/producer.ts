@@ -6,6 +6,7 @@ import { createRedisConnection } from './connection';
 import type { RelayAnnouncementWire } from '@/server/relay/relay';
 import {
   ACCOUNT_EMAIL_JOB,
+  DIAGNOSTIC_FAILURE_JOB,
   EMAIL_JOB_PREFIX,
   ORDERS_QUEUE,
   RELAY_ANNOUNCE_JOB,
@@ -144,6 +145,35 @@ export async function enqueueAccountEmail(
         attempts: 3,
         removeOnComplete: true,
       }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The diagnostics worker failure: one attempt, so the first failure is the
+ * terminal one the worker reports; no payload, kept nowhere afterwards.
+ */
+export async function enqueueDiagnosticFailure(
+  opts: { queue?: EmailQueue; timeoutMs?: number } = {},
+): Promise<void> {
+  const q = opts.queue ?? getQueue();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('enqueue diagnostic failure timed out')),
+      opts.timeoutMs ?? ENQUEUE_TIMEOUT_MS,
+    );
+  });
+  try {
+    await Promise.race([
+      q.add(
+        DIAGNOSTIC_FAILURE_JOB,
+        {},
+        { attempts: 1, removeOnComplete: true, removeOnFail: true },
+      ),
       timeout,
     ]);
   } finally {
