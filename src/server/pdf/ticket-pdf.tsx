@@ -52,7 +52,12 @@ export function missingFontFiles(
   dir: string = FONT_DIR,
   readable: (file: string) => boolean = canRead,
 ): string[] {
-  return Object.values(FONTS).filter((name) => !readable(path.join(dir, name)));
+  // `dir` is only known at runtime, so Next 16.4's tracer would copy the whole
+  // project into the standalone server for this one call. It reads only the
+  // four fonts registered above, which stay traced through Font.register.
+  return Object.values(FONTS).filter(
+    (name) => !readable(path.join(/*turbopackIgnore: true*/ dir, name)),
+  );
 }
 function canRead(file: string): boolean {
   try {

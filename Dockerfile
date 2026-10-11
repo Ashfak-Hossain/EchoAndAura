@@ -82,6 +82,19 @@ RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
   if grep -rlE "build-placeholder" .next-build/standalone .next-build/static public dist; then \
   echo "A build placeholder was baked into the output (files above)." >&2; exit 1; \
   fi
+# Standalone holds only what the server traces (ADR-036). A dynamic fs path
+# once made Next 16.4 trace the whole repo into it (Dockerfile, docs, ops):
+# anything beyond these entries, or beyond the PDF fonts under src/, means
+# that happened again. The build log names the call ("whole project").
+RUN for entry in $(ls -A .next-build/standalone); do \
+  case "$entry" in \
+  .next-build|node_modules|package.json|server.js|src|deployment-revision.json) ;; \
+  *) echo "Next traced unexpected files into the server image: $entry" >&2; exit 1 ;; \
+  esac; \
+  done && \
+  if find .next-build/standalone/src -type f ! -path '*/src/server/pdf/fonts/*' | grep .; then \
+  echo "Next traced unexpected source files into the server image (above)." >&2; exit 1; \
+  fi
 
 # ---- web -----------------------------------------------------------------
 FROM ${NODE_IMAGE} AS web
