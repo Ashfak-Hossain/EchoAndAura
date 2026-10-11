@@ -44,6 +44,14 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 # ---- build ---------------------------------------------------------------
 FROM deps AS build
+# The slim image has no system CA store. Node carries its own, but the Sentry
+# CLI (source-map upload, ADR-068) needs /etc/ssl/certs or TLS fails with curl
+# error 60. Build stage only: the runtime images reach Sentry through Node.
+# Not version-pinned on purpose: the trust store must stay current, and
+# Debian drops superseded versions from its mirrors.
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends ca-certificates && \
+  rm -rf /var/lib/apt/lists/*
 COPY . .
 ARG R2_PUBLIC_URL
 ARG SOURCE_REVISION
