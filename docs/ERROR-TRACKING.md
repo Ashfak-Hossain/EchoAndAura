@@ -74,7 +74,10 @@ A failed map step prints one fixed line in the Build log, for example
 credential (HTTP 401))`. It names the step (`settings`, `revision`,
 `normalize-maps`, `next-inject`, `worker-inject`, `upload`, `cleanup`) and a
 reason from a fixed list with at most an HTTP status or network error number.
-CLI and vendor text is never printed, because CI logs are public.
+CLI and vendor text is never printed, because CI logs are public. `network
+error 60` means TLS verification failed: the CLI checks Sentry's certificate
+against the system CA store, which the build stage installs (`ca-certificates`)
+because the slim Node image ships without it.
 
 ## Activation gate (owner-run, after merge)
 

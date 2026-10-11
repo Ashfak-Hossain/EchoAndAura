@@ -195,6 +195,12 @@ describe('build/runtime configuration contract', () => {
     expect(dockerfile).toContain('# syntax=docker/dockerfile:1.10');
     expect(dockerfile).toContain('--mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN');
     expect(dockerfile).not.toMatch(/(?:ARG|ENV) SENTRY_AUTH_TOKEN/);
+    // The CLI verifies Sentry's TLS against the system store, which slim lacks.
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf('FROM deps AS build'),
+      dockerfile.indexOf('--mount=type=secret,id=sentry_auth_token'),
+    );
+    expect(buildStage).toMatch(/apt-get install -y --no-install-recommends ca-certificates/);
     const compose = parse(readFileSync('docker-compose.prod.yml', 'utf8'), { merge: true });
     expect(compose.services.web.environment.SENTRY_DSN).toBe('${SENTRY_DSN:-}');
     expect(compose.services.worker.environment.SENTRY_DSN).toBe('${SENTRY_DSN:-}');
