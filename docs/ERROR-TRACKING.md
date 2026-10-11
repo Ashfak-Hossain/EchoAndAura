@@ -69,6 +69,13 @@ in either image. BuildKit may reuse a previously successful build/upload layer;
 rotating a credential alone does not invalidate it. To test upload or restore
 deleted artifacts, deliberately rebuild that stage without its prior cache.
 
+A failed map step prints one fixed line in the Build log, for example
+`Private source-map build failed (step upload: Sentry refused the upload
+credential (HTTP 401))`. It names the step (`settings`, `revision`,
+`normalize-maps`, `next-inject`, `worker-inject`, `upload`, `cleanup`) and a
+reason from a fixed list with at most an HTTP status or network error number.
+CLI and vendor text is never printed, because CI logs are public.
+
 ## Activation gate (owner-run, after merge)
 
 This document records the order, not authorization to change production or create

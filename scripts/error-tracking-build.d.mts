@@ -11,3 +11,5 @@ export function finishImageMaps(
   env?: Record<string, string | undefined>,
   execute?: (args: string[]) => Promise<void>,
 ): Promise<void>;
+/** Fixed wording only: the failed step and a reason, never CLI or vendor text. */
+export function failureReason(error: unknown): string;
