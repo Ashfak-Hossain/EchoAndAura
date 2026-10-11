@@ -214,7 +214,9 @@ call a service → map the result).
   `fix(orders): …`, `chore: …`.
 - Commit at each green slice, not at end of day — small commits bisect well.
 - Merge commits only (no squash or rebase), and GitHub deletes the branch
-  after the merge. The PR template's checklist is the review.
+  after the merge. PR descriptions follow the template: a Summary (what
+  and why) and a Test plan, plus Risk and rollback or Invariants only when
+  they apply.
 - **One PR at a time, each branched from a fresh `origin/main`.** No
   stacked PRs (a branch built on another open branch): they retarget,
   re-run CI and leave confusing leftovers.
