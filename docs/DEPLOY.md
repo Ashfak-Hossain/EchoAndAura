@@ -56,15 +56,17 @@ branch → PR → CI green → merge to main → compare with running revision
    3. otherwise builds two images from the `Dockerfile` on GitHub's machines —
       `echoandaura-web` (the site) and `echoandaura-worker` (emails, hold
       expiry, and the migrate/admin scripts);
-   4. **smoke-tests them**: every migration on an empty database, the site
+   4. **scans them** for known vulnerabilities and stops on any critical one
+      that has a fix (ADR-069; [below](#when-the-image-scan-fails));
+   5. **smoke-tests them**: every migration on an empty database, the site
       answering `/api/health` and `/`, the worker staying up, and
       `/api/deployment` confirming the full revision of both images;
-   5. pushes them to GHCR (GitHub's container registry) tagged `main` and
+   6. pushes them to GHCR (GitHub's container registry) tagged `main` and
       `sha-<commit>`;
-   6. calls Dokploy, which pulls the new images and runs
+   7. calls Dokploy, which pulls the new images and runs
       `docker-compose.prod.yml`:
       **migrate** first; **web** and **worker** start only if it succeeded;
-   7. waits up to five minutes for the exact healthy web/worker revision to
+   8. waits up to five minutes for the exact healthy web/worker revision to
       answer at `/api/deployment`. A timeout fails the workflow rather than
       reporting that a deployment request was a successful rollout.
 3. The site is down for a few seconds while `web` restarts (until its
@@ -73,6 +75,29 @@ branch → PR → CI green → merge to main → compare with running revision
    broken.
 
 A failed migration leaves the old version running: nothing new starts.
+
+## When the image scan fails
+
+The Deploy run stops at **Scan images**, before anything is pushed or deployed;
+production keeps running the previous images. The log lists each finding:
+the package, the installed and fixed versions, and where in the image it sits.
+
+1. **Update the package** to the fixed version: a Dependabot or hand bump of
+   the npm dependency, a pnpm override for a transitive one, or a newer
+   `NODE_IMAGE` for the base image. Merge it; the next deploy scans again.
+2. **If the fix cannot ship yet**, and the finding is in code the app never
+   runs, add it to [.trivyignore.yaml](../.trivyignore.yaml) in a PR: the CVE
+   id, a `statement` saying why it is safe for now, and an `expired_at` no more
+   than 30 days out. When it expires the deploy fails again, so the fix is not
+   forgotten.
+
+To check an image before merging, scan it locally with the same pinned
+scanner (`TRIVY_IMAGE` in deploy.yml):
+
+```bash
+docker run --rm "$TRIVY_IMAGE" image --scanners vuln --ignore-unfixed \
+  --severity CRITICAL,HIGH ghcr.io/ashfak-hossain/echoandaura-worker:sha-<commit>
+```
 
 ## Requested versus confirmed (D3B1)
 

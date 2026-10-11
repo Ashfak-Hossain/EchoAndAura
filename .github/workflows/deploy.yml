@@ -32,6 +32,9 @@ permissions: {}
 
 env:
   REGISTRY: ghcr.io/ashfak-hossain
+  # ADR-069: the image scanner, pinned by digest (the same digest on Docker Hub
+  # and public ECR). Bumped by hand: docs/DEVELOPMENT.md → Dependencies.
+  TRIVY_IMAGE: docker.io/aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
 
 jobs:
   selection:
@@ -165,6 +168,36 @@ jobs:
             ${{ env.REGISTRY }}/echoandaura-worker:main
           cache-from: type=gha,scope=worker
           cache-to: type=gha,scope=worker,mode=max
+
+      # ADR-069: fail on critical vulnerabilities that have a fix; list the
+      # high ones without failing. Trivy runs as its own container reading a
+      # `docker save` export: no Docker socket, and none of this job's secrets
+      # in its environment (CVE-2026-33634 hijacked Trivy's GitHub Actions to
+      # read runner memory). Accepted exceptions live in .trivyignore.yaml.
+      - name: Scan images
+        env:
+          WEB: ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
+          WORKER: ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f image.tar' EXIT
+          scan() {
+            docker run --rm \
+              -v "$PWD/image.tar:/scan/image.tar:ro" \
+              -v "$PWD/.trivyignore.yaml:/scan/.trivyignore.yaml:ro" \
+              -v trivy-cache:/root/.cache \
+              "$TRIVY_IMAGE" image --input /scan/image.tar --scanners vuln \
+              --ignore-unfixed --ignorefile /scan/.trivyignore.yaml --no-progress \
+              --db-repository mirror.gcr.io/aquasec/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
+              "$@"
+          }
+          for image in "$WEB" "$WORKER"; do
+            echo "::group::Scan $image"
+            docker save "$image" -o image.tar
+            scan --severity HIGH --exit-code 0
+            scan --severity CRITICAL --exit-code 1
+            echo "::endgroup::"
+          done
 
       # The images that will run in production, booted for real: every
       # migration from an empty database, the web server answering its

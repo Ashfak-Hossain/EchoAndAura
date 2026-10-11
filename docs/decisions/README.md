@@ -73,6 +73,8 @@ flowchart LR
         Running revision proof`"]
         a067["`**ADR-067**
         Confirmed diff filter`"]
+        a069["`**ADR-069**
+        Image scan gate`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -80,6 +82,7 @@ flowchart LR
         a036 --> a067
         a065 -.-> a067
         a066 -.-> a067
+        a036 -.-> a069
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph backups ["Backups as code"]
@@ -279,6 +282,7 @@ flowchart LR
 | 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                                                   | 2026-10-08 |
 | 067 | [Skip application deploys from a confirmed non-runtime diff](067-confirmed-baseline-deploy-filtering.md)     | Accepted                                                                   | 2026-10-08 |
 | 068 | [Error-only Sentry reporting with an outbound privacy allowlist](068-private-error-tracking.md)              | Accepted                                                                   | 2026-10-08 |
+| 069 | [Fail the deploy on critical, fixable vulnerabilities in the images](069-image-scan-gate.md)                 | Accepted                                                                   | 2026-10-12 |
 
 ### Code structure and tooling
 
