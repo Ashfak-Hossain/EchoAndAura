@@ -23,9 +23,12 @@ overrides:
   lightningcss: 1.32.0
   # drizzle-kit's old loader (@esbuild-kit) pins esbuild 0.18, which has a
   # dev-server advisory (GHSA-67mh-4wv8-2f99). We never run esbuild's dev
-  # server, but a clean `pnpm audit` keeps real advisories visible. 0.25.12
-  # is already in the lockfile (Phase 7.6 review).
-  '@esbuild-kit/core-utils>esbuild': 0.25.12
+  # server, but a clean `pnpm audit` keeps real advisories visible (Phase 7.6
+  # review). Both of drizzle-kit's esbuilds follow the app's own version:
+  # 0.25.12's Go runtime carries critical image-scan findings, and drizzle-kit
+  # reaches the worker image as better-auth's optional peer (9.9).
+  '@esbuild-kit/core-utils>esbuild': 0.28.2
+  'drizzle-kit>esbuild': 0.28.2
   # Patched transitive versions, inside the ranges their parents already
   # accept: ip-address GHSA-j6r3-76f7-8jcv + GHSA-h3mg-xc3c-68pw (via shadcn,
   # now dev-only), brace-expansion 1.x (via eslint's minimatch 3). braces
