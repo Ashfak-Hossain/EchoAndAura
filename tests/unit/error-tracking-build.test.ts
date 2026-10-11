@@ -14,6 +14,7 @@ import {
   sourceMapSettings,
   injectNextMaps,
   finishImageMaps,
+  failureReason,
 } from '../../scripts/error-tracking-build.mjs';
 const env = {
   SENTRY_BUILD_SOURCEMAPS: '1',
@@ -94,6 +95,80 @@ describe('private source-map build', () => {
     expect(fs.unlink).not.toHaveBeenCalled();
     fs.readFile.mockResolvedValueOnce('{"revision":"main"}');
     await expect(finishImageMaps(env, run)).rejects.toThrow('image-owned');
+  });
+  it('tags each failure with the step it happened in', async () => {
+    const stageOf = async (work: Promise<unknown>) =>
+      work.then(
+        () => 'resolved',
+        (error: { stage?: string }) => error.stage,
+      );
+    const failAt = (call: number) => {
+      const run = vi.fn<(args: string[]) => Promise<void>>(async () => {});
+      run.mockImplementation(async () => {
+        if (run.mock.calls.length === call) throw new Error('cli failed');
+      });
+      return run;
+    };
+    expect(await stageOf(finishImageMaps({ ...env, SENTRY_AUTH_TOKEN: '' }, failAt(0)))).toBe(
+      'settings',
+    );
+    fs.readFile.mockResolvedValueOnce('{"revision":"main"}');
+    expect(await stageOf(finishImageMaps(env, failAt(0)))).toBe('revision');
+    expect(await stageOf(finishImageMaps(env, failAt(1)))).toBe('worker-inject');
+    expect(await stageOf(finishImageMaps(env, failAt(2)))).toBe('upload');
+    fs.unlink.mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }));
+    expect(await stageOf(finishImageMaps({}, failAt(0)))).toBe('cleanup');
+    expect(await stageOf(injectNextMaps('/', env, failAt(0)))).toBe('settings');
+    expect(await stageOf(injectNextMaps('.next-build', env, failAt(1)))).toBe('next-inject');
+  });
+  it('reports a failure in fixed wording, never the CLI or vendor text', () => {
+    // Shapes taken from sentry-cli 3.8 output and Node's execFile errors.
+    const cliError = (stderr: string) =>
+      Object.assign(new Error(`Command failed: sentry-cli sourcemaps upload\n${stderr}`), {
+        stderr,
+        stage: 'upload',
+      });
+    const api = (cause: string) =>
+      cliError(
+        `error: API request failed\n\nCaused by:\n    0: API request failed\n    1: ${cause}\n`,
+      );
+    const cases: [Error, string][] = [
+      [api('sentry reported an error: Invalid token (http status: 401)'), 'HTTP 401'],
+      [api('sentry reported an error: You do not have permission (http status: 403)'), 'HTTP 403'],
+      [api('sentry reported an error: Not found (http status: 404)'), 'HTTP 404'],
+      [api('sentry reported an error: unknown (http status: 502)'), 'Sentry answered HTTP 502'],
+      [
+        api('[7] Could not connect to server (Failed to connect to 127.0.0.1:9 after 0 ms)'),
+        'could not reach Sentry (network error 7)',
+      ],
+      [cliError('error: No files to upload (strict mode).\n'), 'no files to upload'],
+      [
+        cliError('error: Two different org values supplied: `a` (from token), `b`.\n'),
+        'different organization',
+      ],
+      [cliError('error: something new\n'), 'unrecognised error'],
+    ];
+    for (const [error, reason] of cases) {
+      expect(failureReason(error)).toMatch(/^step upload: /);
+      expect(failureReason(error)).toContain(reason);
+    }
+    try {
+      sourceMapSettings({ ...env, SENTRY_AUTH_TOKEN: '' });
+    } catch (error) {
+      expect(failureReason(Object.assign(error as Error, { stage: 'settings' }))).toBe(
+        'step settings: missing SENTRY_ORG, SENTRY_PROJECT or the BuildKit upload credential',
+      );
+    }
+    const leaky = api(
+      'sentry reported an error: token sntrys_secretvalue for buyer@example.com at https://us.sentry.io/api/0/organizations/echoandaura/ (http status: 401)',
+    );
+    const reported = failureReason(leaky);
+    for (const fragment of ['sntrys_', 'secretvalue', 'buyer@', 'https://', 'echoandaura'])
+      expect(reported).not.toContain(fragment);
+    expect(failureReason(Object.assign(new Error('x'), { stage: 'Bad Stage\nhttps://x' }))).toBe(
+      'step unknown: unrecognised error',
+    );
+    expect(failureReason('not an error')).toBe('step unknown: unrecognised error');
   });
   it('never uploads by default, and still strips runtime maps', async () => {
     const run = vi.fn<(args: string[]) => Promise<void>>(async () => {});
