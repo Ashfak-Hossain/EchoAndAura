@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand';
 import { ActiveSectionTitle, AdminNav } from './admin-nav';
 import type { NavCounts } from './nav-items';
 import { EnvChip } from './env-chip';
@@ -24,8 +25,8 @@ export function AdminShell({ email, counts, signOutQuiet, signOutButton, childre
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar px-3.5 py-4.5 text-sidebar-foreground lg:flex print:hidden">
-        <span className="px-2 pb-4.5 font-heading text-lg font-semibold tracking-tight text-sidebar-accent-foreground">
-          echoandaura
+        <span className="flex px-2 pb-4.5 text-sidebar-accent-foreground">
+          <BrandLogo className="h-6 w-auto" title="echoandaura" />
         </span>
         <AdminNav counts={counts} />
         <div className="mt-auto flex flex-col gap-1.5 border-t border-sidebar-border px-2 pt-3 text-[13px]">

@@ -11,6 +11,7 @@ New to the codebase? Read in this order:
 | [ENVIRONMENT.md](ENVIRONMENT.md)                       | Every environment variable — what it's for, whether it's required, and how to obtain it.                                                           |
 | [ARCHITECTURE.md](ARCHITECTURE.md)                     | System diagram, data flow, data model overview, deployment topology.                                                                               |
 | [DIAGRAMS.md](DIAGRAMS.md)                             | ER, domain class, architecture, order state-machine, and payment sequence diagrams (Mermaid).                                                      |
+| [BRAND.md](BRAND.md)                                   | The mark, wordmark, colours and where they are drawn; regenerating the favicon and outlines.                                                       |
 | [decisions/](decisions/README.md)                      | Architecture decision records (ADRs), one file each, listed by area. Non-obvious choices, never deleted — superseded records are marked.           |
 | [REQUIREMENTS.md](REQUIREMENTS.md)                     | Product scope — what is and isn't in the MVP.                                                                                                      |
 | [DEPLOY.md](DEPLOY.md)                                 | How code reaches production: CI, images on GHCR, Dokploy, rollback, running a script on the server.                                                |

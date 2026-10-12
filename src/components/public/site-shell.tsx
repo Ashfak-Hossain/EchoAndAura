@@ -8,7 +8,7 @@ import { DHAKA_TZ } from '@/lib/time';
 import { toBanglaDigits } from '@/server/lib/digits';
 import { cn } from '@/lib/utils';
 import type { SiteSettings } from '@/server/services/settings.service';
-import { BrandMark } from './brand-mark';
+import { BrandLogo } from '@/components/brand';
 import { PersonIcon } from './chrome-icons';
 import { MobileMenu } from './mobile-menu';
 import { HeaderFrame, SiteNavLinks } from './site-nav';
@@ -86,12 +86,10 @@ export function SiteHeader({
         <Link
           href="/"
           aria-label={t('home')}
-          className="flex min-h-11 items-center gap-2.5 font-heading text-[19px] font-bold tracking-[-0.02em] text-foreground group-data-[tone=dark]:text-[#fbfaf8] lg:text-[22px]"
+          className="flex min-h-11 items-center text-foreground group-data-[tone=dark]:text-[#fbfaf8]"
         >
-          {/* On charcoal the tile turns marigold with a charcoal glyph, as in the footer.
-              CSS `stroke` beats the glyph's presentation attribute. */}
-          <BrandMark className="group-data-[tone=dark]:bg-marigold group-data-[tone=dark]:[&_svg]:stroke-foreground" />
-          echoandaura
+          {/* docs/BRAND.md: the lockup's ink follows the header tone. */}
+          <BrandLogo className="h-6 w-auto lg:h-7" />
         </Link>
 
         <nav aria-label={t('site')} className="hidden items-center gap-1 lg:flex">
@@ -163,9 +161,8 @@ export function SiteFooter({
       <div className="mx-auto flex max-w-360 flex-col gap-8 px-4 pt-12 pb-6 lg:gap-10 lg:px-16 lg:pt-16">
         <div className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,2fr)_minmax(0,2fr)_minmax(0,3fr)] lg:gap-x-10">
           <div className="col-span-2 flex flex-col gap-4 lg:col-span-1">
-            <span className="flex items-center gap-2.5 font-heading text-[19px] font-bold tracking-[-0.02em] text-[#fbfaf8] lg:text-[22px]">
-              <BrandMark inverted />
-              echoandaura
+            <span className="flex text-[#fbfaf8]">
+              <BrandLogo className="h-7 w-auto lg:h-8" title="echoandaura" />
             </span>
             <p className="max-w-90 text-base leading-[1.6]">{t('blurb')}</p>
             <p className="text-sm text-[#a8a29a]">{t('trust')}</p>

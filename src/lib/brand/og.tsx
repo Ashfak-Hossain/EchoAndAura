@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { BRAND_COLORS, LOCKUP, MARK, WORDMARK } from './marks';
 
 /**
  * ADR-042: the site's generated images: the default share card and the
@@ -22,25 +23,70 @@ export async function brandFonts() {
   ];
 }
 
-/** The square mark: "ea" in the brand colours, for icons at any size. */
-export function BrandMark({ size }: { size: number }) {
+/**
+ * The app icon (docs/BRAND.md): the full mark, all marigold, on a full-bleed
+ * charcoal square; platforms round the corners themselves. The mark fills 66%
+ * of the square, inside the maskable safe zone (a 40%-radius circle).
+ */
+export function AppIcon() {
+  const stroke = (part: { d: string; width: number }) => (
+    <path
+      d={part.d}
+      fill="none"
+      stroke={BRAND_COLORS.marigold}
+      strokeWidth={part.width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: BRAND_DARK,
-        color: BRAND_LIGHT,
-        fontFamily: 'Noto Sans',
-        fontWeight: 700,
-        fontSize: Math.round(size * 0.46),
-        letterSpacing: Math.round(-size * 0.02),
-      }}
-    >
-      ea
+    <div style={{ width: '100%', height: '100%', display: 'flex', background: BRAND_DARK }}>
+      <svg width="100%" height="100%" viewBox="0 0 100 100">
+        <g transform="translate(17.67 18.23) scale(0.66)">
+          {stroke(MARK.curl)}
+          {MARK.arc ? stroke(MARK.arc) : null}
+          <circle cx={MARK.dot.cx} cy={MARK.dot.cy} r={MARK.dot.r} fill={BRAND_COLORS.marigold} />
+        </g>
+      </svg>
     </div>
+  );
+}
+
+/** The lockup in paper and marigold, for the charcoal share card. */
+export function LogoOnDark({ height }: { height: number }) {
+  const [, , w, h] = LOCKUP.viewBox.split(' ').map(Number) as [number, number, number, number];
+  const ink = BRAND_LIGHT;
+  return (
+    <svg width={Math.round((height * w) / h)} height={height} viewBox={LOCKUP.viewBox}>
+      <g transform={LOCKUP.markTransform}>
+        <path
+          d={MARK.curl.d}
+          fill="none"
+          stroke={ink}
+          strokeWidth={MARK.curl.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {MARK.arc ? (
+          <path
+            d={MARK.arc.d}
+            fill="none"
+            stroke={ink}
+            strokeWidth={MARK.arc.width}
+            strokeLinecap="round"
+          />
+        ) : null}
+        <circle cx={MARK.dot.cx} cy={MARK.dot.cy} r={MARK.dot.r} fill={BRAND_COLORS.marigold} />
+      </g>
+      <g transform={LOCKUP.wordmarkTransform}>
+        {WORDMARK.parts.map((part) => (
+          <path
+            key={part.d.slice(0, 16)}
+            d={part.d}
+            fill={part.role === 'accent' ? BRAND_COLORS.marigold : ink}
+          />
+        ))}
+      </g>
+    </svg>
   );
 }

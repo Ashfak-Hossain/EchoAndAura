@@ -1,4 +1,4 @@
-import { BrandMark } from '@/components/public/brand-mark';
+import { BrandMark } from '@/components/brand';
 import { cn } from '@/lib/utils';
 
 /** The charcoal band's cover frame (N7): 1200×630, radius 12, a hairline on the band. */
@@ -23,7 +23,7 @@ export function CoverPlaceholder({ className }: { className?: string }) {
       data-testid="cover-placeholder"
       className={cn(bandCover, 'flex items-center justify-center', className)}
     >
-      <BrandMark inverted className="size-16 [&_svg]:size-9" />
+      <BrandMark className="size-20 text-[#fbfaf8]" />
     </div>
   );
 }

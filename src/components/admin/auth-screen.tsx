@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand';
 
 /**
  * B1's split screen for the signed-out admin pages (sign in, forgot
@@ -20,7 +21,9 @@ export function AuthScreen({
   return (
     <main className="flex min-h-screen flex-col lg:flex-row">
       <aside className="flex flex-col justify-between gap-10 bg-foreground px-6 py-8 text-background lg:w-105 lg:shrink-0 lg:px-10 lg:py-10">
-        <span className="font-heading text-2xl font-semibold tracking-tight">echoandaura</span>
+        <span className="flex">
+          <BrandLogo className="h-8 w-auto" title="echoandaura" />
+        </span>
         <div className="flex flex-col gap-3">
           <p className="text-3xl leading-[1.15] tracking-[-0.02em] text-background">
             Organizer console

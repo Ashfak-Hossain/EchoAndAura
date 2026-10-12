@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from '@/i18n/link';
 import { formatInTimeZone } from 'date-fns-tz';
-import { BrandMark } from '@/components/public/brand-mark';
+import { BrandMark } from '@/components/brand';
 import { ContactCard } from '@/components/public/help/contact';
 import { overline } from '@/components/public/help/layout';
 import { RelatedPolicies } from '@/components/public/help/policy-page';
@@ -74,7 +74,7 @@ export default async function AboutPage() {
             aria-label="echoandaura"
             className="flex h-55 items-center justify-center border-y border-border bg-foreground lg:h-120"
           >
-            <BrandMark inverted className="size-16" />
+            <BrandMark className="size-20 text-[#fbfaf8]" />
           </div>
         )}
         {withCover ? (

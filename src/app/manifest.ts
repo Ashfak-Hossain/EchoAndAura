@@ -14,7 +14,10 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: BRAND_LIGHT,
     theme_color: BRAND_DARK,
     icons: [
-      { src: '/icon', sizes: '512x512', type: 'image/png' },
+      { src: '/icon', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      // The mark sits inside the 40% safe circle (docs/BRAND.md), so the same
+      // image can be cropped to any launcher shape.
+      { src: '/icon', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       { src: '/apple-icon', sizes: '180x180', type: 'image/png' },
     ],
   };
