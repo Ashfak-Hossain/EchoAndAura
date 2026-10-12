@@ -90,6 +90,18 @@ export const LOCKUP = (() => {
   };
 })();
 
+/**
+ * The emailed logo (docs/BRAND.md): a hosted PNG, since mail clients drop
+ * SVG. Shown 28 px high; the file is drawn at 3x for sharp screens.
+ * `pnpm brand:assets` writes it to `public${EMAIL_LOGO.path}`. Gmail caches
+ * images by URL, so a changed logo gets a new file name.
+ */
+export const EMAIL_LOGO = (() => {
+  const [, , w, h] = LOCKUP.viewBox.split(' ').map(Number) as [number, number, number, number];
+  const height = 28;
+  return { path: '/brand/email-logo.png', width: Math.round((height * w) / h), height, scale: 3 };
+})();
+
 function round(n: number, places = 2): number {
   const f = 10 ** places;
   return Math.round(n * f) / f;

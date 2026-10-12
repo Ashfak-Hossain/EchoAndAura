@@ -20,8 +20,10 @@ body {
   font-weight: 750;
   letter-spacing: -0.04em;
 }
-.wordmark > span {
-  color: var(--color-fd-primary);
+.wordmark-logo {
+  display: block;
+  height: 22px;
+  width: auto;
 }
 .wordmark small {
   display: block;

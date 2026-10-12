@@ -99,7 +99,12 @@ describe('proxy — Cloudflare Access on /admin', () => {
     for (const path of ['/admin', '/admin/orders', '/bn/events/x', '/events']) {
       expect([path, matches(path)]).toEqual([path, true]);
     }
-    for (const path of ['/api/health', '/door/api/scans', '/_next/static/x.js']) {
+    for (const path of [
+      '/api/health',
+      '/door/api/scans',
+      '/_next/static/x.js',
+      '/brand/email-logo.png',
+    ]) {
       expect([path, matches(path)]).toEqual([path, false]);
     }
   });

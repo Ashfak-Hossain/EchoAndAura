@@ -4,19 +4,22 @@ import {
   Head,
   Hr,
   Html,
+  Img,
   Link,
   Preview,
   Section,
   Text,
 } from '@react-email/components';
 import type { ReactNode } from 'react';
+import { EMAIL_LOGO } from '@/lib/brand/marks';
 import type { EmailSender } from './view';
 
 /**
  * Canvas 4: 600 px, single column, system fonts only (Archivo does not
  * survive Gmail — weight carries the hierarchy). Tables and inline styles
  * come from @react-email/components. Black-on-white with one marigold
- * accent; no background images.
+ * accent; no background images. The logo is a hosted PNG (mail clients
+ * drop SVG); with images blocked, its alt text reads as the old text brand.
  */
 export const FONT = "-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
@@ -29,7 +32,14 @@ export const styles = {
     borderRadius: '12px',
     padding: '28px',
   },
-  brand: { fontSize: '18px', fontWeight: 700, letterSpacing: '-0.01em', margin: '0 0 18px' },
+  brand: {
+    display: 'block',
+    margin: '0 0 18px',
+    border: 0,
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#1c1a17',
+  },
   h1: { fontSize: '24px', lineHeight: '1.2', fontWeight: 700, margin: '0 0 12px' },
   p: { fontSize: '15px', lineHeight: '1.55', margin: '0 0 12px' },
   small: { fontSize: '13px', lineHeight: '1.5', color: '#6b6558', margin: '0 0 8px' },
@@ -97,7 +107,13 @@ export function EmailLayout({ preview, sender, children, footerNote }: LayoutPro
       <Body style={styles.body}>
         <Container style={styles.container}>
           <Section style={styles.card}>
-            <Text style={styles.brand}>echoandaura</Text>
+            <Img
+              src={`${siteUrl}${EMAIL_LOGO.path}`}
+              width={EMAIL_LOGO.width}
+              height={EMAIL_LOGO.height}
+              alt="echoandaura"
+              style={styles.brand}
+            />
             {children}
           </Section>
           <Text style={styles.footer}>

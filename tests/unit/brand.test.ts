@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@react-email/components';
 import { describe, expect, it } from 'vitest';
 import { BrandLogo, BrandMark } from '@/components/brand';
-import { BRAND_COLORS, LOCKUP, MARK, MARK_SMALL, WORDMARK } from '@/lib/brand/marks';
-import { faviconSvg } from '@/lib/brand/svg';
+import { BRAND_COLORS, EMAIL_LOGO, LOCKUP, MARK, MARK_SMALL, WORDMARK } from '@/lib/brand/marks';
+import { docsBrandModule, faviconSvg, lockupSvg } from '@/lib/brand/svg';
 import manifest from '@/app/manifest';
+import { EmailLayout } from '@/server/email/templates/layout';
+import type { EmailSender } from '@/server/email/templates/view';
 
 const box = (viewBox: string) => viewBox.split(' ').map(Number);
 
@@ -66,7 +69,7 @@ describe('icons', () => {
     expect(svg).not.toContain(MARK.arc!.d);
   });
 
-  it('ship favicon.ico as 16, 32 and 48 px PNG frames (pnpm brand:favicon)', () => {
+  it('ship favicon.ico as 16, 32 and 48 px PNG frames (pnpm brand:assets)', () => {
     const ico = readFileSync('src/app/favicon.ico');
     expect(ico.readUInt16LE(2)).toBe(1);
     const count = ico.readUInt16LE(4);
@@ -84,5 +87,46 @@ describe('icons', () => {
       'any',
       'maskable',
     ]);
+  });
+});
+
+// `pnpm brand:assets` writes these; each test fails when its file is stale.
+describe('generated brand files', () => {
+  it('ship the emailed logo as a 3x PNG of the size the email shows', () => {
+    const png = readFileSync(`public${EMAIL_LOGO.path}`);
+    expect(png.subarray(1, 4).toString('latin1')).toBe('PNG');
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([
+      EMAIL_LOGO.width * EMAIL_LOGO.scale,
+      EMAIL_LOGO.height * EMAIL_LOGO.scale,
+    ]);
+  });
+
+  it('draw the emailed lockup on white with the two marigold accents', () => {
+    const svg = lockupSvg({ width: 3, height: 1, background: '#ffffff' });
+    expect(svg).toContain('fill="#ffffff"');
+    expect(svg.match(new RegExp(`fill="${BRAND_COLORS.marigold}"`, 'g'))).toHaveLength(2);
+  });
+
+  it('give the docs site the same favicon and an exact copy of the brand data', () => {
+    expect(readFileSync('docs-site/app/icon.svg', 'utf8')).toBe(faviconSvg());
+    expect(readFileSync('docs-site/lib/brand.generated.ts', 'utf8')).toBe(docsBrandModule());
+  });
+});
+
+describe('email header', () => {
+  it('shows the hosted logo at its display size, named for blocked images', async () => {
+    const sender: EmailSender = {
+      siteUrl: 'https://echoandaura.com',
+      contactEmail: null,
+      contactPhone: null,
+      organizerName: 'Raj',
+      organizerAddress: null,
+    };
+    const html = await render(h(EmailLayout, { preview: 'p', sender, children: 'body' }));
+    const img = /<img[^>]*>/.exec(html)?.[0] ?? '';
+    expect(img).toContain('src="https://echoandaura.com/brand/email-logo.png"');
+    expect(img).toContain(`width="${EMAIL_LOGO.width}"`);
+    expect(img).toContain(`height="${EMAIL_LOGO.height}"`);
+    expect(img).toContain('alt="echoandaura"');
   });
 });

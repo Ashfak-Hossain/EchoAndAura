@@ -1,8 +1,10 @@
 import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
 import {
+  Circle,
   Document,
   Font,
+  G,
   Page,
   Path,
   StyleSheet,
@@ -11,6 +13,7 @@ import {
   View,
   renderToBuffer,
 } from '@react-pdf/renderer';
+import { LOCKUP, MARK, WORDMARK } from '@/lib/brand/marks';
 import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
 
 /**
@@ -112,7 +115,6 @@ const s = StyleSheet.create({
   page: { padding: 40, fontFamily: 'Ticket', fontSize: 11, color: '#000' },
   eyebrow: { fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
   title: { fontSize: 26, fontWeight: 'bold', marginTop: 4 },
-  brand: { fontSize: 11, fontWeight: 'bold', textAlign: 'right' },
   grid: { flexDirection: 'row', marginTop: 24, gap: 24 },
   col: { flex: 1, gap: 14 },
   label: { fontSize: 8, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
@@ -148,6 +150,39 @@ const s = StyleSheet.create({
   struck: { textDecoration: 'line-through' },
 });
 
+/**
+ * The lockup in one ink (docs/BRAND.md): the ticket is black on white so it
+ * prints the same on any printer. Vector paths from the brand data, so it
+ * needs no font and stays sharp at any zoom.
+ */
+function TicketLogo({ height }: { height: number }) {
+  const [, , w, h] = LOCKUP.viewBox.split(' ').map(Number) as [number, number, number, number];
+  const stroke = (part: { d: string; width: number }) => (
+    <Path
+      d={part.d}
+      fill="none"
+      stroke="#000"
+      strokeWidth={part.width}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+  return (
+    <Svg viewBox={LOCKUP.viewBox} style={{ width: (height * w) / h, height }}>
+      <G transform={LOCKUP.markTransform}>
+        {stroke(MARK.curl)}
+        {MARK.arc ? stroke(MARK.arc) : null}
+        <Circle cx={MARK.dot.cx} cy={MARK.dot.cy} r={MARK.dot.r} fill="#000" />
+      </G>
+      <G transform={LOCKUP.wordmarkTransform}>
+        {WORDMARK.parts.map((part) => (
+          <Path key={part.d.slice(0, 16)} d={part.d} fill="#000" />
+        ))}
+      </G>
+    </Svg>
+  );
+}
+
 export function TicketPdf({ input }: { input: TicketPdfInput }) {
   return (
     <Document title={`${input.eventTitle} — tickets`} author="echoandaura">
@@ -163,7 +198,7 @@ export function TicketPdf({ input }: { input: TicketPdfInput }) {
                   {input.eventTitle}
                 </Text>
               </View>
-              <Text style={s.brand}>echoandaura</Text>
+              <TicketLogo height={18} />
             </View>
 
             <View style={s.grid}>
