@@ -19,15 +19,23 @@ const pages = new Map();
 for (const file of html) {
   const ids = new Set();
   const links = [];
+  let shared = false;
   function visit(node) {
     const attrs = new Map(node.attrs?.map((attr) => [attr.name, attr.value]));
     if (attrs.has('id')) ids.add(attrs.get('id'));
     if (attrs.has('href')) links.push(attrs.get('href'));
     if (attrs.has('src')) links.push(attrs.get('src'));
+    // Share images are links too: a missing one is a broken preview card.
+    if (/^(og|twitter):image$/.test(attrs.get('property') ?? attrs.get('name') ?? '')) {
+      links.push(attrs.get('content'));
+      shared = true;
+    }
     for (const child of node.childNodes ?? []) visit(child);
   }
   visit(parse(await readFile(file, 'utf8')));
   pages.set(file, { ids, links });
+  if (!shared && !file.endsWith(`${sep}404.html`) && !file.includes(`${sep}_not-found`))
+    throw new Error(`${file}: no share image`);
 }
 let checked = 0;
 for (const [file, { links }] of pages) {
