@@ -18,45 +18,52 @@ jobs:
     # Dependencies). Same pin in every workflow.
     runs-on: ubuntu-24.04
 
-    # Postgres + Redis are provisioned for the integration suite. The default
-    # gate (`pnpm verify`) does not use them; the Postgres-only integration
-    # subset (inventory — including the concurrency test) runs after it. The
-    # storage integration test needs MinIO, which has no `services:` entry
-    # (its image needs a command), so it stays local-only for now.
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: echoandaura
-          POSTGRES_PASSWORD: ci_password
-          POSTGRES_DB: echoandaura
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U echoandaura -d echoandaura"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-
+    # One job, so the required `verify` check always reports pass or fail,
+    # never "skipped" (which would block merging). ADR-071: steps run by what
+    # the change touches. Typecheck, lint and unit tests always run; the app
+    # part and the docs part are skipped only when no changed path can affect
+    # them. Together the parts are exactly `pnpm verify` (a test keeps them in
+    # step) plus the browser, Postgres and docs-export gates.
     env:
       DATABASE_URL: postgresql://echoandaura:ci_password@localhost:5432/echoandaura
       TEST_DATABASE_URL: postgresql://echoandaura:ci_password@localhost:5432/echoandaura
       REDIS_URL: redis://localhost:6379
-      # `next build` (inside `pnpm verify`) loads every route, and the auth
-      # module refuses to load without these (fail fast at boot). CI has no
-      # .env, so the build failed on main from 2026-09-19 until this was
-      # added. Fake, CI-only values, like ci_password above; the Dockerfile's
-      # build stage does the same.
+      # `next build` loads every route, and the auth module refuses to load
+      # without these (fail fast at boot). CI has no .env, so the build failed
+      # on main from 2026-09-19 until this was added. Fake, CI-only values,
+      # like ci_password above; the Dockerfile's build stage does the same.
       BETTER_AUTH_URL: http://localhost:3000
       BETTER_AUTH_SECRET: ci-only-placeholder-never-used-outside-ci-000000
 
     steps:
       - uses: actions/checkout@v7
+
+      # A PR into main is compared with its base. A push to main runs everything: a
+      # green main run is what deploys (ADR-067) and publishes the docs. Any
+      # doubt (no base, unknown path, empty diff) runs everything.
+      - name: Select checks
+        id: select
+        run: node .github/scripts/ci-select.mjs
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          CI_BASE: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD: ${{ github.sha }}
+
+      # Started early so the images pull while dependencies install. Plain
+      # containers instead of `services:`, which would start on every run.
+      # Postgres serves the integration suite (inventory — including the
+      # concurrency test). The storage test needs MinIO and stays local-only.
+      - name: Start Postgres and Redis
+        if: steps.select.outputs.app != 'false'
+        run: |
+          docker run -d --name postgres -p 5432:5432 \
+            -e POSTGRES_USER=echoandaura -e POSTGRES_PASSWORD=ci_password -e POSTGRES_DB=echoandaura \
+            --health-cmd "pg_isready -U echoandaura -d echoandaura" \
+            --health-interval 2s --health-timeout 5s --health-retries 30 postgres:17
+          docker run -d --name redis -p 6379:6379 \
+            --health-cmd "redis-cli ping" \
+            --health-interval 2s --health-timeout 5s --health-retries 30 redis:7
 
       - uses: pnpm/action-setup@v6
 
@@ -67,30 +74,75 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm verify
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+      - run: pnpm build
+        if: steps.select.outputs.app != 'false'
+
+      - run: pnpm docs:verify
+        if: steps.select.outputs.docs != 'false'
 
       - run: pnpm exec playwright install --with-deps chromium
+        if: steps.select.outputs.docs != 'false'
       - run: pnpm docs:test
+        if: steps.select.outputs.docs != 'false'
       - name: Test Pages static hosting behavior locally
+        if: steps.select.outputs.docs != 'false'
         run: pnpm docs:test
         env:
           DOCS_PREVIEW_MODE: pages
           WRANGLER_SEND_METRICS: 'false'
 
+      - name: Wait for Postgres and Redis
+        if: steps.select.outputs.app != 'false'
+        run: |
+          for container in postgres redis; do
+            for _ in $(seq 1 60); do
+              [ "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = healthy ] && break
+              sleep 1
+            done
+            test "$(docker inspect -f '{{.State.Health.Status}}' "$container")" = healthy
+          done
+
       # THE most important test in the repo (CLAUDE.md § Testing) runs here,
       # with the gate check-in race tests (ADR-030) — both need only Postgres.
       - run: pnpm db:migrate
+        if: steps.select.outputs.app != 'false'
       - run: pnpm test:integration:db
+        if: steps.select.outputs.app != 'false'
 
       # Only checked static output, never the repo, .env or app build. No
       # Cloudflare credentials in CI. The publisher treats this as data.
       - name: Package docs export
+        if: steps.select.outputs.docs != 'false'
         run: node .github/scripts/docs-artifact.mjs package "$RUNNER_TEMP/docs-artifact"
         env:
           DOCS_RUN_ID: ${{ github.run_id }}
           DOCS_RUN_ATTEMPT: ${{ github.run_attempt }}
           DOCS_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # ADR-071: no docs build, so nothing to publish. The publisher accepts
+      # this marker in place of an export; neither, or both, is still an error.
+      - name: Mark docs unaffected
+        if: steps.select.outputs.docs == 'false'
+        run: |
+          mkdir -p "$RUNNER_TEMP/docs-unchanged"
+          printf 'Docs unaffected by this change (ADR-071): %s\n' "$REASON" \
+            > "$RUNNER_TEMP/docs-unchanged/docs-unchanged.txt"
+        env:
+          REASON: ${{ steps.select.outputs.reason }}
       - uses: actions/upload-artifact@v7
+        if: steps.select.outputs.docs == 'false'
+        with:
+          name: docs-unchanged-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/docs-unchanged
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v7
+        if: steps.select.outputs.docs != 'false'
         with:
           name: docs-site-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/docs-artifact

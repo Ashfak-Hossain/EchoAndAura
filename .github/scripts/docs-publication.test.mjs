@@ -114,6 +114,37 @@ test('artifact selection is tied to this run, SHA and attempt, never latest-by-n
   assert.throws(() => selectArtifact([artifact, artifact], run));
 });
 
+test('a PR run that built no docs publishes nothing, but only with its own marker (ADR-071)', () => {
+  const marker = {
+    id: 6,
+    name: 'docs-unchanged-42-2',
+    expired: false,
+    size_in_bytes: 60,
+    workflow_run: { id: 42, head_sha: sha },
+  };
+  const artifact = { ...marker, id: 5, name: 'docs-site-42-2', size_in_bytes: 200 };
+  const pull = { ...run, event: 'pull_request' };
+  assert.equal(selectArtifact([marker], pull), null);
+  // A main (push) run always runs the docs part: a marker there is an error.
+  assert.throws(() => selectArtifact([marker], run));
+  assert.equal(selectArtifact([artifact], pull), 5);
+  // Neither, both, two markers, or a marker from another run/attempt/SHA: fail closed.
+  assert.throws(() => selectArtifact([], pull));
+  assert.throws(() => selectArtifact([artifact, marker], pull));
+  assert.throws(() => selectArtifact([marker, marker], pull));
+  for (const changes of [
+    { name: 'docs-unchanged-42-1' },
+    { expired: true },
+    { size_in_bytes: 0 },
+    { size_in_bytes: 1024 * 1024 },
+    { workflow_run: { id: 43, head_sha: sha } },
+    { workflow_run: { id: 42, head_sha: 'b'.repeat(40) } },
+  ])
+    assert.throws(() => selectArtifact([{ ...marker, ...changes }], pull));
+  // An invalid export next to a marker is still ambiguous, never "unchanged".
+  assert.throws(() => selectArtifact([{ ...artifact, size_in_bytes: 0 }, marker], pull));
+});
+
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'echoandaura-docs-artifact-'));
   t.after(() => rm(root, { recursive: true, force: true }));

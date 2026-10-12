@@ -31,19 +31,33 @@ export function selectRelease(run, repository, mainSha, prs = []) {
   return { branch: `pr-${candidates[0].number}`, environment: 'docs-preview', sha: run.head_sha };
 }
 
+/**
+ * The checked export's id, or null when this CI run built no docs because no
+ * change could affect them (ADR-071) and uploaded only its marker. Exactly one
+ * of the two, from this run, attempt and SHA; anything else fails closed.
+ */
 export function selectArtifact(artifacts, run) {
-  const name = `docs-site-${run.id}-${run.run_attempt}`;
-  const matches = artifacts.filter(
-    (artifact) =>
-      artifact.name === name &&
-      !artifact.expired &&
-      artifact.size_in_bytes > 0 &&
-      artifact.size_in_bytes < 250 * 1024 * 1024 &&
-      artifact.workflow_run?.id === run.id &&
-      artifact.workflow_run?.head_sha === run.head_sha,
-  );
-  if (matches.length !== 1) throw new Error('Missing, expired or ambiguous checked docs artifact');
-  return matches[0].id;
+  const exportName = `docs-site-${run.id}-${run.run_attempt}`;
+  const markerName = `docs-unchanged-${run.id}-${run.run_attempt}`;
+  const valid = (artifact, maxBytes) =>
+    !artifact.expired &&
+    artifact.size_in_bytes > 0 &&
+    artifact.size_in_bytes < maxBytes &&
+    artifact.workflow_run?.id === run.id &&
+    artifact.workflow_run?.head_sha === run.head_sha;
+  const exports = artifacts.filter((artifact) => artifact.name === exportName);
+  const markers = artifacts.filter((artifact) => artifact.name === markerName);
+  if (exports.length === 1 && markers.length === 0 && valid(exports[0], 250 * 1024 * 1024))
+    return exports[0].id;
+  // Only a PR run may build no docs; a main run always carries the export.
+  if (
+    run.event === 'pull_request' &&
+    exports.length === 0 &&
+    markers.length === 1 &&
+    valid(markers[0], 64 * 1024)
+  )
+    return null;
+  throw new Error('Missing, expired or ambiguous checked docs artifact');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -82,17 +96,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     const list = await api(`actions/runs/${run.id}/artifacts?per_page=100`);
     const artifact = selectArtifact(list.artifacts, run);
-    await appendFile(
-      process.env.GITHUB_OUTPUT,
-      [
-        'publish=true',
-        `branch=${release.branch}`,
-        `environment=${release.environment}`,
-        `sha=${release.sha}`,
-        `artifact=${artifact}`,
-        `attempt=${run.run_attempt}`,
-      ].join('\n') + '\n',
-    );
-    console.log(`Checked docs publication selected: ${release.branch}.`);
+    if (artifact === null) {
+      await appendFile(process.env.GITHUB_OUTPUT, 'publish=false\n');
+      console.log('No publication: this CI run built no docs; no change could affect them.');
+    } else {
+      await appendFile(
+        process.env.GITHUB_OUTPUT,
+        [
+          'publish=true',
+          `branch=${release.branch}`,
+          `environment=${release.environment}`,
+          `sha=${release.sha}`,
+          `artifact=${artifact}`,
+          `attempt=${run.run_attempt}`,
+        ].join('\n') + '\n',
+      );
+      console.log(`Checked docs publication selected: ${release.branch}.`);
+    }
   }
 }

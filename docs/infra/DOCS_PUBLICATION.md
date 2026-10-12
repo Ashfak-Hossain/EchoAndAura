@@ -174,8 +174,14 @@ do not mark them verified or copy values into the inventory.
 
 ## Publication checks and limitations
 
-CI packages only `docs-site/out` after verification, browser tests and real
-Postgres integration tests. Artifacts include run ID, attempt, head revision,
+CI packages only `docs-site/out`, after typecheck, lint, unit tests, the docs
+verify and both browser runs. The app build and real Postgres integration tests
+also run first, except on a PR whose changes cannot affect the app (ADR-071);
+on main they always run. A PR run whose changes cannot affect the docs builds
+none and uploads a small `docs-unchanged-<run>-<attempt>` marker instead; the
+publisher then publishes nothing, and that PR's existing preview keeps its
+earlier content (delete it by hand in Cloudflare Pages if that matters). Exactly one of the two must come from the run being
+considered, the marker only from a PR run, so a missing export still fails. Artifacts include run ID, attempt, head revision,
 build revision and file hashes. The manifest is a consistency check, **not an
 independent signature**: trust comes from fetching the exact artifact from the
 verified GitHub CI run and from the protected workflow/code on main.
