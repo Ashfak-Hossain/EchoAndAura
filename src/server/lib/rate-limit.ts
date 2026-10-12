@@ -86,8 +86,15 @@ export function createRedisRateLimitStore(redis: IORedis): RateLimitStore {
 }
 
 // Cached on globalThis like the producer queue: Next dev re-evaluates
-// server modules on reload and would leak a connection each time.
-const g = globalThis as unknown as { __rateLimitStore?: RateLimitStore };
+// server modules on reload and would leak a connection each time. One
+// connection serves both limiters below.
+const g = globalThis as unknown as {
+  __limiterRedis?: IORedis;
+  __rateLimitStore?: RateLimitStore;
+  __authRateLimit?: AuthRateLimitStorage;
+};
+const limiterRedis = () => (g.__limiterRedis ??= createRedisConnection(process.env, 'limiter'));
+
 /**
  * Connects on the first hit, not when a route module loads: limiters are
  * built at module scope, and `next build` loads every route (ADR-036) —
@@ -95,10 +102,7 @@ const g = globalThis as unknown as { __rateLimitStore?: RateLimitStore };
  * REDIS_URL then surfaces on that hit, through the limiter's `onError`.
  */
 export function redisRateLimitStore(): RateLimitStore {
-  const store = () =>
-    (g.__rateLimitStore ??= createRedisRateLimitStore(
-      createRedisConnection(process.env, 'limiter'),
-    ));
+  const store = () => (g.__rateLimitStore ??= createRedisRateLimitStore(limiterRedis()));
   return withTimeout(
     {
       hit: (key, windowSeconds) => store().hit(key, windowSeconds),
@@ -114,16 +118,73 @@ export function redisRateLimitStore(): RateLimitStore {
  * answers through the limiter's `onError` instead of hanging the request.
  */
 export const HIT_TIMEOUT_MS = 2_000;
+function capped<T>(answer: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`rate limiter: no answer in ${ms} ms`)), ms);
+  });
+  return Promise.race([answer, timeout]).finally(() => clearTimeout(timer));
+}
 export function withTimeout(store: RateLimitStore, ms: number): RateLimitStore {
-  const capped = <T>(answer: Promise<T>): Promise<T> => {
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`rate limiter: no answer in ${ms} ms`)), ms);
-    });
-    return Promise.race([answer, timeout]).finally(() => clearTimeout(timer));
-  };
   return {
-    hit: (key, windowSeconds) => capped(store.hit(key, windowSeconds)),
-    peek: (key) => capped(store.peek(key)),
+    hit: (key, windowSeconds) => capped(store.hit(key, windowSeconds), ms),
+    peek: (key) => capped(store.peek(key), ms),
+  };
+}
+
+/**
+ * better-auth's own limiter (rateLimit.customStorage, ADR-070). In memory,
+ * every web instance would allow its own `max`; in Redis they share one
+ * count. Structurally better-auth 1.7's BetterAuthRateLimitStorage.
+ */
+export interface AuthRateLimitStorage {
+  consume(
+    key: string,
+    rule: { window: number; max: number },
+  ): Promise<{ allowed: boolean; retryAfter: number | null }>;
+}
+
+/**
+ * One atomic step, as better-auth requires: count the request and read the
+ * window's remaining time together, so simultaneous requests cannot all
+ * pass a stale read. The window starts at the first request and is never
+ * extended (EXPIRE NX); refused requests still count inside it.
+ */
+export function createRedisAuthRateLimit(redis: IORedis): AuthRateLimitStorage {
+  return {
+    async consume(key, { window, max }) {
+      const k = `ratelimit:better-auth:${key}`;
+      const replies = await redis.multi().incr(k).expire(k, window, 'NX').ttl(k).exec();
+      const count: unknown = replies?.[0]?.[1];
+      const ttl: unknown = replies?.[2]?.[1];
+      if (typeof count !== 'number' || typeof ttl !== 'number')
+        throw new Error('rate limiter: unexpected MULTI reply');
+      if (count <= max) return { allowed: true, retryAfter: null };
+      return { allowed: false, retryAfter: ttl > 0 ? ttl : window };
+    },
+  };
+}
+
+/**
+ * Lazy and time-capped like the store above, but fails open: it guards
+ * better-auth's remaining HTTP routes (email-link verification, session
+ * reads, sign-out), and refusing them would sign everyone out of a working
+ * site over a Redis blip. Their tokens are long random values, and the
+ * Cloudflare rule and Traefik's cap still stand in front (ADR-047).
+ */
+export function redisAuthRateLimit(
+  storage: () => AuthRateLimitStorage = () =>
+    (g.__authRateLimit ??= createRedisAuthRateLimit(limiterRedis())),
+  ms = HIT_TIMEOUT_MS,
+): AuthRateLimitStorage {
+  return {
+    async consume(key, rule) {
+      try {
+        return await capped(storage().consume(key, rule), ms);
+      } catch (err: unknown) {
+        logger.error({ err }, 'auth rate limiter unavailable — allowing');
+        return { allowed: true, retryAfter: null };
+      }
+    },
   };
 }
