@@ -134,11 +134,11 @@ function isAdminPath(pathname: string): boolean {
 export const config = {
   matcher: [
     // Pages only. API routes (the door's too), build assets, the image
-    // optimizer, the self-hosted decoder and the door's service worker
-    // carry no HTML. Prefetches included: a prefetch carries a page's
+    // optimizer, the self-hosted decoder, the brand files (the emailed
+    // logo) and the door's service worker carry no HTML. Prefetches included: a prefetch carries a page's
     // render, so the Access check (ADR-050) and the language step
     // (ADR-061: `/bn` rewritten, a visitor's own locale header replaced)
     // can't skip it.
-    '/((?!api/|door/api/|_next/static|_next/image|vendor/|door/sw\\.js|favicon\\.ico).*)',
+    '/((?!api/|door/api/|_next/static|_next/image|vendor/|brand/|door/sw\\.js|favicon\\.ico).*)',
   ],
 };

@@ -1,4 +1,5 @@
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+import { BrandLogo } from '@/components/brand-logo';
 import { source } from '@/lib/source';
 import type { ReactNode } from 'react';
 
@@ -9,7 +10,9 @@ export default function Layout({ children }: { children: ReactNode }) {
       nav={{
         title: (
           <span className="wordmark">
-            echo<span>&</span>aura <small>developer docs</small>
+            <BrandLogo className="wordmark-logo" />
+            <span className="sr-only">echo&aura</span>
+            <small>developer docs</small>
           </span>
         ),
       }}

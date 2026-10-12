@@ -1,6 +1,7 @@
 # Generated — never hand-edited (CLAUDE.md), so never reformatted either.
 drizzle/
 src/components/ui/
+docs-site/lib/brand.generated.ts
 # Build output and personal notes (may contain third-party exports).
 .next/
 .next-build/

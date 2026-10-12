@@ -45,11 +45,24 @@ single-ink uses such as prints; `mono` on the components draws them.
   marigold, on full-bleed charcoal at 66% of the square, inside the maskable
   safe zone, so the manifest lists it for both `any` and `maskable`.
 - **Favicon** (`src/app/favicon.ico`, 16/32/48 px): the small cut on a rounded
-  charcoal tile. Regenerate with `pnpm brand:favicon` after changing the mark.
+  charcoal tile.
 - **Share image** (`opengraph-image`): the lockup in paper and marigold on
   charcoal.
-- Still to come: the email header (a hosted PNG), the ticket PDF and the
-  developer docs site.
+- **Email header** (`public/brand/email-logo.png`, `EMAIL_LOGO`): the lockup
+  on white, shown 28 px high and drawn at 3x. A hosted PNG because mail apps
+  drop SVG; white, not transparent, so dark-mode apps never put charcoal on
+  charcoal. Its alt text, `echoandaura`, is what shows with images blocked.
+  Gmail caches images by URL: if the logo changes, give the file a new name.
+- **Ticket PDF**: the lockup in black, as vector paths, top right. The ticket
+  is black on white so it prints the same everywhere.
+- **Developer docs site**: the same favicon (`docs-site/app/icon.svg`) and
+  the lockup in the nav (`docs-site/components/brand-logo.tsx`). The docs
+  site is its own package, so it reads a generated copy of the brand data
+  (`docs-site/lib/brand.generated.ts`).
+
+**After changing the mark or the wordmark**, run `pnpm brand:assets`. It
+rewrites the favicon, the email PNG and the docs site's icon and data copy.
+`tests/unit/brand.test.ts` fails while any of them is stale.
 
 ## Don't
 
@@ -66,4 +79,4 @@ Only needed if the font, weight or tracking changes. Download Archivo Bold
 units per em with kerning and `-0.02 × 100` tracking, and write each part's
 `toPathData(2)` into `WORDMARK` in `marks.ts`, keeping the ampersand as its own
 part with role `accent`. Update its `viewBox` to the union of the parts'
-bounding boxes; `LOCKUP` is derived from it.
+bounding boxes; `LOCKUP` is derived from it. Then run `pnpm brand:assets`.
