@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildAuthOptions } from '@/lib/auth-options';
@@ -39,7 +39,7 @@ async function getSession(auth: ReturnType<typeof instance>, ip: string): Promis
   return response.status;
 }
 
-const freshIp = () => `203.0.113.${1 + (randomBytes(1)[0]! % 250)}`;
+const freshIp = () => `203.0.113.${randomInt(1, 255)}`;
 
 describe("better-auth's limiter across instances (real Redis)", () => {
   it('shares one limit between two instances, counted in Redis', async () => {
