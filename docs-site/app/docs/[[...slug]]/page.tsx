@@ -1,3 +1,4 @@
+import { SOURCE_URL } from '@/lib/layout.shared';
 import { source } from '@/lib/source';
 import { DocsPage, DocsBody, DocsTitle, DocsDescription } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
@@ -37,6 +38,7 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
   const page = source.getPage(slug);
   if (!page) notFound();
   const Content = page.data.body;
+  const revision = process.env.DOCS_SOURCE_REVISION ?? '';
   return (
     // One label above the title, from frontmatter; the breadcrumb would repeat it.
     <DocsPage toc={page.data.toc} breadcrumb={{ enabled: false }}>
@@ -47,7 +49,10 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
         <Content components={getMDXComponents()} />
       </DocsBody>
       <p className="source-revision">
-        Source revision: <code>{process.env.DOCS_SOURCE_REVISION?.slice(0, 7)}</code>
+        Source revision: <code>{revision.slice(0, 7)}</code> ·{' '}
+        <a href={`${SOURCE_URL}/blob/${revision}/docs-site/content/docs/${page.path}`}>
+          View this page&apos;s source
+        </a>
       </p>
     </DocsPage>
   );

@@ -22,6 +22,17 @@ test('ticket tour renders live excerpts and checked type information', async ({ 
     'href',
     /\/src\/server\/email\/dispatch.ts$/,
   );
+  // Five numbered steps, the rules they rely on, then where to read next.
+  await expect(page.locator('.fd-step')).toHaveCount(5);
+  await expect(page.getByText('Rule: prices never come from the browser')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Order states/ }).last()).toHaveAttribute(
+    'href',
+    '/docs/reference/order-states/',
+  );
+  await expect(page.getByRole('link', { name: "View this page's source" })).toHaveAttribute(
+    'href',
+    /\/blob\/[a-f0-9]{40}\/docs-site\/content\/docs\/tours\/buy-a-ticket\.mdx$/,
+  );
   await page.screenshot({ path: test.info().outputPath('tour-light.png'), fullPage: true });
 });
 

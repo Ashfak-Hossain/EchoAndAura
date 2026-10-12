@@ -332,6 +332,14 @@ lacks one or links a missing one. The home layout wraps `app/page.tsx` itself:
 a `(home)` route group would put parentheses into exported file names, which
 the publication validator refuses.
 
+### Reading comfort (D4B)
+
+The tour's sections are numbered steps (Fumadocs `Steps`). A rule from the
+project's invariants that a step depends on, such as "prices never come from
+the browser", sits in a callout titled "Rule: …", so a reader can find every
+rule by scanning. Each page ends with "read next" cards, and its footer links
+the page's own MDX source at the same revision as its source links.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

@@ -37,7 +37,8 @@ test('static pages, search, source links, themes and narrow layouts', async ({ p
   await expect(input).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(trigger).toBeFocused();
-  await page.getByRole('link', { name: 'reading the codebase', exact: true }).click();
+  // The overview's "read next" card, not the sidebar or footer link to the same page.
+  await page.locator('article a[data-card]', { hasText: 'Reading the codebase' }).click();
   await expect(
     page.getByRole('heading', { name: 'Reading the codebase', exact: true }),
   ).toBeVisible();

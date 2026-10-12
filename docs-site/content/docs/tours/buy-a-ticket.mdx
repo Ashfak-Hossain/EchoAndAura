@@ -13,12 +13,20 @@ payment, and why delivery failures do not undo issued tickets.
 
 <TicketJourney />
 
-## 1. Register with IDs and quantities
+<Steps>
+<Step>
 
-The registration action validates the form and calls the order service. It
-does not trust a price supplied by the browser. The service checks the event's
-registration window, the ticket type's sale window, and the requested quantity,
-then reads prices and any applicable promo from the database.
+## Register with IDs and quantities
+
+The registration action validates the form and calls the order service. The
+service checks the event's registration window, the ticket type's sale window,
+and the requested quantity, then reads prices and any applicable promo from the
+database.
+
+<Callout title="Rule: prices never come from the browser">
+  The request carries ticket type IDs and quantities only. The server recalculates every total from
+  the database, so an edited page cannot change what a buyer owes.
+</Callout>
 
 Follow the <SourceLink path="src/app/(public)/events/[slug]/register/actions.ts">registration action</SourceLink>
 → <SourceLink path="src/server/services/orders.service.ts">order service</SourceLink>
@@ -46,15 +54,22 @@ See the <SourceLink path="tests/unit/order-validation.test.ts">validation
 tests</SourceLink> and <SourceLink path="tests/unit/orders.promo.test.ts">promo
 tests</SourceLink> for refusal paths.
 
-## 2. Reserve inventory and create the order together
+</Step>
+<Step>
+
+## Reserve inventory and create the order together
 
 The service opens a transaction, checks the buyer's open-order cap, and reserves
 two tickets. It inserts the order and an `order.created` audit row in that same
 transaction. A transaction commits all those writes or rolls them all back.
 
-The order starts as `pending_payment`. Stock is held, not sold. The reservation
-is a conditional UPDATE, so competing requests cannot both claim stock that
-only one request can satisfy.
+The order starts as `pending_payment`. Stock is held, not sold.
+
+<Callout title="Rule: one statement checks and reserves">
+  The reservation is a conditional UPDATE: the availability check and the counter change are one
+  statement, never a read followed by a write. Competing requests cannot both claim stock that only
+  one request can satisfy.
+</Callout>
 
 ```ts source="src/server/repositories/inventory.repository.ts#inventoryRepository.reserve" title="inventory.repository.ts · actual reservation"
 
@@ -70,7 +85,10 @@ then inspect the <SourceLink path="tests/integration/orders.service.test.ts">ord
 transaction tests</SourceLink> and <SourceLink path="docs/decisions/012-order-creation.md">order
 creation decision</SourceLink>.
 
-## 3. Transfer money, then submit its transaction ID
+</Step>
+<Step>
+
+## Transfer money, then submit its transaction ID
 
 Mina transfers ৳2,400 through bKash outside the application. She then submits
 the transaction ID and the sending phone number on her order page. This is a
@@ -79,7 +97,11 @@ payment claim awaiting a person's verification, not an automatic callback.
 `submitPayment` normalizes digits, trims whitespace, and uppercases the
 transaction ID. It locks the order row, checks the current status and hold
 cutoff, updates the order to `pending_verification`, and records an audit row.
-The database's unique index prevents another order from using the same ID.
+
+<Callout title="Rule: one transaction ID, one order">
+  A unique index on the stored, normalized ID refuses a second order with the same transaction ID,
+  whatever the application code does.
+</Callout>
 
 The buyer sees a 20-minute countdown. The server accepts a transaction ID for
 a further two minutes as a grace period. At the cutoff, an unpaid order can
@@ -90,7 +112,10 @@ the correction is audited too.
 
 See <SourceLink path="src/server/lib/hold.ts">the hold rule</SourceLink>, <SourceLink path="tests/unit/hold.test.ts">its boundary tests</SourceLink>, and <SourceLink path="docs/decisions/013-payment-submission-and-expiry.md">the payment submission decision</SourceLink>.
 
-## 4. Verify the statement and issue the tickets
+</Step>
+<Step>
+
+## Verify the statement and issue the tickets
 
 The admin compares the submitted ID and amount with the bKash statement, then
 approves or rejects. The approval request carries the exact transaction ID
@@ -109,17 +134,29 @@ When the transaction commits, the order is already `issued`. `paid` is an
 intermediate step inside that transaction, preserved in the audit history.
 Rejection instead records the decision and releases the hold in one transaction.
 
-The <SourceLink path="src/server/services/fulfilment.service.ts">fulfilment
-service</SourceLink> is the sole issuance path. Review the <SourceLink path="tests/unit/fulfilment.service.test.ts">changed-ID and collision tests</SourceLink>, <SourceLink path="tests/integration/fulfilment.service.test.ts">concurrent approval tests</SourceLink>, and <SourceLink path="docs/decisions/014-fulfilment.md">the fulfilment decision</SourceLink>.
+<Callout title="Rule: one path issues tickets">
+  Only the{' '}
+  <SourceLink path="src/server/services/fulfilment.service.ts">fulfilment service</SourceLink> marks
+  an order paid and creates tickets, and only the admin's approval calls it.
+</Callout>
 
-## 5. Deliver after the commit
+Review the <SourceLink path="tests/unit/fulfilment.service.test.ts">changed-ID and collision tests</SourceLink>, <SourceLink path="tests/integration/fulfilment.service.test.ts">concurrent approval tests</SourceLink>, and <SourceLink path="docs/decisions/014-fulfilment.md">the fulfilment decision</SourceLink>.
+
+</Step>
+<Step>
+
+## Deliver after the commit
 
 After registration, the application queues a payment-instructions email.
 After approval, it queues the ticket email. The worker reads the order and
 renders the relevant message; ticket delivery includes the PDF and ticket links.
 
-No email or HTTP request runs inside the database transaction. This actual
-order-service helper catches a failed after-commit hook:
+<Callout title="Rule: no network calls inside a transaction">
+  A transaction can roll back database writes; it cannot unsend an email. Email and other network
+  work is queued after the commit.
+</Callout>
+
+This actual order-service helper catches a failed after-commit hook:
 
 ```ts source="src/server/services/orders.service.ts#afterCommit" title="orders.service.ts · actual after-commit helper"
 
@@ -128,13 +165,29 @@ order-service helper catches a failed after-commit hook:
 The queue producer gives accepted order-email jobs five attempts with
 exponential backoff. A send failure rejects the job so BullMQ can retry. A
 failure to enqueue is different: the service logs it and the committed order
-remains valid. This is not a transactional outbox that guarantees replay of
-every missing job. An admin can request a ticket-email resend after issuance.
+remains valid.
+
+<Callout type="warn" title="Not an outbox">
+  Nothing replays a job that failed to enqueue. An admin can request a ticket-email resend after
+  issuance.
+</Callout>
 
 Read the <SourceLink path="src/server/queue/producer.ts">queue producer</SourceLink>, <SourceLink path="src/server/email/dispatch.ts">email dispatcher</SourceLink>, and <SourceLink path="tests/unit/email-dispatch.test.ts">after-commit and delivery failure tests</SourceLink> together.
 
+</Step>
+</Steps>
+
 ## Keep the state contract close
 
-Use the [order-state reference](/docs/reference/order-states/) when you need
-the exact statuses and failure behavior. Use the [last-ticket walkthrough](/docs/concepts/last-ticket/)
-to inspect the race that the reservation query prevents.
+<Cards>
+  <Card
+    title="Order states"
+    href="/docs/reference/order-states/"
+    description="The exact statuses, who owns the inventory at each, and the failure behavior."
+  />
+  <Card
+    title="Who gets the last ticket?"
+    href="/docs/concepts/last-ticket/"
+    description="Step through the race that the reservation query settles."
+  />
+</Cards>
