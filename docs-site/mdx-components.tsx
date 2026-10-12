@@ -2,6 +2,7 @@ import defaults from 'fumadocs-ui/mdx';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 import * as Twoslash from 'fumadocs-twoslash/ui';
 import type { MDXComponents } from 'mdx/types';
+import { AfterCommit } from './components/after-commit';
 import { Diagram } from './components/diagram';
 import { PaisaCalculator } from './components/paisa-calculator';
 import { SourceLink } from './components/source-link';
@@ -16,6 +17,7 @@ export function getMDXComponents(): MDXComponents {
     Step,
     Steps,
     Diagram,
+    AfterCommit,
     PaisaCalculator,
     SourceLink,
     SystemMap,

@@ -556,6 +556,155 @@ a:focus-visible {
     word-break: break-all;
   }
 }
+.after-commit {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 16px;
+  background: var(--color-fd-card);
+}
+.after-commit-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+.after-commit-controls > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.after-commit-controls span {
+  min-width: 108px;
+  font-size: 13px;
+  color: var(--color-fd-muted-foreground);
+}
+.after-commit-controls button {
+  padding: 7px 11px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.after-commit-controls button[aria-pressed='true'] {
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+}
+.after-commit-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.after-commit .after-commit-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.after-commit-lines li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--color-fd-muted);
+}
+.after-commit-lines small {
+  display: block;
+  font-size: 12px;
+  color: var(--color-fd-muted-foreground);
+}
+.after-commit-status {
+  flex: none;
+  width: 96px;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-status='ok'] .after-commit-status {
+  color: #20715c;
+}
+[data-status='fail'] .after-commit-status,
+[data-status='undone'] .after-commit-status {
+  color: #a13d56;
+}
+[data-status='retry'] .after-commit-status {
+  color: #895400;
+}
+[data-status='skipped'] {
+  opacity: 0.6;
+}
+.dark [data-status='ok'] .after-commit-status {
+  color: #96d8c4;
+}
+.dark [data-status='fail'] .after-commit-status,
+.dark [data-status='undone'] .after-commit-status {
+  color: #f1a4b8;
+}
+.dark [data-status='retry'] .after-commit-status {
+  color: #efc780;
+}
+.after-commit-outcome {
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+.after-commit-outcome[data-good='true'] {
+  background: #eaf7f3;
+  border-color: #b9e0d3;
+  color: #17503f;
+}
+.after-commit-outcome[data-good='false'] {
+  background: #fff0f2;
+  border-color: #f0c4cf;
+  color: #7d2a40;
+}
+.dark .after-commit-outcome[data-good='true'] {
+  background: #16322b;
+  border-color: #24564a;
+  color: #c6eadf;
+}
+.dark .after-commit-outcome[data-good='false'] {
+  background: #391f29;
+  border-color: #5e3141;
+  color: #f6cdd7;
+}
+.after-commit-outcome dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.after-commit-outcome dt {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.after-commit .after-commit-outcome dd {
+  margin: 2px 0 0;
+  padding: 0;
+  font-weight: 600;
+}
+.after-commit-outcome p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+@media (max-width: 600px) {
+  .after-commit {
+    padding: 14px;
+  }
+  .after-commit-outcome dl {
+    grid-template-columns: 1fr;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

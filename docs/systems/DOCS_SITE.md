@@ -378,6 +378,19 @@ real `takaToPaisa`, `percentOfPaisa` and `computeOrderTotals`, and points to
 the database `CHECK` that refuses totals that do not add up. On a phone each
 line stacks, so the paisa column is never scrolled out of view.
 
+### Concept: work after commit (D4F)
+
+Invariant 7, and the "rollback after a failed insert" interaction planned
+above. The reader chooses where registration sends its email (inside the
+transaction, or after the commit) and what fails (nothing, the audit insert,
+the email service, or the queue). A timeline marks each step done, failed,
+rolled back, retried or never run, and an outcome box gives the order, the
+stock and the email. Inside the transaction, a failed insert leaves the buyer
+with instructions for an order that does not exist, and a down email service
+stops registration; after the commit, each failure stays in its own lane. The
+page quotes the real `afterCommit`, `enqueueEmail` and retry policy, and says
+plainly that this is not an outbox.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant
