@@ -108,3 +108,19 @@ test('last ticket walkthrough supports either winner, keyboard, reset and narrow
   }
   expect(errors).toEqual([]);
 });
+
+test('glossary terms can be linked to directly and found by search', async ({ page }) => {
+  await page.goto('/docs/reference/glossary/#paisa');
+  await expect(page.locator('h2#paisa')).toBeInViewport();
+  await page
+    .getByRole('button', { name: /Search/ })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('combobox').fill('idempotent');
+  await expect(dialog.getByRole('option', { name: /Idempotent/ }).first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.goto('/docs/run-it-locally/');
+  await expect(page.locator('.fd-step')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Take an order through it' })).toBeVisible();
+});

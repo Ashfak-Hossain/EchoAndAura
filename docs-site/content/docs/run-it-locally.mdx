@@ -1,0 +1,119 @@
+---
+title: Run it locally
+description: Start the application with demo data, then take one order through it yourself.
+label: Start here
+---
+
+The code is easier to read once you have watched it run. This page starts the
+application with realistic demo data, then takes an order through the same
+steps as the [Buy a ticket tour](/docs/tours/buy-a-ticket/), in your own
+browser.
+
+Nothing leaves your machine. Emails are written to files instead of being sent,
+the bot check uses Cloudflare's always-pass test keys, and payment is, as in
+production, a transaction ID that someone types.
+
+## What you need
+
+- **Node 26**, the version in the repository's `.nvmrc`
+- **pnpm 11**: `corepack enable`
+- **Docker**, for Postgres, Redis and MinIO
+
+## Start the application
+
+<Steps>
+<Step>
+
+### Install and configure
+
+```sh
+pnpm install
+cp .env.example .env
+```
+
+The example's local values already match the Docker services. Set
+`BETTER_AUTH_SECRET` in `.env` to a random value from
+`openssl rand -base64 32`.
+
+</Step>
+<Step>
+
+### Start the services and the database
+
+```sh
+docker compose up -d
+pnpm db:migrate
+```
+
+This starts Postgres 17, Redis 7 and MinIO, which stands in for the object
+storage that holds event covers in production.
+
+</Step>
+<Step>
+
+### Create the admin and the demo data
+
+```sh
+pnpm admin:create you@example.com 'a long password'
+pnpm db:seed
+```
+
+Public sign-up is off, so `admin:create` is the only way to make the admin.
+The seed builds five Dhaka events and about 155 orders in every state. It goes
+through the real services, so every inventory counter and audit row is
+genuine. Its buyers use `@example.com` addresses and nothing is sent.
+
+</Step>
+<Step>
+
+### Run the app and the worker
+
+In two terminals:
+
+```sh
+pnpm dev     # the application, at http://localhost:3000
+pnpm worker  # emails and the hold-expiry job
+```
+
+</Step>
+</Steps>
+
+## Take an order through it
+
+1. **Register.** Open `http://localhost:3000`, choose **Echo & Aura Live —
+   Dhaka** and register for two **General** tickets. The server prices them at
+   ৳1,200 each, 240,000 paisa in all, whatever the page sends.
+2. **Read the payment email.** The order page shows the 20-minute countdown.
+   The worker has written the payment-instructions email to `tmp/emails/`;
+   open the `.html` file in a browser.
+3. **Submit a payment.** Enter a made-up transaction ID of ten letters and
+   digits, such as `9XY12CD34E`, and any ten-digit bKash number after +880.
+   The order becomes `pending_verification`.
+4. **Approve it.** Sign in at `http://localhost:3000/admin/login`. The first
+   sign-in sets up an authenticator app, as every admin sign-in requires a
+   code. Open **Verification**, find the order and approve it.
+5. **See the tickets.** The ticket email and its PDF appear in `tmp/emails/`,
+   and the order page says "You're in." above the list of tickets.
+
+Then try a refusal: register a second order and submit the **same**
+transaction ID. The database's unique index refuses it, whatever the form
+says.
+
+## Look inside
+
+- `pnpm db:studio` opens Drizzle Studio. Find your order in `orders`, then its
+  history in `order_events`: one row per status change, with who made it.
+- Stop the worker, register again and watch the order page: the order stands,
+  and its email is waiting in the queue. Start the worker and it is sent.
+- `pnpm test` runs the unit tests. `pnpm test:integration:db` runs the
+  Postgres tests, including the concurrency test behind the
+  [last-ticket concept](/docs/concepts/last-ticket/).
+
+## If something is off
+
+- **No email in `tmp/emails/`:** the worker is not running. Emails are queued
+  after each commit and sent by the worker, never by the request.
+- **The seed refuses to run:** it only writes to a local development database,
+  never to one that looks like production.
+- **A port is taken:** another Postgres, Redis or app is already running on
+  5432, 6379, 9000 or 3000.
