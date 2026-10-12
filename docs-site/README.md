@@ -22,6 +22,9 @@ Use `<SourceLink path="src/server/services/orders.service.ts">Order service</Sou
 in MDX. The build validates the file and pins its GitHub link to the checkout's
 commit. Uncommitted edits are visible locally but have no remote commit yet.
 Do not import application services to render documentation.
+Never start a line with an inline `<SourceLink>`: MDX treats it as a block and
+Prettier splits the paragraph. Break the line before the tag's sentence instead;
+`tests/content.test.ts` checks this.
 
 ## Source excerpts and type examples
 

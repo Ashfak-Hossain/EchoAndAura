@@ -353,6 +353,20 @@ are the order state machine (reference) and the Buy a ticket sequence, whose
 colored bands separate a database transaction, a job queued after the commit,
 and the worker's network work.
 
+### Glossary and local setup (D4D)
+
+**Run it locally** (Start here) starts the application with demo data and
+takes an order through the same steps as the Buy a ticket tour: registration,
+the payment email in `tmp/emails/`, a typed transaction ID, admin approval,
+and the ticket email. It ends with a refusal to try (a reused transaction ID)
+and where to look inside. The **glossary** (Reference) defines the project's
+terms under linkable headings, each pointing to the page or source that
+explains it. Search finds each term.
+
+An inline `SourceLink` must not start an MDX line: MDX makes such a line a
+block of its own and Prettier then splits the sentence into two paragraphs.
+`tests/content.test.ts` fails on any such line.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

@@ -1,0 +1,109 @@
+---
+title: Glossary
+description: The words this project uses, what each one means here, and where to read more.
+label: Reference
+---
+
+Each term links to the page or source that explains it in full. Order
+statuses have their own [reference](/docs/reference/order-states/).
+
+## After-commit
+
+Work that starts only once a database transaction has committed: queuing an
+email, for example. A transaction can roll back a database write but cannot
+unsend an email, so network work never runs inside one. See
+[Deliver after the commit](/docs/tours/buy-a-ticket/#deliver-after-the-commit).
+
+## Audit row
+
+One row in `order_events`, written in the same transaction as the change it
+records: who did what, when, and the status before and after. The table is
+append-only, so an order's history can always answer "why was this rejected?".
+
+## Complimentary ticket
+
+A ticket the organizer gives away. It is a ৳0 order created already
+`issued`, through the same <SourceLink path="src/server/services/fulfilment.service.ts">fulfilment
+service</SourceLink> as a paid one, so it takes a seat like any other. See
+the <SourceLink path="docs/decisions/028-complimentary-tickets.md">complimentary
+tickets decision</SourceLink>.
+
+## Conditional UPDATE
+
+One SQL statement that checks a condition and changes a row together, such as
+"reserve two tickets **if** two are still available". The database settles
+competing requests one at a time, so two buyers can never both take the last
+ticket. See [Who gets the last ticket?](/docs/concepts/last-ticket/).
+
+## Early Bird
+
+Not a discount rule: a separate ticket type with its own price, quantity and
+sales window.
+
+## Fulfilment
+
+Approving a payment and issuing its tickets, in one transaction. Only the <SourceLink path="src/server/services/fulfilment.service.ts">fulfilment service</SourceLink>
+marks an order paid and creates tickets.
+
+## Gate pass
+
+The credential a door phone uses to check tickets in, for one event and one
+gate. Door staff need no accounts; the organizer creates and revokes passes.
+See the <SourceLink path="docs/decisions/030-gate-scanner-slice-a.md">gate scanner
+decision</SourceLink>.
+
+## Grace period
+
+The two minutes after a 20-minute hold ends during which the server still
+accepts a transaction ID, so a buyer who pays at the last moment is not
+refused.
+
+## Hold
+
+Inventory reserved for an order that has not been paid for yet. A hold lasts
+20 minutes on a clock the buyer can see, and ends in a sale, or is released
+when the order expires or is rejected. Also called a reservation.
+
+## Idempotent
+
+Safe to repeat: doing it twice has the same effect as once. Email jobs have an
+ID made from the email kind and the order, so a repeated hook queues one job,
+not two. A repeated approval is refused because the order is no longer
+pending verification.
+
+## Issued and delivered
+
+**Issued** is an order status: the tickets exist. **Delivered** is not: email
+delivery is tracked by jobs and audit events. A failed email never makes an
+issued order less issued. See [Order states](/docs/reference/order-states/).
+
+## Paisa
+
+The unit every amount is stored and calculated in: 100 paisa is ৳1. Money is
+always a whole number of paisa, never a decimal, so no total is ever off by a
+rounding error.
+
+## Promo code
+
+A percentage or fixed discount a buyer types at registration, priced on the
+server and limitable to some ticket types. An invalid code is refused, not
+silently dropped.
+
+## Queue, job and worker
+
+The **queue** (Redis with BullMQ) holds **jobs**: work to do later, such as
+sending an email. The **worker** is a separate process that takes jobs from
+the queue and does them, retrying failures with backoff, outside the buyer's
+request.
+
+## Transaction
+
+A group of database writes that commit together or not at all. Registration
+reserves stock, creates the order and writes its audit row in one transaction.
+
+## Transaction ID
+
+The ID bKash gives a payment, ten letters and digits, which the buyer pastes
+into the order page. It is stored uppercase and trimmed, and a unique index
+means one transaction ID can pay for only one order. Often shortened to
+**TrxID**.
