@@ -46,6 +46,7 @@ vi.mock('@/server/queue/producer', () => ({
 vi.mock('@/server/lib/rate-limit', () => ({
   createRateLimiter: () => ({ allow: async () => true, check: async () => true }),
   redisRateLimitStore: () => ({}),
+  redisAuthRateLimit: () => ({ consume: async () => ({ allowed: true, retryAfter: null }) }),
 }));
 vi.mock('@/lib/request-ip', () => ({ requestIp: async () => '203.0.113.7' }));
 

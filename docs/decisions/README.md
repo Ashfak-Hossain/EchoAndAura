@@ -120,8 +120,11 @@ flowchart LR
         Admin accounts`"]
         a048["`**ADR-048**
         Turnstile bot check`"]
+        a070["`**ADR-070**
+        Shared auth limiter`"]
         a019 --> a048
         a038 --> a048
+        a019 -.-> a070
     end
 
     subgraph look ["The home page and covers"]
@@ -260,6 +263,7 @@ flowchart LR
 | 048 | [Bot check: Cloudflare Turnstile on the public forms](048-bot-check-turnstile.md)                              | Accepted                                                   | 2026-10-02 |
 | 049 | [Admin two-factor sign-in: authenticator app, backup codes, no shortcuts](049-admin-two-factor.md)             | Accepted                                                   | 2026-10-02 |
 | 050 | [Cloudflare Access in front of the admin area and Dokploy](050-cloudflare-access.md)                           | Accepted                                                   | 2026-10-03 |
+| 070 | [better-auth's rate limiter counts in Redis, shared by every web instance](070-shared-auth-rate-limit.md)      | Accepted                                                   | 2026-10-12 |
 
 ### Performance
 

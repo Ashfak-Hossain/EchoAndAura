@@ -14,6 +14,7 @@ import {
 } from '@/server/auth/account-emails';
 import { MAGIC_LINK_TTL_SECONDS, sendMagicLink } from '@/server/auth/magic-link';
 import { enqueueAccountEmail, enqueueSignInEmail } from '@/server/queue/producer';
+import { redisAuthRateLimit } from '@/server/lib/rate-limit';
 import { adminAccountsRepository } from '@/server/repositories/admin-accounts.repository';
 
 export interface BuildAuthOptionsInput {
@@ -74,6 +75,10 @@ export function buildAuthOptions({ disableSignUp }: BuildAuthOptionsInput): Bett
     // but drives one IP from six workers at once, so APP_ENV=test turns it off.
     rateLimit: {
       enabled: process.env.APP_ENV === 'test' ? false : process.env.NODE_ENV === 'production',
+      // ADR-070: counted in Redis, so every web instance shares one limit
+      // (in memory, each would allow its own). Connects on first use; fails
+      // open if Redis does not answer.
+      customStorage: redisAuthRateLimit(),
     },
     // A disabled path 404s in better-auth's HTTP router only; `auth.api.*`
     // calls the endpoint directly, so the server actions keep working.

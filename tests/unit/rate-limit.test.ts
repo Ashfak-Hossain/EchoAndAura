@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRateLimiter, type RateLimitStore } from '@/server/lib/rate-limit';
+import type IORedis from 'ioredis';
+import {
+  createRateLimiter,
+  createRedisAuthRateLimit,
+  redisAuthRateLimit,
+  type AuthRateLimitStorage,
+  type RateLimitStore,
+} from '@/server/lib/rate-limit';
+import { logger } from '@/server/lib/logger';
 
 vi.mock('@/server/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -99,5 +107,129 @@ describe('withTimeout (ADR-038)', () => {
     expect(await store.hit('k', 60)).toBe(1);
     expect(await store.hit('k', 60)).toBe(2);
     expect(await store.peek('k')).toBe(2);
+  });
+});
+
+/** The MULTI → INCR, EXPIRE NX, TTL chain, on a fake clock. */
+function fakeRedis(now: () => number) {
+  const keys = new Map<string, { count: number; expiresAt: number | null }>();
+  const live = (k: string) => {
+    const entry = keys.get(k);
+    if (entry && entry.expiresAt !== null && entry.expiresAt <= now()) keys.delete(k);
+    return keys.get(k);
+  };
+  const redis = {
+    multi() {
+      const ops: (() => unknown)[] = [];
+      const chain = {
+        incr(k: string) {
+          ops.push(() => {
+            const entry = live(k) ?? { count: 0, expiresAt: null };
+            entry.count += 1;
+            keys.set(k, entry);
+            return entry.count;
+          });
+          return chain;
+        },
+        expire(k: string, seconds: number, mode: 'NX') {
+          ops.push(() => {
+            const entry = live(k);
+            if (!entry || (mode === 'NX' && entry.expiresAt !== null)) return 0;
+            entry.expiresAt = now() + seconds * 1000;
+            return 1;
+          });
+          return chain;
+        },
+        ttl(k: string) {
+          ops.push(() => {
+            const entry = live(k);
+            if (!entry) return -2;
+            return entry.expiresAt === null ? -1 : Math.ceil((entry.expiresAt - now()) / 1000);
+          });
+          return chain;
+        },
+        exec: async () => ops.map((op) => [null, op()]),
+      };
+      return chain;
+    },
+  };
+  return { redis: redis as unknown as IORedis, keys };
+}
+
+describe("better-auth's shared limiter (ADR-070)", () => {
+  it('allows max requests per window, then refuses with the seconds left', async () => {
+    let clock = 0;
+    const { redis, keys } = fakeRedis(() => clock);
+    const storage = createRedisAuthRateLimit(redis);
+    const rule = { window: 60, max: 3 };
+    for (let i = 0; i < 3; i++)
+      expect(await storage.consume('203.0.113.9/get-session', rule)).toEqual({
+        allowed: true,
+        retryAfter: null,
+      });
+    clock = 20_000;
+    expect(await storage.consume('203.0.113.9/get-session', rule)).toEqual({
+      allowed: false,
+      retryAfter: 40,
+    });
+    // Its own namespace, and a refusal does not extend the window.
+    expect([...keys.keys()]).toEqual(['ratelimit:better-auth:203.0.113.9/get-session']);
+    clock = 60_000;
+    expect(await storage.consume('203.0.113.9/get-session', rule)).toMatchObject({ allowed: true });
+  });
+
+  it('keeps keys apart', async () => {
+    const storage = createRedisAuthRateLimit(fakeRedis(() => 0).redis);
+    const rule = { window: 60, max: 1 };
+    expect((await storage.consume('a', rule)).allowed).toBe(true);
+    expect((await storage.consume('b', rule)).allowed).toBe(true);
+    expect((await storage.consume('a', rule)).allowed).toBe(false);
+  });
+
+  it('refuses an unexpected Redis reply rather than guessing', async () => {
+    const broken = {
+      multi: () => {
+        const chain = {
+          incr: () => chain,
+          expire: () => chain,
+          ttl: () => chain,
+          exec: async () => null,
+        };
+        return chain;
+      },
+    } as unknown as IORedis;
+    await expect(
+      createRedisAuthRateLimit(broken).consume('k', { window: 60, max: 1 }),
+    ).rejects.toThrow('unexpected MULTI reply');
+  });
+
+  it('fails open, and says so, when Redis errors or does not answer in time', async () => {
+    const failing: AuthRateLimitStorage = {
+      consume: async () => {
+        throw new Error('connect ECONNREFUSED');
+      },
+    };
+    expect(await redisAuthRateLimit(() => failing).consume('k', { window: 60, max: 1 })).toEqual({
+      allowed: true,
+      retryAfter: null,
+    });
+    const hanging: AuthRateLimitStorage = { consume: () => new Promise(() => {}) };
+    expect(await redisAuthRateLimit(() => hanging, 5).consume('k', { window: 60, max: 1 })).toEqual(
+      { allowed: true, retryAfter: null },
+    );
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.anything(),
+      'auth rate limiter unavailable — allowing',
+    );
+  });
+
+  it('passes a refusal through unchanged', async () => {
+    const refusing: AuthRateLimitStorage = {
+      consume: async () => ({ allowed: false, retryAfter: 12 }),
+    };
+    expect(await redisAuthRateLimit(() => refusing).consume('k', { window: 60, max: 1 })).toEqual({
+      allowed: false,
+      retryAfter: 12,
+    });
   });
 });
