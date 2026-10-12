@@ -52,15 +52,34 @@ describe('docs publication trust boundary', () => {
     expect(steps.at(-1).run).toContain('node "$GITHUB_WORKSPACE/.github/scripts/docs-project.mjs"');
   });
 
-  it('packages only after the full verify, browser and Postgres gates', () => {
+  it('packages only after every verify, browser and Postgres gate that runs (ADR-071)', () => {
     const steps = ci.jobs.verify.steps;
     const artifact = steps.findIndex(
       (step: { name?: string }) => step.name === 'Package docs export',
     );
-    for (const command of ['pnpm verify', 'pnpm docs:test', 'pnpm test:integration:db'])
-      expect(steps.findIndex((step: { run?: string }) => step.run === command)).toBeLessThan(
-        artifact,
-      );
+    expect(artifact).toBeGreaterThan(0);
+    for (const command of [
+      'pnpm typecheck',
+      'pnpm lint',
+      'pnpm test',
+      'pnpm build',
+      'pnpm docs:verify',
+      'pnpm docs:test',
+      'pnpm test:integration:db',
+    ]) {
+      // Present, not just "not after": findIndex's -1 would pass a bare `<`.
+      const index = steps.findIndex((step: { run?: string }) => step.run === command);
+      expect(index, command).toBeGreaterThanOrEqual(0);
+      expect(index, command).toBeLessThan(artifact);
+    }
+    // The export or the "docs unaffected" marker, never both and never neither.
+    expect(steps[artifact].if).toBe("steps.select.outputs.docs != 'false'");
+    expect(steps.at(-1).if).toBe("steps.select.outputs.docs != 'false'");
+    const marker = steps.find(
+      (step: { with?: { name?: string } }) =>
+        step.with?.name === 'docs-unchanged-${{ github.run_id }}-${{ github.run_attempt }}',
+    );
+    expect(marker.if).toBe("steps.select.outputs.docs == 'false'");
     expect(steps.at(-1).with.path).toBe('${{ runner.temp }}/docs-artifact');
     expect(steps.at(-1).with.name).toBe('docs-site-${{ github.run_id }}-${{ github.run_attempt }}');
     expect(steps.at(-1).with['if-no-files-found']).toBe('error');

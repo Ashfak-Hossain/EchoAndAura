@@ -173,8 +173,18 @@ for a new version on every page load, so this should never be needed.
 
 ## The quality gate
 
-`pnpm verify` runs typecheck → lint → unit tests → build. **Nothing merges unless
-it passes**, locally and in CI (`.github/workflows/ci.yml`).
+`pnpm verify` runs typecheck → lint → unit tests → build → docs verify.
+**Nothing merges unless it passes**, locally and in CI (`.github/workflows/ci.yml`).
+
+On a pull request into `main`, CI runs only the parts a change can affect (ADR-071).
+Typecheck, lint and unit tests always run. The app build and the Postgres
+integration tests are skipped when a PR touches only repository docs,
+`docs-site/` (except its `package.json`), Terraform, Ansible or deploy-only
+wiring; the docs build, browser tests and export are skipped when it touches
+only infrastructure or repository docs outside `docs/decisions/`. Anything
+else, including any new top-level path, runs everything, and **every push to
+main runs everything**. The run's summary shows what was selected and why.
+Locally, run the full `pnpm verify` regardless.
 
 Builds write to `.next-build/`, the dev server to `.next/` (`NEXT_DIST_DIR`
 in the `build`, `start` and `typecheck` scripts; `distDir` in
