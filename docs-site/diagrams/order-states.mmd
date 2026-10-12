@@ -1,0 +1,12 @@
+%% The order state machine: one arrow per entry in ORDER_TRANSITIONS
+%% (src/server/lib/order-status.ts). tests/unit/docs-diagrams.test.ts fails
+%% if the arrows and the table drift apart.
+stateDiagram-v2
+  [*] --> pending_payment: register, stock held
+  pending_payment --> pending_verification: buyer submits<br/>the transaction ID
+  pending_payment --> expired: hold lapses
+  pending_verification --> paid: admin approves
+  pending_verification --> rejected: admin rejects
+  pending_verification --> expired: in the table,<br/>taken by no service
+  paid --> issued: same transaction
+  issued --> cancelled: last ticket<br/>cancelled

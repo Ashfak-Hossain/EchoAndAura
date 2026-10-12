@@ -40,6 +40,7 @@
     "docs:build": "pnpm --filter @echoandaura/docs build",
     "docs:verify": "pnpm --filter @echoandaura/docs verify",
     "docs:test": "pnpm --filter @echoandaura/docs test:browser",
+    "docs:diagrams": "pnpm --filter @echoandaura/docs diagrams",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm docs:verify",
     "brand:assets": "tsx scripts/brand/assets.ts"
   },

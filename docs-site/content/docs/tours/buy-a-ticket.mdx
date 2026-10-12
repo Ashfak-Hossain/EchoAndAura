@@ -177,6 +177,17 @@ Read the <SourceLink path="src/server/queue/producer.ts">queue producer</SourceL
 </Step>
 </Steps>
 
+## The whole order at a glance
+
+<Diagram
+  name="buy-a-ticket"
+  alt="Sequence diagram of one order. The buyer registers; in one transaction the application reserves stock and writes the order and its audit row to Postgres, then commits. After the commit it queues the payment instructions, and the worker sends that email. The buyer pays by bKash outside the application and submits the transaction ID, which one transaction records as pending_verification. The admin approves the checked ID; one fulfilment transaction marks the order paid, sells the stock, creates the tickets and marks it issued. After that commit the ticket email is queued, and the worker reads the order and sends the tickets with the PDF, retrying on failure."
+>
+  **Teal:** one database transaction. **Amber:** a job queued after the commit. **Rose:** network
+  work the worker does outside any transaction, so a failed email never undoes an order. Select the
+  diagram to open it full size.
+</Diagram>
+
 ## Keep the state contract close
 
 <Cards>

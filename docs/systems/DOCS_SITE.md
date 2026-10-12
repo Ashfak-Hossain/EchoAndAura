@@ -340,6 +340,19 @@ the browser", sits in a callout titled "Rule: …", so a reader can find every
 rule by scanning. Each page ends with "read next" cards, and its footer links
 the page's own MDX source at the same revision as its source links.
 
+### Diagrams (D4C)
+
+Mermaid sources in `docs-site/diagrams/` are rendered ahead of time, in both
+themes, by `pnpm docs:diagrams`, and committed with them. The design spike
+found Mermaid needs a browser to measure text; CI installs its browser only
+after the docs build, so rendering in the build would mean reordering CI and
+needing Chromium for every local `pnpm verify`. A stamp in each SVG hashes its
+source and theme config, and a unit test fails on a stale rendering. The
+order-state diagram is also checked against `ORDER_TRANSITIONS`. The first two
+are the order state machine (reference) and the Buy a ticket sequence, whose
+colored bands separate a database transaction, a job queued after the commit,
+and the worker's network work.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

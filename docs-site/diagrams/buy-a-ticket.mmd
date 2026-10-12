@@ -1,0 +1,47 @@
+%% One order from registration to delivery. Teal: one database transaction.
+%% Amber: a job queued after the commit. Rose: network work outside any
+%% transaction, done by the worker.
+sequenceDiagram
+  actor Buyer
+  participant App as Application
+  participant DB as Postgres
+  participant Q as Queue
+  participant W as Worker
+  actor Admin
+
+  Buyer->>App: Register (IDs, quantity)
+  rect rgba(32, 113, 92, 0.16)
+    Note over App,DB: One transaction
+    App->>DB: Reserve stock
+    App->>DB: Order + audit row
+    DB-->>App: Commit
+  end
+  rect rgba(137, 84, 0, 0.16)
+    App-)Q: Payment instructions
+  end
+  App-->>Buyer: Order page, 20-min hold
+  rect rgba(161, 61, 86, 0.14)
+    Q-)W: Job
+    W-)Buyer: Email (network)
+  end
+  Note over Buyer: Pays by bKash,<br/>outside the app
+  Buyer->>App: Transaction ID
+  rect rgba(32, 113, 92, 0.16)
+    Note over App,DB: One transaction
+    App->>DB: pending_verification + audit
+    DB-->>App: Commit
+  end
+  Admin->>App: Approve the checked ID
+  rect rgba(32, 113, 92, 0.16)
+    Note over App,DB: One transaction (fulfilment)
+    App->>DB: paid, sold, tickets, issued
+    DB-->>App: Commit
+  end
+  rect rgba(137, 84, 0, 0.16)
+    App-)Q: Ticket email
+  end
+  rect rgba(161, 61, 86, 0.14)
+    Q-)W: Job (retried)
+    W->>DB: Read the order
+    W-)Buyer: Tickets + PDF (network)
+  end

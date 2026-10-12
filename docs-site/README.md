@@ -49,6 +49,26 @@ Dependencies are pinned. The docs use webpack because it is the bundler verified
 by the design spike. Generated `.source/`, `.next/`, and `out/` are ignored.
 No app `.env` is loaded by these commands.
 
+## Diagrams
+
+Behavior diagrams are Mermaid sources in `diagrams/*.mmd`, rendered ahead of
+time to `public/diagrams/<name>.light.svg` and `<name>.dark.svg`:
+
+```sh
+pnpm docs:diagrams
+```
+
+Commit the sources and both renderings together. Rendering needs the
+Playwright Chromium above and the pinned `mermaid` package; nothing is fetched.
+`diagrams/config.mjs` holds both themes. Every SVG starts with a stamp that
+hashes its source and that config, and `tests/unit/docs-diagrams.test.ts`
+fails while any rendering is stale or orphaned. The same test checks that
+`order-states.mmd` draws exactly the app's `ORDER_TRANSITIONS`.
+
+In MDX, `<Diagram name="order-states" alt="…">caption</Diagram>` shows the
+rendering for the current theme, linked to the full-size file. Write `alt` as
+what the picture says in words; use the caption for how to read it.
+
 ## Publication (D3A, prepared but not activated)
 
 The export includes a collection-derived sitemap, robots rules and reviewed
