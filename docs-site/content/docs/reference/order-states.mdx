@@ -18,6 +18,14 @@ status.
 | `expired`              | Unpaid hold expired through the expiry service          | Hold released                                    |
 | `cancelled`            | All tickets on the issued order have been cancelled     | Sold inventory released as tickets are cancelled |
 
+<Diagram
+  name="order-states"
+  alt="Order state diagram. Registration creates pending_payment. From pending_payment, the buyer submitting the transaction ID leads to pending_verification, and a lapsed hold leads to expired. From pending_verification, the admin approving leads to paid, rejecting leads to rejected, and expired is allowed by the table but taken by no service. paid becomes issued in the same transaction, and issued becomes cancelled when the last ticket is cancelled."
+>
+  Each arrow is one entry in the transition table below; a test fails if the diagram and the table
+  disagree. Select the diagram to open it full size.
+</Diagram>
+
 ## Legal transitions and exposed operations
 
 This table is extracted from the application's transition validator:

@@ -33,7 +33,18 @@ test('ticket tour renders live excerpts and checked type information', async ({ 
     'href',
     /\/blob\/[a-f0-9]{40}\/docs-site\/content\/docs\/tours\/buy-a-ticket\.mdx$/,
   );
+  // The pre-rendered sequence diagram loads, in the theme the page shows.
+  const diagram = page.locator('figure.diagram').first();
+  const loaded = (selector: string) =>
+    diagram.locator(selector).evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth);
+  await expect(diagram.locator('.diagram-light img')).toBeVisible();
+  await expect.poll(() => loaded('.diagram-light img')).toBeGreaterThan(0);
   await page.screenshot({ path: test.info().outputPath('tour-light.png'), fullPage: true });
+  await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+  await page.reload();
+  await expect(diagram.locator('.diagram-dark img')).toBeVisible();
+  await expect(diagram.locator('.diagram-light img')).toBeHidden();
+  await expect.poll(() => loaded('.diagram-dark img')).toBeGreaterThan(0);
 });
 
 test('last ticket walkthrough supports either winner, keyboard, reset and narrow themes', async ({

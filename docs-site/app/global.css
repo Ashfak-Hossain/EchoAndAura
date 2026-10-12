@@ -276,6 +276,38 @@ h4 {
   background: #391f29;
   color: #f1a4b8;
 }
+.diagram {
+  margin: 28px 0;
+  padding: 16px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 14px;
+  background: var(--color-fd-card);
+}
+.diagram a {
+  display: block;
+}
+.diagram img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 0;
+}
+/* One rendering per theme; the site's theme class picks it. */
+.diagram-dark,
+.dark .diagram-light {
+  display: none !important;
+}
+.dark .diagram-dark {
+  display: block !important;
+}
+.diagram figcaption {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-fd-muted-foreground);
+}
 .source-revision a {
   text-decoration: underline;
   text-underline-offset: 3px;
