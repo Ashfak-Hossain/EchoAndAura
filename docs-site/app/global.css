@@ -13,8 +13,22 @@
   --color-fd-primary: #e9b764;
   --color-fd-primary-foreground: #241b0c;
 }
+@theme {
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family:
+    var(--font-archivo),
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 .wordmark {
   font-weight: 750;
@@ -33,6 +47,7 @@ body {
   color: var(--color-fd-muted-foreground);
 }
 .eyebrow {
+  text-transform: uppercase;
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.12em;
@@ -64,6 +79,121 @@ body {
   color: var(--color-fd-primary-foreground);
   padding: 14px 22px;
   font-weight: 600;
+}
+.home {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 72px 24px 96px;
+}
+.home-hero h1 {
+  font-size: clamp(40px, 6.5vw, 72px);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  margin: 20px 0;
+}
+.home-lead {
+  font-size: 19px;
+  line-height: 1.7;
+  max-width: 640px;
+  color: var(--color-fd-muted-foreground);
+}
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 32px;
+}
+.home-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: var(--color-fd-primary);
+  color: var(--color-fd-primary-foreground);
+  padding: 13px 20px;
+  font-weight: 600;
+}
+.home-secondary {
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--color-fd-border);
+}
+.home-section {
+  margin-top: 88px;
+}
+.home-section h2 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.home-section-lead {
+  color: var(--color-fd-muted-foreground);
+  line-height: 1.7;
+  max-width: 640px;
+}
+.home-section-lead a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-paths {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.home-path {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  padding: 20px;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 14px;
+  background: var(--color-fd-card);
+  transition: border-color 150ms;
+}
+.home-path:hover {
+  border-color: var(--color-fd-primary);
+}
+.home-path-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-fd-primary);
+}
+.home-path strong {
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 19px;
+}
+.home-path span:last-child {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-fd-muted-foreground);
+}
+.home-race {
+  max-width: none;
+}
+@media (max-width: 800px) {
+  .home {
+    padding-top: 40px;
+  }
+  .home-paths {
+    grid-template-columns: 1fr;
+  }
+  .home-section {
+    margin-top: 64px;
+  }
 }
 .system-map {
   border: 1px solid var(--color-fd-border);
@@ -226,8 +356,10 @@ a:focus-visible {
   font-size: 12px;
   color: var(--color-fd-muted-foreground);
 }
-.race-counters dd {
+/* The prose styles indent every <dd>; the counters sit under their labels. */
+.ticket-race .race-counters dd {
   margin: 4px 0 0;
+  padding: 0;
   font-weight: 600;
 }
 .race-buyers {
@@ -264,7 +396,7 @@ a:focus-visible {
     justify-content: space-between;
     align-items: center;
   }
-  .race-counters dd {
+  .ticket-race .race-counters dd {
     margin: 0;
   }
   .race-buyers {

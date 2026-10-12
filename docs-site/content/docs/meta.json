@@ -1,4 +1,14 @@
 {
   "title": "Learn the system",
-  "pages": ["---Start here---", "index", "reading-the-code", "tours", "concepts", "reference"]
+  "pages": [
+    "---Start here---",
+    "index",
+    "reading-the-code",
+    "---Tours---",
+    "...tours",
+    "---Concepts---",
+    "...concepts",
+    "---Reference---",
+    "...reference"
+  ]
 }

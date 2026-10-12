@@ -17,10 +17,18 @@ export async function generateMetadata({
   const { slug } = await params;
   const page = source.getPage(slug);
   if (!page) notFound();
+  const image = `/og/docs/${[...page.slugs, 'image.png'].join('/')}`;
   return {
     title: page.data.title,
     description: page.data.description,
     alternates: { canonical: page.url },
+    openGraph: {
+      siteName: 'Echo & Aura developer docs',
+      type: 'article',
+      url: page.url,
+      images: image,
+    },
+    twitter: { card: 'summary_large_image', images: image },
   };
 }
 
@@ -30,16 +38,9 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
   if (!page) notFound();
   const Content = page.data.body;
   return (
-    <DocsPage toc={page.data.toc}>
-      <p className="eyebrow">
-        {slug?.[0] === 'tours'
-          ? 'GUIDED TOUR'
-          : slug?.[0] === 'concepts'
-            ? 'CONCEPT'
-            : slug?.[0] === 'reference'
-              ? 'REFERENCE'
-              : 'START HERE'}
-      </p>
+    // One label above the title, from frontmatter; the breadcrumb would repeat it.
+    <DocsPage toc={page.data.toc} breadcrumb={{ enabled: false }}>
+      <p className="eyebrow">{page.data.label}</p>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>

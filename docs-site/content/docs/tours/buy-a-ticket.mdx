@@ -1,6 +1,7 @@
 ---
 title: Buy a ticket
 description: Follow one order through registration, manual payment, approval, and email delivery.
+label: Guided tour
 ---
 
 Mina wants two General tickets priced at ৳1,200 each. With no discount, the
@@ -20,9 +21,8 @@ registration window, the ticket type's sale window, and the requested quantity,
 then reads prices and any applicable promo from the database.
 
 Follow the <SourceLink path="src/app/(public)/events/[slug]/register/actions.ts">registration action</SourceLink>
-→ <SourceLink path="src/server/services/orders.service.ts">order service</SourceLink> →
-
-<SourceLink path="src/server/lib/pricing.ts">pricing rule</SourceLink>.
+→ <SourceLink path="src/server/services/orders.service.ts">order service</SourceLink>
+→ <SourceLink path="src/server/lib/pricing.ts">pricing rule</SourceLink>.
 
 This illustrative call imports the actual pure quantity validator. Hover the
 function or `valid` to inspect its types. TypeScript checks that the argument

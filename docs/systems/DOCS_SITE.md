@@ -1,16 +1,16 @@
 # Developer documentation site
 
-Status: DRAFT · Owner: Evan · Last updated: 2026-10-07
+Status: Live at docs.echoandaura.com · Owner: Evan · Last updated: 2026-10-13
 
 The design for `docs.echoandaura.com`: a place to understand how Echo & Aura
 works, follow the implementation, and find a precise answer when returning
 to the project. The foundation is clear reference documentation. Selected
 concepts add diagrams and interactive explanations.
 
-The product direction is agreed. The visual treatment is a prototype for
-review; the site has not been published. [ADR-064](../decisions/064-developer-docs-site.md)
-records the architectural boundaries. This document describes the experience,
-the technical spike, and the implementation slices.
+The site has been published since 2026-10-08 (D3A).
+[ADR-064](../decisions/064-developer-docs-site.md) records the architectural
+boundaries. This document describes the experience, the technical spike, and
+the implementation slices.
 
 ## Who it serves
 
@@ -98,6 +98,11 @@ Use a restrained documentation shell: readable text, generous spacing, a
 stable sidebar, an on-page contents list, keyboard search, and clear links.
 Borrow the application's warm accent for navigation without copying its
 ticket-buying layout. Both light and dark themes are first-class.
+
+The shell carries the application's brand ([BRAND.md](../BRAND.md)): the
+echo&aura lockup in the nav and on the share images, the favicon tile,
+Archivo for headings and Geist Mono for code. Body text stays on the system
+font stack, as in the application.
 
 Color is strongest inside diagrams and explanatory components. Use a small
 semantic palette consistently: blue for a visitor/request, violet for
@@ -203,7 +208,8 @@ only public build metadata, such as its URL and source revision.
 
 ## Technical spike
 
-The isolated experiment uses the application's Next.js 16.3.8, React 19.3.0,
+The isolated experiment (2026-10-07) used the application's then-current
+Next.js 16.3.8, React 19.3.0,
 Tailwind 4.3.3, TypeScript 5.9.3, and pnpm 11.9.0. Packages checked on
 2026-10-07: Fumadocs Core/UI 16.16.2, MDX 15.4.6, and Twoslash 4.0.1.
 These are tested candidates for the skeleton, not a request to upgrade the
@@ -313,6 +319,18 @@ non-runtime-only changes; see [ADR-067](../decisions/067-confirmed-baseline-depl
 Publication can follow D1 if its overview is ready to share; D2 is the first
 complete learning journey. There is no dependency on the deferred restore
 drill or on tagging the application `v1.0.0`.
+
+### Front door (D4A)
+
+The home page uses Fumadocs' home layout, so it has the same nav, search and
+theme toggle as the docs. It offers three paths (a tour, a concept, a
+reference page), a "Start with Buy a ticket" action and the last-ticket race
+to try in place. Each page names its kind in frontmatter (`label`), shown once
+above its title; the sidebar has a heading per section. Every page has a share
+image built at export time (`/og/…`), and the export check fails when a page
+lacks one or links a missing one. The home layout wraps `app/page.tsx` itself:
+a `(home)` route group would put parentheses into exported file names, which
+the publication validator refuses.
 
 ## Review the experience before expanding it
 

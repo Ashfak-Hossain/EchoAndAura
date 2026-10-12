@@ -4,7 +4,15 @@ test('static pages, search, source links, themes and narrow layouts', async ({ p
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
-  await page.getByRole('link', { name: 'Explore the system' }).click();
+  // The home page: a way into each section, and a share card.
+  for (const name of [/Buy a ticket/, /Who gets the last ticket/, /Order states/]) {
+    await expect(page.getByRole('link', { name }).first()).toBeVisible();
+  }
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+    'content',
+    'https://docs.echoandaura.com/og/site.png',
+  );
+  await page.getByRole('link', { name: 'How the system fits together', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'How the system fits together', exact: true }),
   ).toBeVisible();
@@ -43,14 +51,18 @@ test('static pages, search, source links, themes and narrow layouts', async ({ p
   await page.goto('/docs/');
   await page.screenshot({ path: test.info().outputPath('overview-dark.png'), fullPage: true });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  for (const width of [390, 320]) {
+  for (const [width, path] of [
+    [390, '/docs/'],
+    [320, '/docs/'],
+    [320, '/'],
+  ] as const) {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/docs/');
+    await page.goto(path);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       .toBe(true);
     await page.screenshot({
-      path: test.info().outputPath(`overview-${width}.png`),
+      path: test.info().outputPath(`${path === '/' ? 'home' : 'overview'}-${width}.png`),
       fullPage: true,
     });
     const overflow = await page.evaluate(() =>
@@ -65,7 +77,7 @@ test('static pages, search, source links, themes and narrow layouts', async ({ p
     );
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      `overflow at ${width}px: ${JSON.stringify(overflow)}`,
+      `overflow on ${path} at ${width}px: ${JSON.stringify(overflow)}`,
     ).toBe(true);
   }
   const missing = await page.goto('/docs/missing-page/');
