@@ -124,3 +124,24 @@ test('glossary terms can be linked to directly and found by search', async ({ pa
   await expect(page.locator('.fd-step')).toHaveCount(4);
   await expect(page.getByRole('heading', { name: 'Take an order through it' })).toBeVisible();
 });
+
+test('paisa calculator shows the floating drift and the exact paisa total', async ({ page }) => {
+  await page.goto('/docs/concepts/money-in-paisa/');
+  const calc = page.locator('.paisa-calc');
+  const total = calc.getByRole('row', { name: /^Total/ });
+  // Default: ৳19.99 × 3 with DHAKA15, the example the page explains.
+  await expect(total).toContainText('50.9745');
+  await expect(total).toContainText('not a whole paisa');
+  await expect(total).toContainText('5,100');
+  await expect(total).toContainText('৳51.00');
+  await calc.getByRole('button', { name: /DHAKA15/ }).click();
+  await expect(total).toContainText('5,997');
+  await calc.getByRole('button', { name: '৳1,200' }).click();
+  await calc.getByRole('button', { name: 'One ticket fewer' }).click();
+  await expect(total).toContainText('240,000');
+  await expect(total).not.toContainText('not a whole paisa');
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+});
