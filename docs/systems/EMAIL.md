@@ -77,9 +77,10 @@ Step by step:
    the admin can re-send later.
 3. **The worker picks it up** (`src/worker.ts`, bundled with esbuild to
    `dist/worker.mjs`, run by plain `node` — `pnpm worker`). Concurrency 2,
-   rate-limited to 5 jobs/s. Cloudflare's daily quota for a new account is
-   unpublished and grows with good sending; past it, sends are throttled and
-   retried (dashboard: Compute → Email Service).
+   rate-limited to 5 jobs/s. Cloudflare caps sends at **2,000 a day**
+   ([infra/CLOUDFLARE.md](../infra/CLOUDFLARE.md#email-sending-limit));
+   past it, sends are throttled and retried (dashboard: Compute → Email
+   Service).
 4. **The dispatcher** (`src/server/email/dispatch.ts`) loads the order and
    applies the **status guard**: C1 only for an order still awaiting money
    (and not past its hold deadline — the 20-minute clock, not the 2-minute
@@ -177,8 +178,8 @@ Work down; stop at the first hit.
    too).
 4. **Queue state:** BullMQ keys live under `bull:orders:*` in Redis;
    `failed` and `delayed` sets show retries in progress. A job stuck in
-   `delayed` for minutes is being throttled — check the daily quota in
-   Compute → Email Service.
+   `delayed` for minutes is being throttled — check the day's count against
+   the 2,000 limit in Compute → Email Service.
 5. **Accepted but nothing in the inbox:** Compute → Email Service → the
    activity and analytics views show delivered, bounced and queued counts
    (search by recipient). Then have the buyer check
