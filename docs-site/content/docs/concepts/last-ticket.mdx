@@ -48,12 +48,29 @@ The <SourceLink path="tests/integration/inventory.concurrency.test.ts">real-Post
 concurrency test</SourceLink> starts 50 competing one-ticket reservations against
 20 available tickets. It checks that exactly 20 succeed and the stored
 availability never becomes negative. That checks the same guarantee at a
-larger scale; this browser model is an explanation, not a substitute for it.
+larger scale.
+
+<Callout title="An explanation, not a test">
+  The walkthrough above is a browser model and runs no SQL. The concurrency test is what proves the
+  guarantee, and it runs on every change.
+</Callout>
 
 Also see the <SourceLink path="tests/integration/inventory.repository.test.ts">repository
 integration tests</SourceLink>, <SourceLink path="tests/integration/orders.service.test.ts">order
 transaction tests</SourceLink>, and <SourceLink path="docs/decisions/011-inventory-primitives.md">inventory
 decision</SourceLink>.
 
-Continue the [Buy a ticket tour](/docs/tours/buy-a-ticket/) to see the reservation
-become a verified payment and issued tickets.
+## Read next
+
+<Cards>
+  <Card
+    title="Buy a ticket"
+    href="/docs/tours/buy-a-ticket/"
+    description="See the reservation become a verified payment and issued tickets."
+  />
+  <Card
+    title="Order states"
+    href="/docs/reference/order-states/"
+    description="Who owns the inventory at each status, and what ends an order."
+  />
+</Cards>
