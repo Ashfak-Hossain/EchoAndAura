@@ -1,0 +1,103 @@
+---
+title: Money as integer paisa
+description: Why every amount in the code is a whole number of paisa, and what goes wrong with decimal taka.
+label: Concept
+---
+
+Open any order in the database and its total looks a hundred times too big:
+Mina's two General tickets are stored as `240000`. That is 240,000 **paisa**,
+৳2,400. Every amount in the application is a whole number of paisa, from the
+ticket price to the day's revenue, and only one module ever converts to taka.
+
+This page shows what that rule prevents, and where the code enforces it.
+
+<Callout title="Rule: money is integer paisa">
+  Amounts are `BIGINT` paisa in the database and `number` in code, never a decimal. Conversion
+  between taka and paisa lives only in `money.ts`.
+</Callout>
+
+## Decimals are not exact
+
+Computers store a number like 0.1 in binary, where it has no exact form, the
+way one third has no exact decimal form. JavaScript, like most languages,
+rounds it to the nearest value it can store:
+
+```ts
+0.1 + 0.2; // 0.30000000000000004
+19.99 * 100; // 1998.9999999999998
+```
+
+The second line is the one that costs money. Turn ৳19.99 into paisa by
+cutting off the fraction and you get 1,998, a paisa short. Each error is tiny;
+they add up across thousands of orders, and a total that should match a bKash
+statement no longer does.
+
+## Count the same order two ways
+
+Pick a price, a quantity and the 15% `DHAKA15` code. The left column does
+plain JavaScript arithmetic on taka; the right one follows the application's
+rules.
+
+<PaisaCalculator />
+
+Try ৳19.99, three tickets, with the code. The floating total is 50.9745 taka:
+not a whole paisa, so something would have to decide which way to round it,
+and every place that rounds might decide differently. In paisa the answer is
+exact, 5,100 (৳51.00), because the discount is worked out per ticket and
+rounded down: 15% of 1,999 paisa is 299.85, so each ticket gets 299 off.
+Rounding down means a buyer never gets a paisa more than the organizer
+offered. Add up a thousand such orders and the floating sum drifts further
+from any real amount, while the paisa sum stays exact.
+
+## Where the code enforces it
+
+Taka becomes paisa once, at the edge, rounded to the nearest paisa so
+`19.99` becomes 1,999:
+
+```ts source="src/server/lib/money.ts#takaToPaisa" title="money.ts · actual conversion"
+
+```
+
+A percentage discount never touches a decimal. `paisa × percent` is a whole
+number, and the one division is rounded down:
+
+```ts source="src/server/lib/money.ts#percentOfPaisa" title="money.ts · actual percentage rule"
+
+```
+
+The order's totals are computed in one place, from the ticket type's stored
+price, never from the request:
+
+```ts source="src/server/lib/pricing.ts#computeOrderTotals" title="pricing.ts · actual order totals"
+
+```
+
+## When something is wrong
+
+Every helper checks its input with `assertValidPaisa`: a fraction, a negative
+amount or one past `Number.MAX_SAFE_INTEGER`, where JavaScript stops counting
+exactly, throws instead of producing a wrong total. See the <SourceLink path="tests/unit/money.test.ts">money tests</SourceLink>,
+the <SourceLink path="tests/unit/pricing.test.ts">pricing tests</SourceLink>
+and the <SourceLink path="tests/unit/promo.test.ts">promo tests</SourceLink>.
+
+The database checks the arithmetic again, whatever code wrote the row. A
+`CHECK` constraint on `orders` requires the subtotal to equal the unit price
+times the quantity, and the total to equal the subtotal minus the discount.
+Those are exact equalities, which only whole numbers can promise. See the <SourceLink path="src/db/schema.ts">schema</SourceLink>,
+and the <SourceLink path="docs/decisions/027-promo-codes.md">promo codes decision</SourceLink>
+for why discounts are per ticket and rounded down.
+
+## Read next
+
+<Cards>
+  <Card
+    title="Buy a ticket"
+    href="/docs/tours/buy-a-ticket/"
+    description="See the server price Mina's order from the ticket type, never from the page."
+  />
+  <Card
+    title="Who gets the last ticket?"
+    href="/docs/concepts/last-ticket/"
+    description="The other half of an order's arithmetic: how many tickets are left."
+  />
+</Cards>

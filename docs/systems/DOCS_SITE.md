@@ -367,6 +367,17 @@ An inline `SourceLink` must not start an MDX line: MDX makes such a line a
 block of its own and Prettier then splits the sentence into two paragraphs.
 `tests/content.test.ts` fails on any such line.
 
+### Concept: money as integer paisa (D4E)
+
+The first concept after the last-ticket race explains invariant 1. A small
+calculator counts one order in floating taka and in integer paisa, with the
+seeded `DHAKA15` code: ৳19.99 × 3 gives a floating total of 50.9745 and an
+exact 5,100 paisa, and a thousand orders show the float sum drifting. Like the
+race, it is an illustration of the rules, not their code; the page quotes the
+real `takaToPaisa`, `percentOfPaisa` and `computeOrderTotals`, and points to
+the database `CHECK` that refuses totals that do not add up. On a phone each
+line stacks, so the paisa column is never scrolled out of view.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

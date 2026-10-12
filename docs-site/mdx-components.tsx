@@ -3,6 +3,7 @@ import { Step, Steps } from 'fumadocs-ui/components/steps';
 import * as Twoslash from 'fumadocs-twoslash/ui';
 import type { MDXComponents } from 'mdx/types';
 import { Diagram } from './components/diagram';
+import { PaisaCalculator } from './components/paisa-calculator';
 import { SourceLink } from './components/source-link';
 import { SystemMap } from './components/system-map';
 import { TicketRace } from './components/ticket-race';
@@ -15,6 +16,7 @@ export function getMDXComponents(): MDXComponents {
     Step,
     Steps,
     Diagram,
+    PaisaCalculator,
     SourceLink,
     SystemMap,
     TicketRace,
