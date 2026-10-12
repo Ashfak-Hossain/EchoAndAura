@@ -12,7 +12,7 @@ import {
   isPublicNavActive,
 } from '@/lib/public-nav';
 import { cn } from '@/lib/utils';
-import { BrandMark } from './brand-mark';
+import { BrandLogo } from '@/components/brand';
 import { CloseIcon, MenuIcon, PersonIcon } from './chrome-icons';
 
 /** Tailwind's `lg`: the desktop header takes over, so an open menu has no reason to stay. */
@@ -93,10 +93,9 @@ export function MobileMenu({
               href="/"
               onClick={close}
               aria-label={shell('home')}
-              className="flex min-h-11 items-center gap-2.5 font-heading text-[19px] font-bold tracking-[-0.02em]"
+              className="flex min-h-11 items-center text-foreground"
             >
-              <BrandMark />
-              echoandaura
+              <BrandLogo className="h-6 w-auto" />
             </Link>
             <Dialog.Close aria-label={t('close')} className={cn(button, 'hover:bg-secondary')}>
               <CloseIcon />

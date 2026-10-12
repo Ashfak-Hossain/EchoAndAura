@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { BRAND_DARK, BRAND_LIGHT, brandFonts } from '@/lib/brand/og';
+import { BRAND_DARK, BRAND_LIGHT, LogoOnDark, brandFonts } from '@/lib/brand/og';
 import { HOME_TAGLINE, SITE_NAME } from '@/lib/seo';
 
 // ADR-042: the share card for every page without an event cover (About,
@@ -26,8 +26,8 @@ export default async function OpengraphImage() {
     >
       <div style={{ display: 'flex', fontSize: 30, opacity: 0.7 }}>Live events · Dhaka</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-        <div style={{ display: 'flex', fontSize: 120, fontWeight: 700, letterSpacing: -4 }}>
-          {SITE_NAME}
+        <div style={{ display: 'flex' }}>
+          <LogoOnDark height={150} />
         </div>
         <div style={{ display: 'flex', fontSize: 38, lineHeight: 1.35, maxWidth: 980 }}>
           {HOME_TAGLINE}
