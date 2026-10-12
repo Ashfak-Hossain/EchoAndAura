@@ -1,0 +1,99 @@
+---
+title: Work after commit
+description: Why emails and other network work start only after the database commits, and what that does and does not guarantee.
+label: Concept
+---
+
+A database transaction can undo its own writes. It cannot unsend an email,
+cancel a payment request or take back a file it uploaded. So the application
+keeps network work out of transactions: it commits first, then queues the
+work for a separate process.
+
+This page shows what goes wrong otherwise, and how the code keeps the rule.
+
+<Callout title="Rule: no network calls inside a transaction">
+  Email, uploads and any other network request run after the commit, from a queue, never between
+  `BEGIN` and `COMMIT`.
+</Callout>
+
+## Two places to send an email
+
+Registration writes three things in one transaction: the stock hold, the order
+and its audit row. The buyer also needs an email with the payment details.
+Choose where that email is sent, then break something.
+
+<AfterCommit />
+
+Sent inside the transaction, the email goes wrong both ways. If the audit
+insert fails after the email went out, the rollback removes the order but not
+the email: the buyer is told to pay for an order that does not exist. If the
+email service is down, the send fails and takes the order with it, so an email
+outage stops every registration. Even when nothing fails, the ticket type's
+row stays locked while the email service answers, and every other buyer of
+that ticket type waits behind a network call.
+
+Sent after the commit, each failure stays in its own lane. A failed insert
+rolls back before any email is queued, so there is nothing to undo. A down
+email service delays the email, not the order: the worker retries it.
+
+## How the code keeps the rule
+
+Services never send. After the transaction returns, the order service runs a
+hook, and a hook that fails is logged rather than allowed to undo a committed
+order:
+
+```ts source="src/server/services/orders.service.ts#afterCommit" title="orders.service.ts · actual after-commit helper"
+
+```
+
+The hook only queues a job. Queuing waits at most three seconds, so a Redis
+outage cannot hang the buyer's request, and the job ID is made from the email
+kind and the order, so a repeated hook queues one job, not two:
+
+```ts source="src/server/queue/producer.ts#enqueueEmail" title="producer.ts · actual enqueue"
+
+```
+
+The worker sends with five attempts and growing waits between them:
+
+```ts source="src/server/queue/producer.ts#EMAIL_JOB_OPTIONS" title="producer.ts · actual retry policy"
+
+```
+
+A job carries only the order's ID. The worker reads the order again when it
+runs, and the <SourceLink path="src/server/email/dispatch.ts">email dispatcher</SourceLink>
+skips a job whose order has moved on, so payment instructions are never sent
+for an order whose hold has already run out.
+
+## What it does not guarantee
+
+<Callout type="warn" title="Not an outbox">
+  If the queue is unreachable at the moment of the commit, the job is lost: the failure is logged
+  and nothing replays it. The order still stands, and its page shows the payment details. A
+  transactional outbox, which stores the job in the same transaction, would close that gap at the
+  cost of another table and a relay process.
+</Callout>
+
+The evidence:
+
+- The <SourceLink path="tests/unit/queue-producer.test.ts">producer tests</SourceLink>
+  check the timeout, the job ID and the retry options.
+- The <SourceLink path="tests/unit/email-dispatch.test.ts">dispatcher tests</SourceLink>
+  cover failed hooks and stale jobs.
+- The <SourceLink path="docs/decisions/016-transactional-email.md">transactional email decision</SourceLink>
+  records why services never send.
+
+## Read next
+
+<Cards>
+  <Card
+    title="Buy a ticket"
+    href="/docs/tours/buy-a-ticket/"
+    description="See the whole order, and where each commit and each queued job falls."
+  />
+  <Card
+    title="Money as integer paisa"
+    href="/docs/concepts/money-in-paisa/"
+    description="The other half of a correct order: amounts that never drift."
+  />
+</Cards>

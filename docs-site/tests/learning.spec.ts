@@ -145,3 +145,29 @@ test('paisa calculator shows the floating drift and the exact paisa total', asyn
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
 });
+
+test('after-commit explorer shows what each placement does under each failure', async ({
+  page,
+}) => {
+  await page.goto('/docs/concepts/work-after-commit/');
+  const box = page.locator('.after-commit');
+  const outcome = box.locator('.after-commit-outcome');
+  // Default: the app's way, nothing failing.
+  await expect(outcome).toHaveAttribute('data-good', 'true');
+  await expect(outcome).toContainText('Sent by the worker');
+  await box.getByRole('button', { name: 'Inside the transaction' }).click();
+  await expect(box.getByRole('button', { name: 'The queue is unreachable' })).toBeDisabled();
+  await box.getByRole('button', { name: 'The audit insert fails' }).click();
+  await expect(outcome).toHaveAttribute('data-good', 'false');
+  await expect(outcome).toContainText('an order that does not exist');
+  await box.getByRole('button', { name: 'After the commit' }).click();
+  await expect(outcome).toHaveAttribute('data-good', 'true');
+  await expect(outcome).toContainText('Never queued');
+  await box.getByRole('button', { name: 'The email service is down' }).click();
+  await expect(outcome).toContainText('Retrying');
+  await expect(box.locator('[data-status="retry"]')).toHaveCount(1);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+});

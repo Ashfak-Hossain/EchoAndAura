@@ -12,7 +12,7 @@ statuses have their own [reference](/docs/reference/order-states/).
 Work that starts only once a database transaction has committed: queuing an
 email, for example. A transaction can roll back a database write but cannot
 unsend an email, so network work never runs inside one. See
-[Deliver after the commit](/docs/tours/buy-a-ticket/#deliver-after-the-commit).
+[Work after commit](/docs/concepts/work-after-commit/).
 
 ## Audit row
 
