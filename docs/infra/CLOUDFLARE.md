@@ -109,6 +109,22 @@ Replies to any app email land in Gmail with the buyer's address intact;
 replying from Gmail goes out as Gmail, not as `hello@` (fine for now — a
 "send as" alias needs SMTP, which SES can provide later).
 
+## Email Sending limit
+
+| Item        | Value                                                                      |
+| ----------- | -------------------------------------------------------------------------- |
+| Where       | Account home → **Compute → Email Service** (sending overview)              |
+| Daily limit | **2,000 emails a day**, raised from 200 on 2026-10-12 (requested that day) |
+| Counts      | every message the worker sends: order emails C1–C4 and sign-in links (C6)  |
+| Past it     | sends are throttled; BullMQ retries them, nothing is dropped (ADR-057)     |
+
+What 2,000 buys: an order costs two emails (C1 + C2 when paid, C1 + C4 when
+abandoned), plus a sign-in link when a buyer opens their tickets. Plan on
+**about 800 orders a day** before the limit bites. Check the overview before
+an on-sale; if an event could go past it, ask Cloudflare for more through the
+limit-increase request form a few days ahead (the last request was answered
+the same day).
+
 ## R2
 
 Created 2026-09-27. R2 needs a payment method on the account even inside
@@ -594,3 +610,4 @@ The app serves `robots.txt`, `sitemap.xml` and structured data itself
 | 2026-10-05 | Access under Terraform (ADR-062): apps `Admin`, `Dokploy` and policies `admins`, `developer`, `github deploy` imported (`access.tf`); emails from `.env`, sensitive. Only change: Terraform marking the email lists sensitive, values unchanged. Plan = No changes. Checked: `/admin` and `deploy` (incl. `/api/*`) 302 to the Access login from outside; Admin gate passed in a private window. Token gained Access: Edit (account)                                               |
 | 2026-10-08 | D3A production hosting confirmed (ADR-065): owner-applied Pages project, narrow docs-host rate-limit exclusion, Pages domain association and proxied docs CNAME. Owner confirmed No changes after both stages. Protected static upload and live HTTPS/search/links/themes/mobile/headers/404 checks passed on Pages and the custom hostname. First same-repository preview remains pending                                                                                         |
 | 2026-10-08 | D3B2 rollout verified at PR #73 merge `7b5bfcc` (ADR-067): Deploy run 37752597485 skipped images; owner-approved Publish docs run 37752597640 succeeded. Public checks confirmed docs source `7b5bfcc`, 200 pages/sitemap, real 404 and healthy web/worker at `89f0ac2`. No Cloudflare resource or credential change; [rollout evidence](DOCS_PUBLICATION.md#application-skip-and-docs-publication-confirmed-on-2026-10-08)                                                        |
+| 2026-10-12 | Email Sending daily limit raised from 200 to 2,000 on request; see [Email Sending limit](#email-sending-limit)                                                                                                                                                                                                                                                                                                                                                                     |
