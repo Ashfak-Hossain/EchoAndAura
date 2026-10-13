@@ -659,7 +659,8 @@ design (ADR-008, and `order_events` is append-only), so the user emptied
 the event and order tables by hand. This was a one-off, deliberate
 exception to "never run destructive SQL against production", made while
 nothing real existed. **Once real orders exist, this must not be
-repeated.**
+repeated.** It was repeated once more before go-live, under the same
+condition: section 22.
 
 1. Backup: `pg_dump -Fc` to `/root/before-wipe-2026-09-28.dump`
    (51,602 bytes, 16 tables of data), copied to the developer's Mac with
@@ -1071,6 +1072,52 @@ more.
 - **Change the cap** by editing `inflight.yml`: Traefik reloads it without
   a restart. Re-measure on the load stack first (LOAD-TEST.md).
 
+### 22. Test data removed before go-live (2026-10-14)
+
+The same one-off exception as section 15, made for the same reason: nothing
+real existed yet. Raj confirmed it first. Production held only the launch
+rehearsal (Phase 7.7) and later tests: the events `test-night` (archived)
+and `nothing` (published), 2 ticket types, 7 orders with 59 audit rows and
+24 tickets, 3 gate passes with 87 scans, and 2 test buyer accounts. No promo
+codes or sponsors. **Once real orders exist, this must not be repeated.**
+
+1. Backup: `pg_dump -Fc` to `/root/before-golive-wipe-2026-10-14.dump`
+   (73,752 bytes; `pg_restore -l` lists 18 tables of data), then
+   `chmod 600`. It holds the test data and the admin's password hash:
+   **delete it on or after 2026-10-21** (`rm` the file).
+2. One transaction as the owner role, with no `CASCADE`, so a missed
+   reference would have rolled everything back:
+
+   ```sql
+   BEGIN;
+   TRUNCATE door_decisions, door_scans, door_passes, tickets, order_events,
+            orders, promo_code_ticket_types, promo_codes, ticket_types,
+            events, sponsors;
+   DELETE FROM users WHERE role = 'buyer';   -- sessions, accounts, 2FA cascade
+   DELETE FROM verifications;                 -- stale sign-in links
+   COMMIT;
+   ```
+
+   Output: `TRUNCATE TABLE`, `DELETE 2`, `DELETE 3`, `COMMIT`.
+
+3. Kept: the admin (`users`, `accounts`, `two_factors`, `sessions`), the
+   `settings` row and the 27 migrations. Counts after: every event, order,
+   ticket and gate table 0; users 1. `/api/health` ok; the home page lists
+   no events and `/events/nothing` answers 404.
+4. Redis: the finished jobs that still carried the test orders' email
+   addresses were removed with BullMQ's `clean()` from inside the worker
+   container (`orders`: 3 failed, 10 completed; `holds`: 100 completed).
+   The `expire-holds` and `worker.ping` schedulers were left alone.
+5. R2 `echoandaura-media`: both covers under `events/` deleted in the
+   dashboard; their URLs answer 404. Sentry: the synthetic issues
+   PRODUCTION-1 to 3 resolved.
+6. Admin → Settings filled with the organizer's real bKash and contact
+   details (they replace the placeholders the payment page showed).
+
+The nightly backups in R2 and S3 still hold the test data until they
+rotate out. v1.0.0 was tagged the same night on the deployed commit
+`23d2f08`.
+
 ---
 
 ## Verify
@@ -1227,3 +1274,4 @@ Dashed: by hand. In order:
 | 2026-10-05 | Gate relay (ADR-058): Dokploy Environment `RELAY_URL=https://relay.echoandaura.com`, `RELAY_SECRET` (Bitwarden "Gate relay secret") → deployed; worker runs queues orders, holds, relay; door CSP allows the relay                                                                                                                                                                                                                                                     |
 | 2026-10-06 | Ansible (9.2 slice C): origin lockdown, disk alert and Traefik's in-flight file managed by roles; the scripts moved from `ops/server/` to `ops/ansible/roles/`. `traefik.yml` stays Dokploy's: Ansible only checks the § 13 trustedIPs and § 21 middleware are still there. Production check: changed=0                                                                                                                                                                |
 | 2026-10-06 | Ansible (9.2 slice D, PR #63): `pnpm ansible apply production` changed=4, all origin lockdown: port 3000 dropped from `eth0` for everyone (IPv4 + IPv6), interface now read from `/etc/default/origin-lockdown`, service re-applied ("applied on eth0"). Checked: only 22 answers from outside; `/api/health` 200; dashboard 302 to Cloudflare Access; `pnpm ansible check production` changed=0. Dokploy itself unchanged (role `dokploy` found it, installs nothing) |
+| 2026-10-14 | **Test data removed before go-live** (§ 22): dump in `/root` (delete on or after 2026-10-21), one-transaction wipe of the event, order, ticket and gate tables plus the 2 test buyers; Redis finished jobs cleaned; R2 covers deleted; Settings filled. **v1.0.0** released on the deployed `23d2f08` (images tagged `v1.0.0`)                                                                                                                                         |
