@@ -416,6 +416,19 @@ that admitted offline syncs into a recorded double entry, counted once; and a
 gate that heard through the relay refuses offline. It is a deterministic model
 of ADR-030/034/058, like the last-ticket race, not the scanner's code.
 
+### Infrastructure: from merge to production (D4I)
+
+The first Infrastructure page follows a change through every gate: verify on
+the pull request (with the ADR-071 fast path), everything on `main`, the
+deploy selection that compares with the running commit (ADR-067), building,
+scanning, smoke-testing and pushing the images (ADR-036/069), the one-off
+migration, and confirming the exact running commit (ADR-066, quoting the real
+`/api/deployment` route). The October 2026 standalone-tracing guard is its
+real example. A flowchart in both themes opens the page. Nothing operational
+is published: no hosts, credentials, environment values or runbooks. The
+system-map poster, with vendor icons, is a separate slice once its icon
+sources and tool are chosen.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

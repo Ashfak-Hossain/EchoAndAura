@@ -1,0 +1,17 @@
+%% From a pull request to the exact commit running in production.
+%% Every arrow out of a box is a gate: a failure stops the line there.
+flowchart TB
+  PR["Pull request"] --> V["verify: typecheck, lint, unit tests"]
+  V -->|"app or docs touched"| Full["+ build, Postgres, integration, docs"]
+  V --> Merge["Merge to main"]
+  Full --> Merge
+  Merge --> Main["CI on main: everything runs"]
+  Main --> Select{"Deploy needed?"}
+  Select -->|"only docs, tests, CI or infra code changed since the running commit"| Skip["No new images"]
+  Select -->|"anything else"| Build["Build web and worker images"]
+  Build --> Scan["Scan: stop on critical, fixable"]
+  Scan --> Smoke["Smoke test: migrate from empty, health, worker"]
+  Smoke --> Push["Push the image tagged with the commit"]
+  Push --> Pull["Server pulls; migrate runs once; web and worker start"]
+  Pull --> Confirm["Confirm this exact commit is running"]
+  Main --> Docs["Docs: separate, approved upload"]
