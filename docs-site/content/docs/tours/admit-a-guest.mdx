@@ -152,6 +152,26 @@ See the <SourceLink path="docs/decisions/058-gate-relay.md">relay decision</Sour
 </Step>
 </Steps>
 
+## Try it: two gates, one ticket
+
+Scan Mina's ticket at either gate, and drop or restore each gate's signal.
+Three runs show the rules:
+
+1. **Both gates have signal.** Scan at Gate A, then at Gate B. A admits; B
+   answers already in, because the server decided A's scan first.
+2. **Gate A loses signal.** Reset, drop Gate A's signal, scan at A, then scan
+   at B. Both admit: B's server has not heard of A's offline admit. Restore A's
+   signal and its sync finds the ticket already in. The server counts Mina
+   once and records a **double entry** for the organizer.
+3. **Gate A has heard.** Reset, scan at A, then drop B's signal and scan at B.
+   B refuses offline: the relay told it Mina was in before the signal went.
+
+<GateFlow />
+
+Double entries are shown, not prevented: two gates without signal cannot know
+about each other. The check-in page lists each one with both gates and times,
+and each gate pass shows how many scans it made offline.
+
 ## The whole night at a glance
 
 <Diagram

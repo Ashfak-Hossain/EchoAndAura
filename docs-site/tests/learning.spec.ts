@@ -190,3 +190,45 @@ test('gate tour shows the real check-in and offline code, and its diagram', asyn
     .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth))
     .toBeGreaterThan(0);
 });
+
+test('gate flow: online agreement, an offline double entry, and a relayed refusal', async ({
+  page,
+}) => {
+  await page.goto('/docs/tours/admit-a-guest/');
+  const flow = page.locator('.gate-flow');
+  const gate = (id: 'A' | 'B') => flow.getByRole('region', { name: `Gate ${id}` });
+  const answer = (id: 'A' | 'B') => gate(id).locator('.gate-answer');
+  const server = flow.locator('.gate-server');
+  const reset = () => flow.getByRole('button', { name: 'Reset' }).click();
+
+  // 1. Both online: A admits, B is refused by the server.
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate A" }).click();
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate B" }).click();
+  await expect(answer('A')).toHaveText('Admit');
+  await expect(answer('B')).toContainText('Already in: Gate A');
+
+  // 2. A offline admits, B admits online, A's sync records a double entry.
+  await reset();
+  await flow.getByRole('button', { name: "Drop Gate A's signal" }).click();
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate A" }).click();
+  await expect(answer('A')).toContainText('offline');
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate B" }).click();
+  await expect(answer('B')).toHaveText('Admit');
+  await flow.getByRole('button', { name: "Restore Gate A's signal" }).click();
+  await expect(server).toHaveAttribute('data-double', 'true');
+  await expect(server).toContainText('Gate B');
+
+  // 3. B heard via the relay before its signal dropped: refused offline.
+  await reset();
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate A" }).click();
+  await flow.getByRole('button', { name: "Drop Gate B's signal" }).click();
+  await flow.getByRole('button', { name: "Scan Mina's ticket at Gate B" }).click();
+  await expect(answer('B')).toContainText('Already in: Gate A');
+  await expect(answer('B')).toContainText('offline');
+  await expect(server).toHaveAttribute('data-double', 'false');
+
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+});
