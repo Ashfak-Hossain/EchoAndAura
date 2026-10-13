@@ -1,6 +1,20 @@
 packages:
   - docs-site
 
+# pnpm 11 reads its settings from this file; .npmrc holds only auth and
+# registry settings, and anything else there is silently ignored.
+#
+# Pin exact versions on every `pnpm add` (CLAUDE.md: "Pin dependency versions
+# exactly. No ^ ranges."). A unit test also refuses any range in package.json.
+saveExact: true
+# Refuse to install on a Node or pnpm outside package.json's `engines`
+# (Node 26, pnpm 11), instead of failing later in odd ways.
+engineStrict: true
+# The bleeding-edge stack (Next 16 / React 19 / Tailwind 4) has unavoidable
+# peer mismatches from packages not yet updated for React 19. Don't hard-fail
+# installs on peers (ADR-003). Warnings still print.
+strictPeerDependencies: false
+
 allowBuilds:
   # next-intl's optional message extractor (unused): their binaries come as
   # optional dependencies, the install scripts only re-check them.

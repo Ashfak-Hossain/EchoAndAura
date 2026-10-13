@@ -28,18 +28,21 @@ export function faviconSvg(): string {
 /**
  * The lockup as a standalone SVG: charcoal ink, marigold dot and ampersand,
  * on `background` when given (the emailed PNG sits on the white email card).
+ * `ink` swaps the charcoal for a dark background (the README's dark logo).
  */
 export function lockupSvg({
   width,
   height,
   background,
+  ink = BRAND_COLORS.ink,
 }: {
   width: number;
   height: number;
   background?: string;
+  ink?: string;
 }): string {
   const [x, y, w, h] = LOCKUP.viewBox.split(' ');
-  const { ink, marigold } = BRAND_COLORS;
+  const { marigold } = BRAND_COLORS;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${LOCKUP.viewBox}" preserveAspectRatio="xMidYMid meet">` +
     (background
@@ -52,6 +55,21 @@ export function lockupSvg({
       .join('') +
     '</g></svg>'
   );
+}
+
+/**
+ * The README's logo: the lockup with no background, in charcoal for GitHub's
+ * light theme and in paper for its dark theme (a `<picture>` picks one).
+ */
+export const README_LOGOS = {
+  light: { path: '.github/assets/logo-light.svg', ink: BRAND_COLORS.ink },
+  dark: { path: '.github/assets/logo-dark.svg', ink: BRAND_COLORS.paper },
+} as const;
+
+export function readmeLogoSvg(theme: keyof typeof README_LOGOS): string {
+  const [, , w, h] = LOCKUP.viewBox.split(' ').map(Number) as [number, number, number, number];
+  const height = 64;
+  return lockupSvg({ width: Math.round((height * w) / h), height, ink: README_LOGOS[theme].ink });
 }
 
 /**

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: ACTIVE · Owner: unassigned · Last updated: 2026-09-27
+Status: ACTIVE · Owner: unassigned · Last updated: 2026-10-14
 
 The invariants that protect money and inventory live in
 [../CLAUDE.md](../CLAUDE.md) and are deliberately not repeated here in full —
@@ -14,7 +14,7 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
 
 ```
                          ┌──────────────────────────┐
-   Buyer / Admin  ─────► │   Next.js 15 App         │
+   Buyer / Admin  ─────► │   Next.js 16 App         │
    (browser)             │   (App Router)           │
                          │                          │
                          │  (public)/ events,       │
@@ -38,7 +38,7 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
                                 ▼         ▼
                          ┌───────────┐ ┌────────────────┐
                          │ Postgres  │ │ worker.ts      │
-                         │    17     │ │ (tsx process)  │
+                         │    17     │ │ (bundled Node) │
                          └───────────┘ │ - send email   │
                                        │ - expire holds │
                                        └──────┬─────────┘
@@ -46,17 +46,17 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
                                     ┌─────────┴─────────┐
                                     ▼                   ▼
                                ┌─────────┐        ┌───────────┐
-                               │ Resend  │        │ R2 (S3)   │
+                               │ CF Email│        │ R2 (S3)   │
                                │ + React │        │ event     │
                                │ Email   │        │ images    │
                                └─────────┘        └───────────┘
 ```
 
-The web process never talks to Resend or R2 for anything that must happen
-inside a DB transaction — see [../CLAUDE.md § Invariant 7](../CLAUDE.md).
-Route handlers and server actions call into `src/server/`, which owns all
-business logic; the worker imports the same services directly rather than
-duplicating logic.
+The web process never talks to the email provider or R2 for anything that must
+happen inside a DB transaction — see [../CLAUDE.md § Invariant
+7](../CLAUDE.md). Route handlers and server actions call into `src/server/`,
+which owns all business logic; the worker imports the same services directly
+rather than duplicating logic.
 
 ## Request / order-state flow
 
@@ -191,8 +191,8 @@ One VPS (BengalCloud, Dhaka: 2 vCPU, 4 GB RAM, 25 GB disk) running
 
 ```
 GitHub ── merge to main ──► Actions: verify → build web + worker images
-                                     → smoke test → push to GHCR
-                                     → call Dokploy
+                                     → scan → smoke test → push to GHCR
+                                     → call Dokploy → confirm revision
                                             │
 Cloudflare ──► VPS: Dokploy (Traefik) ──────┘
                  ├─ migrate  (worker image, runs once per deploy)
@@ -200,7 +200,8 @@ Cloudflare ──► VPS: Dokploy (Traefik) ──────┘
                  ├─ worker   (BullMQ: emails, hold expiry)
                  ├─ Postgres 17 (Dokploy database, nightly backup → R2)
                  └─ Redis 7     (Dokploy database)
-External: Cloudflare R2 (covers, logos, backups), Amazon SES (email)
+External: Cloudflare R2 (covers, logos, backups), Cloudflare Email Service
+(email; SES is the rollback, ADR-057), AWS S3 (off-site backup copy)
 ```
 
 Nothing is built on the server: the images come from CI, and the server

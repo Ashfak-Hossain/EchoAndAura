@@ -1,7 +1,37 @@
 {
   "name": "echoandaura",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "Ticketing for Echo & Aura, Dhaka: bKash payment with manual verification, emailed tickets and an offline-capable door scanner.",
+  "keywords": [
+    "ticketing",
+    "events",
+    "bkash",
+    "bangladesh",
+    "nextjs",
+    "postgresql",
+    "drizzle-orm",
+    "bullmq",
+    "typescript"
+  ],
+  "homepage": "https://echoandaura.com",
+  "bugs": {
+    "url": "https://github.com/Ashfak-Hossain/EchoAndAura/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ashfak-Hossain/EchoAndAura.git"
+  },
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Ashfak Hossain Evan",
+    "url": "https://github.com/Ashfak-Hossain"
+  },
+  "engines": {
+    "node": ">=26 <27",
+    "pnpm": ">=11 <12"
+  },
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "next dev",
     "build": "pnpm sw:build && NEXT_DIST_DIR=.next-build next build",
@@ -119,6 +149,5 @@
     "vitest": "5.0.3",
     "wrangler": "4.148.0",
     "yaml": "2.9.1"
-  },
-  "packageManager": "pnpm@11.9.0"
+  }
 }
