@@ -391,6 +391,21 @@ stops registration; after the commit, each failure stays in its own lane. The
 page quotes the real `afterCommit`, `enqueueEmail` and retry policy, and says
 plainly that this is not an outbox.
 
+### Tour: admit a guest at the gate (D4G)
+
+The second tour follows Mina's ticket to the door in six steps: a QR that holds
+only the code, a gate pass instead of a staff account, one atomic check-in
+(the last-ticket pattern again), the offline list and outbox, "the list first,
+the server too", and how gates share admits through the status ping and the
+relay. It quotes the real `ticketsRepository.checkIn`, `offlineDigest` and
+`judgeOffline`, links ADR-030/034/035/053/058 and the real-Postgres check-in
+test, and ends with a sequence diagram of two gates and a dropped signal. The
+"online/offline gate flow" interaction is the next slice.
+
+The diagram renderer now draws each diagram in a fresh page: Mermaid numbers
+some ids with counters shared across renders, so adding a diagram changed the
+output of others drawn after it.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

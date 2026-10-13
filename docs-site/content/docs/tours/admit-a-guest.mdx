@@ -1,0 +1,179 @@
+---
+title: Admit a guest at the gate
+description: Follow one ticket from its QR code to a check-in, at several gates at once and through a dropped signal.
+label: Guided tour
+---
+
+Mina's tickets were issued in the [Buy a ticket tour](/docs/tours/buy-a-ticket/).
+Now it is the night of the event. Door staff hold phones at two gates, the
+venue's signal comes and goes, and hundreds of people want to get in quickly.
+Each ticket must admit exactly one person, once.
+
+By the end you will know what the phone decides and what only the server
+decides, how two gates agree, and why a dropped signal does not stop the queue.
+
+<Steps>
+<Step>
+
+## The QR holds only the code
+
+The QR on Mina's ticket encodes its code as plain text, nothing else. It needs
+no signature: the code means nothing until the server finds it, so tickets
+already sent never need reissuing. The QR is also never the only way in: staff
+can type the code, search the attendee's name, or use the printed list.
+
+```ts source="src/server/lib/qr.ts#ticketQrSvg" title="qr.ts · actual ticket QR"
+
+```
+
+</Step>
+<Step>
+
+## A gate pass, not a staff account
+
+Door staff do not sign in. The organizer creates a **gate pass** for one event
+and one gate, and opens it on the phone from a link. The pass code travels in
+the link's `#` fragment, which a browser never sends to the server, so it
+never reaches a log. The page then keeps the pass in a cookie that only the
+door pages receive, so a door phone can never reach the admin area.
+
+A pass works from four hours before the event starts until six hours after it
+ends. That window is worked out from the event's dates on every request, never
+stored, so moving the event can never strand a pass.
+
+<Callout title="Rule: a door phone holds the least it can">
+  One event, one gate, a working window, and a cookie that only the door pages receive. Losing a
+  phone loses a pass the organizer can revoke, not an account.
+</Callout>
+
+See the <SourceLink path="docs/decisions/030-gate-scanner-slice-a.md">gate scanner decision</SourceLink>.
+
+</Step>
+<Step>
+
+## One atomic check-in
+
+When Mina's QR is scanned, the server locks the gate pass (a revoked pass
+cannot slip a scan through) and then checks the ticket in with one statement:
+
+```ts source="src/server/repositories/tickets.repository.ts#ticketsRepository.checkIn" title="tickets.repository.ts · actual check-in"
+
+```
+
+It is the same pattern as [the last ticket](/docs/concepts/last-ticket/): the
+condition and the change are one `UPDATE`. A ticket that is `issued` and not
+yet checked in gets the time, the gate and the scan; the database settles
+simultaneous scans one at a time. Of any number of them exactly one admits,
+and the rest re-read the row and answer **already in**, with the winning gate
+and time.
+
+<Callout title="Rule: one person, once">
+  The database decides every check-in. A `CHECK` constraint also keeps a checked-in ticket `issued`,
+  so a ticket cannot be cancelled after its guest walked in.
+</Callout>
+
+The <SourceLink path="tests/integration/door.checkin.test.ts">real-Postgres check-in tests</SourceLink>
+fire twelve simultaneous scans of one ticket and expect exactly one admit and
+eleven already in.
+
+</Step>
+<Step>
+
+## When the signal drops
+
+A venue full of phones is a poor place for mobile data. So each door phone
+downloads an **offline list** when it starts and every minute after: each
+ticket's attendee name, type and status, and whether it is in. A ticket's code
+is not on the list in plain text, only a salted hash of it:
+
+```ts source="src/server/lib/door-offline.ts#offlineDigest" title="door-offline.ts · actual code hash"
+
+```
+
+When a scan gets no answer, the phone judges it from the list: admit, already
+in, cancelled, or not on this list. It shows that answer marked **offline** and
+saves the scan in an outbox. The judging is one pure function, shared by the
+phone and the server:
+
+```ts source="src/server/lib/door-offline.ts#judgeOffline" title="door-offline.ts · actual offline judgement"
+
+```
+
+When the signal returns, the phone sends its outbox. The server replays each
+offline admit with the same conditional `UPDATE`, dated when the guest walked
+in, so a ticket used at two gates while both were offline is still counted
+once. A service worker keeps a saved copy of the door page, so even a reload
+with no signal opens the scanner.
+
+<Callout type="warn" title="What the hash is worth">
+  Codes are short enough that anyone holding the list could work them out. The hash only keeps codes
+  from being read straight off a door phone; the printed backup list shows them in full anyway.
+</Callout>
+
+See the <SourceLink path="docs/decisions/034-gate-scanner-offline.md">offline decision</SourceLink>
+and the <SourceLink path="docs/decisions/035-gate-scanner-service-worker.md">service worker decision</SourceLink>.
+
+</Step>
+<Step>
+
+## The list first, the server too
+
+Even with signal, waiting for the server slows the queue. So every scan is
+judged from the list at once, in under a millisecond, while the request goes
+out. If the list says **admit**, the phone waits up to 0.4 s for the server,
+then shows ADMIT and checks behind the guest. A **refusal** always waits for
+the server, because a list a minute old must never turn away a valid ticket.
+
+If the server later disagrees with an early ADMIT, the phone stops the gate
+with a full-screen alarm until staff record what they did: turned the guest
+away, or let them in anyway. Both answers are logged for the organizer;
+neither checks anyone in.
+
+See the <SourceLink path="docs/decisions/053-gate-scanner-race-both.md">race-both decision</SourceLink>.
+
+</Step>
+<Step>
+
+## Gates share what they admit
+
+A ticket used at Gate A must be refused at Gate B within moments, even if
+Gate B's list is a minute old. Two paths carry the news. Every five seconds
+each phone asks the server for the event's check-ins since its last ask. And
+a **relay**, one room per event on Cloudflare, passes "ticket X is in" between
+the phones at once.
+
+The relay only passes news along. Postgres still decides every check-in, and
+refusals still wait for the server. A phone's offline admit reaches the room
+as a **claim**; the server's check-in arrives as **confirmed** and replaces it.
+No phone can remove a confirmed check-in.
+
+See the <SourceLink path="docs/decisions/058-gate-relay.md">relay decision</SourceLink>.
+
+</Step>
+</Steps>
+
+## The whole night at a glance
+
+<Diagram
+  name="admit-a-guest"
+  alt="Sequence diagram of two gates and one ticket. The server sends both gate phones an offline list of hashed codes every minute. A guest shows a QR at Gate A; the phone judges it from its list and sends the scan. In one transaction the server locks the pass and runs the conditional UPDATE, which admits the ticket, and Gate A shows ADMIT. The server tells the relay the ticket is in, and the relay tells Gate B. When the same ticket is scanned at Gate B, the UPDATE matches no row and Gate B shows ALREADY IN with Gate A. Later Gate A loses signal, judges another guest from its list, shows ADMIT offline and saves the scan; when the signal returns it syncs the outbox and the server replays the scan with the same UPDATE."
+>
+  **Teal:** one database transaction, the only place a check-in is decided. **Amber:** news the
+  relay spreads between gates. **Rose:** Gate A without signal, judging from its own list. Select
+  the diagram to open it full size.
+</Diagram>
+
+## Read next
+
+<Cards>
+  <Card
+    title="Who gets the last ticket?"
+    href="/docs/concepts/last-ticket/"
+    description="The same one-statement pattern, step by step, with two buyers."
+  />
+  <Card
+    title="Glossary"
+    href="/docs/reference/glossary/"
+    description="Gate pass, idempotent and the other terms this tour uses."
+  />
+</Cards>

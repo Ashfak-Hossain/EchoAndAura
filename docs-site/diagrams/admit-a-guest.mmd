@@ -1,0 +1,42 @@
+%% Two gates, one ticket. Teal: one database transaction, the only place a
+%% check-in is decided. Amber: news spread by the relay. Rose: Gate A without
+%% signal, judging from its own list.
+sequenceDiagram
+  participant A as Gate A phone
+  participant S as Server
+  participant DB as Postgres
+  participant R as Relay
+  participant B as Gate B phone
+
+  S-->>A: Offline list (hashed codes), every 60 s
+  S-->>B: Offline list, every 60 s
+  Note over A: A guest shows their QR
+  A->>A: Judge from the list (under 1 ms)
+  A->>S: Scan
+  rect rgba(32, 113, 92, 0.16)
+    Note over S,DB: One transaction
+    S->>DB: Lock the pass, conditional UPDATE
+    DB-->>S: One row: admitted
+  end
+  S-->>A: ADMIT
+  rect rgba(137, 84, 0, 0.16)
+    S-)R: Confirmed: ticket is in
+    R-)B: Ticket is in
+  end
+  B->>S: Same ticket scanned
+  rect rgba(32, 113, 92, 0.16)
+    S->>DB: Conditional UPDATE
+    DB-->>S: No row
+  end
+  S-->>B: ALREADY IN, Gate A
+  rect rgba(161, 61, 86, 0.14)
+    Note over A: Signal drops
+    A->>A: Another guest: judged from the list
+    Note over A: ADMIT (offline), scan saved to the outbox
+  end
+  Note over A: Signal returns
+  A->>S: Sync the outbox
+  rect rgba(32, 113, 92, 0.16)
+    S->>DB: Replay with the same UPDATE
+    DB-->>S: Admitted, marked offline
+  end

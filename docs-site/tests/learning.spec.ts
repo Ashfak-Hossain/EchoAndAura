@@ -171,3 +171,22 @@ test('after-commit explorer shows what each placement does under each failure', 
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
 });
+
+test('gate tour shows the real check-in and offline code, and its diagram', async ({ page }) => {
+  await page.goto('/docs/tours/admit-a-guest/');
+  await expect(
+    page.getByRole('heading', { name: 'Admit a guest at the gate', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.fd-step')).toHaveCount(6);
+  await expect(page.locator('pre').filter({ hasText: 'isNull(tickets.checkedInAt)' })).toHaveCount(
+    1,
+  );
+  await expect(page.locator('pre').filter({ hasText: 'export function judgeOffline' })).toHaveCount(
+    1,
+  );
+  const img = page.locator('figure.diagram .diagram-light img');
+  await expect(img).toBeVisible();
+  await expect
+    .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth))
+    .toBeGreaterThan(0);
+});
