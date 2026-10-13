@@ -4,10 +4,17 @@
 //   public/brand/email-logo.png      the lockup on white, for email headers
 //   docs-site/app/icon.svg           the favicon tile, for the docs site
 //   docs-site/lib/brand.generated.ts the brand data, for the docs site's logo
+//   .github/assets/logo-*.svg        the lockup for the README, light and dark
 import { mkdir, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { EMAIL_LOGO } from '../../src/lib/brand/marks';
-import { docsBrandModule, faviconSvg, lockupSvg } from '../../src/lib/brand/svg';
+import {
+  docsBrandModule,
+  faviconSvg,
+  lockupSvg,
+  README_LOGOS,
+  readmeLogoSvg,
+} from '../../src/lib/brand/svg';
 
 async function favicon(): Promise<void> {
   const sizes = [16, 32, 48];
@@ -66,8 +73,15 @@ async function docsSite(): Promise<void> {
   console.log('docs-site: app/icon.svg, lib/brand.generated.ts');
 }
 
+async function readmeLogos(): Promise<void> {
+  await mkdir('.github/assets', { recursive: true });
+  await writeFile(README_LOGOS.light.path, readmeLogoSvg('light'));
+  await writeFile(README_LOGOS.dark.path, readmeLogoSvg('dark'));
+  console.log('README: .github/assets/logo-light.svg, logo-dark.svg');
+}
+
 async function main(): Promise<void> {
-  await Promise.all([favicon(), emailLogo(), docsSite()]);
+  await Promise.all([favicon(), emailLogo(), docsSite(), readmeLogos()]);
 }
 
 main().catch((err: unknown) => {

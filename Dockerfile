@@ -28,7 +28,7 @@ WORKDIR /app
 
 # ---- every dependency, for the build -------------------------------------
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY docs-site/package.json ./docs-site/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \
@@ -39,7 +39,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 # site's packages (Fumadocs, Twoslash's native TypeScript compiler) into the
 # worker image, with critical findings in binaries it never runs (9.9).
 FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY docs-site/package.json ./docs-site/package.json
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store && \

@@ -5,7 +5,13 @@ import { render } from '@react-email/components';
 import { describe, expect, it } from 'vitest';
 import { BrandLogo, BrandMark } from '@/components/brand';
 import { BRAND_COLORS, EMAIL_LOGO, LOCKUP, MARK, MARK_SMALL, WORDMARK } from '@/lib/brand/marks';
-import { docsBrandModule, faviconSvg, lockupSvg } from '@/lib/brand/svg';
+import {
+  docsBrandModule,
+  faviconSvg,
+  lockupSvg,
+  README_LOGOS,
+  readmeLogoSvg,
+} from '@/lib/brand/svg';
 import manifest from '@/app/manifest';
 import { EmailLayout } from '@/server/email/templates/layout';
 import type { EmailSender } from '@/server/email/templates/view';
@@ -110,6 +116,16 @@ describe('generated brand files', () => {
   it('give the docs site the same favicon and an exact copy of the brand data', () => {
     expect(readFileSync('docs-site/app/icon.svg', 'utf8')).toBe(faviconSvg());
     expect(readFileSync('docs-site/lib/brand.generated.ts', 'utf8')).toBe(docsBrandModule());
+  });
+
+  it('give the README a transparent lockup in charcoal for light and paper for dark', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const svg = readmeLogoSvg(theme);
+      expect(readFileSync(README_LOGOS[theme].path, 'utf8')).toBe(svg);
+      expect(svg).not.toContain('<rect');
+      expect(svg).toContain(`stroke="${README_LOGOS[theme].ink}"`);
+    }
+    expect(README_LOGOS.dark.ink).toBe(BRAND_COLORS.paper);
   });
 });
 
