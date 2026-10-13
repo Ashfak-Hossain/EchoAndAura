@@ -429,6 +429,17 @@ is published: no hosts, credentials, environment values or runbooks. The
 system-map poster, with vendor icons, is a separate slice once its icon
 sources and tool are chosen.
 
+### Infrastructure: the system at a glance (D4J)
+
+The icon system map, chosen as a plain-HTML poster rather than one large
+image: four zones by who runs each part (people, Cloudflare, the one server,
+and the services around it), 20 tiles with a mark, a name and one line, and
+six numbered connections. It reflows on a phone and every label is text.
+Marks are vendored, never fetched: Simple Icons 16.33.0 (CC0) for the
+vendors, and the official AWS Architecture Icons package for Amazon S3, drawn
+unmodified. Sources and terms are in `docs-site/README.md` § Vendor icons.
+Each service appears only where it takes part; nothing operational is shown.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

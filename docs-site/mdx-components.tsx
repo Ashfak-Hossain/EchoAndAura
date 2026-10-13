@@ -7,6 +7,7 @@ import { Diagram } from './components/diagram';
 import { GateFlow } from './components/gate-flow';
 import { PaisaCalculator } from './components/paisa-calculator';
 import { SourceLink } from './components/source-link';
+import { SystemPoster } from './components/system-poster';
 import { SystemMap } from './components/system-map';
 import { TicketRace } from './components/ticket-race';
 import { TicketJourney } from './components/ticket-journey';
@@ -20,6 +21,7 @@ export function getMDXComponents(): MDXComponents {
     Diagram,
     AfterCommit,
     GateFlow,
+    SystemPoster,
     PaisaCalculator,
     SourceLink,
     SystemMap,
