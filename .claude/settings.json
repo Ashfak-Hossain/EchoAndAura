@@ -32,7 +32,21 @@
       "Bash(aws iam get-*)",
       "Bash(aws sesv2 get-*)",
       "Bash(aws sesv2 list-*)",
-      "Bash(aws budgets describe-*)"
+      "Bash(aws budgets describe-*)",
+      "Bash(git fetch*)",
+      "Bash(git tag -l*)",
+      "Bash(git rev-list*)",
+      "Bash(git rev-parse*)",
+      "Bash(git merge-base*)",
+      "Bash(git describe*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh run list*)",
+      "Bash(gh run view*)",
+      "Bash(gh release view*)",
+      "Bash(gh release list*)"
     ],
     "deny": [
       "Read(.env)",
@@ -58,7 +72,33 @@
       "Bash(psql *)",
       "Bash(aws iam create-*)",
       "Bash(aws iam delete-*)",
-      "Bash(aws iam put-*)"
+      "Bash(aws iam put-*)",
+      "Bash(git tag -a*)",
+      "Bash(git tag -d*)",
+      "Bash(git tag -f*)",
+      "Bash(git tag -s*)",
+      "Bash(gh release create*)",
+      "Bash(gh release edit*)",
+      "Bash(gh release delete*)",
+      "Bash(gh release upload*)",
+      "Bash(gh pr merge*)",
+      "Bash(gh pr close*)",
+      "Bash(gh repo edit*)",
+      "Bash(gh repo delete*)",
+      "Bash(gh secret *)",
+      "Bash(gh variable set*)",
+      "Bash(gh variable delete*)",
+      "Bash(gh workflow run*)",
+      "Bash(terraform * apply*)",
+      "Bash(terraform * destroy*)",
+      "Bash(pnpm tf:* apply*)",
+      "Bash(pnpm tf:* destroy*)",
+      "Bash(pnpm ansible apply*)",
+      "Bash(pnpm relay:deploy*)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(wrangler deploy*)",
+      "Bash(docker push*)",
+      "Bash(docker buildx imagetools create*)"
     ]
   },
   "hooks": {
@@ -83,6 +123,15 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/no-secrets.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -96,5 +145,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "$CLAUDE_PROJECT_DIR/.claude/statusline.sh",
+    "padding": 0
   }
 }
