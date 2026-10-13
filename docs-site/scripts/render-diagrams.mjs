@@ -17,12 +17,15 @@ const names = (await readdir('diagrams'))
 await mkdir('public/diagrams', { recursive: true });
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage();
-  await page.setContent('<!doctype html><html><body></body></html>');
-  await page.addScriptTag({ path: mermaidBundle });
   for (const name of names) {
     const source = await readFile(join('diagrams', `${name}.mmd`), 'utf8');
     for (const theme of Object.keys(THEMES)) {
+      // A fresh page per rendering: Mermaid numbers some ids with counters
+      // shared across renders, so one diagram's output would otherwise
+      // depend on which diagrams were drawn before it.
+      const page = await browser.newPage();
+      await page.setContent('<!doctype html><html><body></body></html>');
+      await page.addScriptTag({ path: mermaidBundle });
       const svg = await page.evaluate(
         async ({ source, config, id }) => {
           // @ts-expect-error: the bundle defines a global.
@@ -46,6 +49,7 @@ try {
         join('public/diagrams', `${name}.${theme}.svg`),
         `${stampFor(name, source, theme)}\n${sized}\n`,
       );
+      await page.close();
       console.log(`${name}.${theme}.svg: ${Math.ceil(width)}x${Math.ceil(height)}`);
     }
   }
