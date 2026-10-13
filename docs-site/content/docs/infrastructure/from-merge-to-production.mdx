@@ -1,0 +1,133 @@
+---
+title: From merge to production
+description: How a change travels from a pull request to the exact commit running in production, and every gate that can stop it.
+label: Infrastructure
+---
+
+A change to the application reaches buyers through one line of gates. Each
+gate can stop it, and none needs a person to remember a step. Images are built
+and tested in CI, never on the server; the server only pulls what CI proved;
+and the line ends by checking that the exact commit is the one running.
+
+<Diagram
+  name="merge-to-production"
+  alt="Flowchart from a pull request to production. A pull request runs verify: typecheck, lint and unit tests, plus the build, Postgres integration tests and docs when the app or docs are touched. After the merge, CI on main runs everything. A deploy step asks whether anything changed since the running commit beyond docs, tests, CI or infrastructure code; if not, no new images are built. Otherwise the web and worker images are built, scanned for critical fixable vulnerabilities, smoke-tested by migrating an empty database and checking health and the worker, then pushed tagged with the commit. The server pulls them, runs the migration once, starts web and worker, and the pipeline confirms that exact commit is running. Separately, the docs are uploaded after an approval."
+>
+  Every arrow out of a box is a gate: a failure stops the line there. Select the diagram to open it
+  full size.
+</Diagram>
+
+<Steps>
+<Step>
+
+## A pull request runs verify
+
+Every pull request runs one required check, `verify`: typecheck, lint and the
+unit tests, always. When the change can affect the application or the docs
+site, it also builds the app, starts Postgres and Redis, runs the integration
+tests (including the [last-ticket](/docs/concepts/last-ticket/) concurrency
+test) and builds and tests the docs. A pull request that only touches
+documentation or infrastructure code skips those parts and still reports
+**passed**, so it can merge in about a minute.
+
+See the <SourceLink path="docs/decisions/071-ci-fast-path.md">CI fast path decision</SourceLink>.
+
+</Step>
+<Step>
+
+## Main runs everything
+
+After the merge, CI on `main` always runs every part, whatever changed. The
+deploy is built from this run, so a shortcut here could ship code that skipped
+its integration tests.
+
+</Step>
+<Step>
+
+## Deploy only what changed at runtime
+
+Before building anything, the deploy asks production which commit it is
+running, then compares everything that changed since that commit, not only
+the last merge. If every changed path is documentation, a test, CI
+configuration or infrastructure code, there is nothing new to run: the deploy
+stops there. Any other path, or any doubt, builds a release.
+
+<Callout title="Rule: compare with what runs, not with the last merge">
+  An earlier merge whose deploy failed is still waiting to ship. Comparing only the latest commit
+  could skip it; comparing with the running commit cannot.
+</Callout>
+
+See the <SourceLink path="docs/decisions/067-confirmed-baseline-deploy-filtering.md">deploy selection decision</SourceLink>.
+
+</Step>
+<Step>
+
+## Build, scan and smoke-test the images
+
+CI builds two images from one `Dockerfile`: `web`, the Next.js server, and
+`worker`, the queue worker with the one-off database scripts. Each is
+scanned, and a critical vulnerability that has a fix stops the release. Then
+both start against a real, empty Postgres and Redis: every migration runs from
+scratch, the health check and the home page must answer, and the worker must
+stay up. Only then are the images pushed, tagged with their commit.
+
+The build also guards its own output. In October 2026 a framework update began
+copying the whole repository into the server image; the build now fails if
+anything outside the expected files appears there.
+
+See the <SourceLink path="docs/decisions/036-deployment-dokploy.md">deployment decision</SourceLink>
+and the <SourceLink path="docs/decisions/069-image-scan-gate.md">image scan decision</SourceLink>.
+
+</Step>
+<Step>
+
+## The server pulls, migrates once, then starts
+
+The server never builds; it pulls the tested images. A one-off `migrate`
+service runs first, and `web` and `worker` start only if it succeeds.
+Migrations are never rolled back, so each one stays compatible with the
+previous release: add a column first, remove the old one a release later.
+Rolling back is pinning the previous commit's image.
+
+</Step>
+<Step>
+
+## Confirm the exact commit is running
+
+A green workflow is not proof of what runs. Each image carries the commit it
+was built from, and the application answers one small public question: which
+commit is running, and is it ready.
+
+```ts source="src/app/api/deployment/route.ts#GET" title="route.ts · actual deployment check"
+
+```
+
+Ready means the database, Redis and both worker queues answer, and both
+queues report the same commit. The deploy polls this for up to five minutes
+and fails loudly if that exact commit never appears.
+
+See the <SourceLink path="docs/decisions/066-confirmed-app-deployments.md">deployment confirmation decision</SourceLink>.
+
+</Step>
+</Steps>
+
+## The docs take their own road
+
+This site is published by a separate workflow. It uploads the docs export that
+CI already built and tested, using trusted code from `main`, never code from a
+pull request, and only after an approval. See the <SourceLink path="docs/decisions/065-docs-publication.md">docs publication decision</SourceLink>.
+
+## Read next
+
+<Cards>
+  <Card
+    title="Run it locally"
+    href="/docs/run-it-locally/"
+    description="The same application on your machine, with demo data."
+  />
+  <Card
+    title="Work after commit"
+    href="/docs/concepts/work-after-commit/"
+    description="Why the worker image exists: network work happens outside the request."
+  />
+</Cards>

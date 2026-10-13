@@ -232,3 +232,16 @@ test('gate flow: online agreement, an offline double entry, and a relayed refusa
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
 });
+
+test('merge-to-production page shows the pipeline, its gates and the real check', async ({
+  page,
+}) => {
+  await page.goto('/docs/infrastructure/from-merge-to-production/');
+  await expect(page.locator('.fd-step')).toHaveCount(6);
+  await expect(page.locator('pre').filter({ hasText: 'deploymentService.check()' })).toHaveCount(1);
+  const img = page.locator('figure.diagram .diagram-light img');
+  await expect
+    .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth))
+    .toBeGreaterThan(0);
+  await expect(page.getByRole('link', { name: 'From merge to production' }).first()).toBeVisible();
+});
