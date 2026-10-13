@@ -245,8 +245,8 @@ describe('production deployment selection workflow contract', () => {
   });
 
   it('fetches complete history and keeps deployment serialization', () => {
-    const checkout = workflow.jobs.selection.steps.find(
-      (item: { uses?: string }) => item.uses === 'actions/checkout@v7',
+    const checkout = workflow.jobs.selection.steps.find((item: { uses?: string }) =>
+      item.uses?.startsWith('actions/checkout@'),
     );
     expect(checkout.with['fetch-depth']).toBe(0);
     expect(workflow.concurrency['cancel-in-progress']).toBe(false);

@@ -275,6 +275,14 @@ bump. It also opens security fixes as soon as an advisory lands. Treat them
 like any PR: CI must be green, and read the release notes of anything that
 touches money, auth, the queue or the database driver.
 
+**Every GitHub Action is pinned to a commit SHA** (ADR-073), written as
+`uses: owner/action@<40-character SHA> # vX.Y.Z`. A tag can be moved to other
+code; a SHA can't. Dependabot moves the SHA and the comment together. To add
+an action by hand, find the commit its release tag points to
+(`gh api repos/OWNER/ACTION/commits/vX.Y.Z --jq .sha`) and write both.
+`tests/unit/actions-pinned.test.ts` refuses a tag, a branch or a SHA without
+its version.
+
 **The CI runner's operating system is pinned** to `ubuntu-24.04` in every
 workflow (ci, deploy, release), not `ubuntu-latest`. GitHub moves
 `ubuntu-latest` to a new Ubuntu on its own schedule (Ubuntu 26 from

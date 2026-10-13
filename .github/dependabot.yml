@@ -22,6 +22,9 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
 
+  # Actions are pinned by commit SHA with the version as a comment (ADR-073).
+  # Dependabot reads the `# vX.Y.Z` comment and moves the SHA and the comment
+  # together; tests/unit/actions-pinned.test.ts refuses anything else.
   - package-ecosystem: github-actions
     directory: /
     schedule:
