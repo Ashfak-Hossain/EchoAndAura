@@ -332,23 +332,13 @@ These are the points an "idiomatic simplification" tends to break.
 
 ## Working with Claude Code
 
-Most of this code is written with Claude Code. Its setup is in
-[`.claude/`](../.claude/): permissions, hooks, the status line, agents and
-commands. The guardrails ([ADR-072](decisions/072-ai-guardrails.md)):
-
-| Claude may                                                  | Claude never                                                                |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Edit code, run tests, builds and `pnpm verify`              | Commit, push, tag, merge, or publish a release                              |
-| Read production over `ssh echoandaura`: counts, logs, state | Change production: SQL writes, files, containers, queues, services          |
-| `terraform plan`, `pnpm ansible check`, read-only `aws`     | Apply Terraform or Ansible, deploy to Cloudflare, push images, write to AWS |
-| Read GitHub: PRs, runs, releases                            | Change repo settings, secrets, variables, or start workflows                |
-| Prepare commit messages, PR bodies and the owner's commands | Write a secret into a file (`no-secrets.sh`)                                |
-
-`.claude/settings.json` denies those commands, and
-`.claude/hooks/guard-bash.sh` refuses them even inside `cd x && …` or
-`ssh host '…'`, with a message to hand the command to the owner instead.
-`tests/unit/claude-hooks.test.ts` proves each rule both ways. A new
-outward-facing tool needs a rule there and a test case.
+Most of this code is written with Claude Code. Claude edits, tests and reads
+production; the owner commits, merges, tags and changes production
+([ADR-072](decisions/072-ai-guardrails.md)). The whole setup is in
+[`.claude/README.md`](../.claude/README.md): what a session may and may never
+do, the slash commands (`/prime`, `/slice`, `/verify`, `/wrap`, the release
+and production checks), the reviewers and when to run each, the hooks, and
+how to add to them.
 
 ## Further reading
 
