@@ -406,6 +406,16 @@ The diagram renderer now draws each diagram in a fresh page: Mermaid numbers
 some ids with counters shared across renders, so adding a diagram changed the
 output of others drawn after it.
 
+### Interaction: two gates, one ticket (D4H)
+
+The "online/offline gate flow" planned above, inside the gate tour. Two gate
+panels scan Mina's ticket and drop or restore their signal; a server line
+shows what Postgres decided, and a log explains each step. Three suggested
+runs show the rules: with signal the server refuses the second gate; a gate
+that admitted offline syncs into a recorded double entry, counted once; and a
+gate that heard through the relay refuses offline. It is a deterministic model
+of ADR-030/034/058, like the last-ticket race, not the scanner's code.
+
 ## Review the experience before expanding it
 
 The next visual review should answer three questions: is the main text pleasant

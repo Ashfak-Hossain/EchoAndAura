@@ -4,6 +4,7 @@ import * as Twoslash from 'fumadocs-twoslash/ui';
 import type { MDXComponents } from 'mdx/types';
 import { AfterCommit } from './components/after-commit';
 import { Diagram } from './components/diagram';
+import { GateFlow } from './components/gate-flow';
 import { PaisaCalculator } from './components/paisa-calculator';
 import { SourceLink } from './components/source-link';
 import { SystemMap } from './components/system-map';
@@ -18,6 +19,7 @@ export function getMDXComponents(): MDXComponents {
     Steps,
     Diagram,
     AfterCommit,
+    GateFlow,
     PaisaCalculator,
     SourceLink,
     SystemMap,
