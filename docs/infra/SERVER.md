@@ -1083,8 +1083,8 @@ codes or sponsors. **Once real orders exist, this must not be repeated.**
 
 1. Backup: `pg_dump -Fc` to `/root/before-golive-wipe-2026-10-14.dump`
    (73,752 bytes; `pg_restore -l` lists 18 tables of data), then
-   `chmod 600`. It holds the test data and the admin's password hash:
-   **delete it on or after 2026-10-21** (`rm` the file).
+   `chmod 600`. It held the test data and the admin's password hash, so
+   it was deleted the same day, once the wipe was checked.
 2. One transaction as the owner role, with no `CASCADE`, so a missed
    reference would have rolled everything back:
 
@@ -1274,4 +1274,4 @@ Dashed: by hand. In order:
 | 2026-10-05 | Gate relay (ADR-058): Dokploy Environment `RELAY_URL=https://relay.echoandaura.com`, `RELAY_SECRET` (Bitwarden "Gate relay secret") → deployed; worker runs queues orders, holds, relay; door CSP allows the relay                                                                                                                                                                                                                                                     |
 | 2026-10-06 | Ansible (9.2 slice C): origin lockdown, disk alert and Traefik's in-flight file managed by roles; the scripts moved from `ops/server/` to `ops/ansible/roles/`. `traefik.yml` stays Dokploy's: Ansible only checks the § 13 trustedIPs and § 21 middleware are still there. Production check: changed=0                                                                                                                                                                |
 | 2026-10-06 | Ansible (9.2 slice D, PR #63): `pnpm ansible apply production` changed=4, all origin lockdown: port 3000 dropped from `eth0` for everyone (IPv4 + IPv6), interface now read from `/etc/default/origin-lockdown`, service re-applied ("applied on eth0"). Checked: only 22 answers from outside; `/api/health` 200; dashboard 302 to Cloudflare Access; `pnpm ansible check production` changed=0. Dokploy itself unchanged (role `dokploy` found it, installs nothing) |
-| 2026-10-14 | **Test data removed before go-live** (§ 22): dump in `/root` (delete on or after 2026-10-21), one-transaction wipe of the event, order, ticket and gate tables plus the 2 test buyers; Redis finished jobs cleaned; R2 covers deleted; Settings filled. **v1.0.0** released on the deployed `23d2f08` (images tagged `v1.0.0`)                                                                                                                                         |
+| 2026-10-14 | **Test data removed before go-live** (§ 22): dump in `/root`, deleted the same day, one-transaction wipe of the event, order, ticket and gate tables plus the 2 test buyers; Redis finished jobs cleaned; R2 covers deleted; Settings filled. **v1.0.0** released on the deployed `23d2f08` (images tagged `v1.0.0`)                                                                                                                                                   |

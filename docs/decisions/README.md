@@ -302,6 +302,7 @@ flowchart LR
 | 005 | [Service/repository shape: factories, a composition root, typed domain errors](005-service-repository-shape.md)  | Accepted | 2026-09-16 |
 | 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)           | Accepted | 2026-09-29 |
 | 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted | 2026-10-07 |
+| 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted | 2026-10-14 |
 
 ## Adding an ADR
 
