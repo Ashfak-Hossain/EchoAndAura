@@ -72,6 +72,22 @@ In MDX, `<Diagram name="order-states" alt="…">caption</Diagram>` shows the
 rendering for the current theme, linked to the full-size file. Write `alt` as
 what the picture says in words; use the caption for how to read it.
 
+## Vendor icons
+
+The system map's brand marks are vendored in `lib/vendor-icons.ts`, never
+fetched at runtime:
+
+- **Simple Icons 16.33.0** (CC0-1.0): Cloudflare, Cloudflare Pages and
+  Workers, PostgreSQL, Redis, Next.js, Node.js, Traefik, GitHub, GitHub
+  Actions, Sentry and Better Stack. Each is the `d` of `icons/<slug>.svg`.
+- **AWS Architecture Icons** (package 07312026): Amazon S3, drawn unmodified
+  (its green tile is part of the mark). AWS permits these icons in
+  architecture diagrams; see https://aws.amazon.com/architecture/icons/.
+
+The marks remain their owners' trademarks and imply no endorsement. Show a
+service only where it takes part. To add a mark, copy its path from the
+same sources and add its source line here.
+
 ## Publication (D3A, prepared but not activated)
 
 The export includes a collection-derived sitemap, robots rules and reviewed

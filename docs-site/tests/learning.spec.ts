@@ -245,3 +245,17 @@ test('merge-to-production page shows the pipeline, its gates and the real check'
     .toBeGreaterThan(0);
   await expect(page.getByRole('link', { name: 'From merge to production' }).first()).toBeVisible();
 });
+
+test('system map groups every service, with real text and brand marks', async ({ page }) => {
+  await page.goto('/docs/infrastructure/system-map/');
+  const poster = page.locator('.system-poster');
+  for (const zone of ['People', 'Cloudflare', 'One server', 'Around it']) {
+    await expect(poster.getByRole('heading', { name: zone, exact: true })).toBeVisible();
+  }
+  await expect(poster.locator('.poster-zone li')).toHaveCount(20);
+  await expect(poster.locator('figcaption li')).toHaveCount(6);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+});

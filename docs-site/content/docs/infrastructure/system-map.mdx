@@ -1,0 +1,32 @@
+---
+title: The system at a glance
+description: Every service this system uses, grouped by who runs it, and how they connect.
+label: Infrastructure
+---
+
+The [overview](/docs/) follows one request through the application. This page
+steps back to everything around it: the people who use it, Cloudflare in front,
+the one server that runs the app, and the services that build, watch and keep a
+copy of it.
+
+<SystemPoster />
+
+Each service is shown only where it takes part. Amazon S3, for example, holds a
+copy of the backups and nothing else; the application does not run on AWS. The
+Cloudflare and AWS settings are kept as Terraform code and the server's setup as
+Ansible, so the map can be checked against code, not memory.
+
+## Read next
+
+<Cards>
+  <Card
+    title="From merge to production"
+    href="/docs/infrastructure/from-merge-to-production/"
+    description="How a change reaches the server in this picture."
+  />
+  <Card
+    title="Admit a guest at the gate"
+    href="/docs/tours/admit-a-guest/"
+    description="Door phones, the server and the relay working together."
+  />
+</Cards>
