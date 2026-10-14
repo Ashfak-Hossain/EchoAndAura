@@ -1,0 +1,22 @@
+# Every text file is stored and checked out with LF, on every OS. Shell
+# scripts and Dockerfile lines break inside a Linux container with CRLF.
+* text=auto eol=lf
+
+# Binary: never converted, never diffed as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.ttf   binary
+*.otf   binary
+*.woff  binary
+*.woff2 binary
+*.wasm  binary
+
+# Generated: folded away in GitHub's diffs and language stats. Only the
+# drizzle snapshots: the migration SQL stays visible, reviewers read it.
+pnpm-lock.yaml   linguist-generated=true
+drizzle/meta/**  linguist-generated=true

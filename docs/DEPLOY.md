@@ -337,6 +337,12 @@ docker buildx imagetools inspect ghcr.io/ashfak-hossain/echoandaura-web:sha-abc1
   | jq -r '(if has("config") then . else .["linux/amd64"] end).config.Labels["org.opencontainers.image.revision"]'
 ```
 
+If verify fails with "token was denied", the cause is usually an old
+`docker login ghcr.io`: `gh` reads Docker's saved registry credentials, and
+GHCR refuses an expired one even though the images are public. Run `docker
+logout ghcr.io`, or run the command with `DOCKER_CONFIG` pointing at an
+empty folder.
+
 To read the package list, add
 `--predicate-type https://spdx.dev/Document/v2.3 --format json` to the
 verify command. The version in that URL is whatever SPDX version the
