@@ -47,6 +47,7 @@ decision.
 - [Deployment and operations](#deployment-and-operations)
 - [Documentation](#documentation)
 - [Versioning](#versioning)
+- [Contributing](#contributing)
 - [Security](#security)
 - [License](#license)
 
@@ -268,6 +269,12 @@ Releases follow [Semantic Versioning](https://semver.org/). Every merge to
 shipped, so a rollback can pin one. Release notes open with the version's
 [CHANGELOG.md](CHANGELOG.md) section. How to cut one:
 [docs/DEVELOPMENT.md → Releases](docs/DEVELOPMENT.md#releases).
+
+## Contributing
+
+Bug reports and ideas are welcome as issues; pull requests from outside the
+maintainers are not accepted. [CONTRIBUTING.md](CONTRIBUTING.md) says why,
+and how every change here is made.
 
 ## Security
 

@@ -7,6 +7,7 @@ New to the codebase? Read in this order:
 | Doc                                                    | Purpose                                                                                                                                            |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [../CLAUDE.md](../CLAUDE.md)                           | The invariants — payment model, money, inventory, order state machine, architecture rules. The rules that cause financial loss if violated.        |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md)               | What outside help is accepted (issues, not PRs), and the path every change takes: plan, slice, verify, reviewers, PR, ADR.                         |
 | [DEVELOPMENT.md](DEVELOPMENT.md)                       | Setup, environment, scripts, testing, the `pnpm verify` gate, branching, commits, Definition of Done.                                              |
 | [ENVIRONMENT.md](ENVIRONMENT.md)                       | Every environment variable — what it's for, whether it's required, and how to obtain it.                                                           |
 | [ARCHITECTURE.md](ARCHITECTURE.md)                     | System diagram, data flow, data model overview, deployment topology.                                                                               |
