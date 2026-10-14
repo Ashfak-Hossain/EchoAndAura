@@ -101,6 +101,15 @@ flowchart LR
         a051 --> a062
     end
 
+    subgraph releases ["Release versions"]
+        direction LR
+        a041["`**ADR-041**
+        The repository`"]
+        a074["`**ADR-074**
+        Release tag rulesets`"]
+        a041 -.-> a074
+    end
+
     subgraph mail ["The email provider"]
         direction LR
         a016["`**ADR-016**
@@ -307,6 +316,7 @@ flowchart LR
 | 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)           | Accepted | 2026-09-29 |
 | 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted | 2026-10-07 |
 | 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted | 2026-10-14 |
+| 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted | 2026-10-14 |
 
 ## Adding an ADR
 
