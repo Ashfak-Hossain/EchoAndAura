@@ -218,7 +218,10 @@ call a service → map the result).
 
 ## Branching & commits
 
-- One branch per feature or phase (`feat/…`, `phase/N-…`); PR into `main`.
+- One branch per change, named `type/short-description` with a commit
+  type (`feat/…`, `fix/…`, `docs/…`, `chore/…`); PR into `main`. The path
+  a change takes, from plan to PR, is in
+  [../CONTRIBUTING.md](../CONTRIBUTING.md).
 - `main` is always deployable; CI must be green to merge.
 - **Conventional commits:** `feat(events): add ticket type editor`,
   `fix(orders): …`, `chore: …`.
