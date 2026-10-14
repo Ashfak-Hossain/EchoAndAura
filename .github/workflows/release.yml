@@ -4,9 +4,11 @@ name: Release
 # and deployed. Deploys stay continuous from main (ADR-036): a tag marks a
 # milestone and deploys nothing. It does two things:
 #   - names that commit's images with the version, so a rollback can pin
-#     IMAGE_TAG=v1.0.0 (DEPLOY.md → Rolling back);
-#   - publishes the GitHub Release: the tag's CHANGELOG.md section, then the
-#     notes GitHub generates from the merged PRs (.github/release.yml).
+#     IMAGE_TAG=v1.0.0 (DEPLOY.md → Rolling back), after checking that the
+#     Deploy workflow signed their provenance (ADR-075);
+#   - publishes the GitHub Release: the tag's CHANGELOG.md section, the
+#     images' digests, then the notes GitHub generates from the merged PRs
+#     (.github/release.yml).
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
@@ -14,6 +16,7 @@ on:
 permissions:
   contents: write
   packages: write
+  attestations: read
 
 env:
   REGISTRY: ghcr.io/ashfak-hossain
@@ -46,13 +49,58 @@ jobs:
       # A new name for the existing images: nothing is rebuilt, so the
       # version runs exactly what production ran. Fails if the Deploy
       # workflow never built this commit.
-      - name: Name the images with the version
+      # ADR-075: the sha tag is resolved to a digest once. That digest must
+      # carry provenance signed by this repository's Deploy workflow running
+      # from main on GitHub's runners, and the image's revision label must be
+      # this exact commit (the label is inside the signed digest; a short sha
+      # tag alone could collide). Both images pass before either is named,
+      # and the version is named from the digest, so a sha tag pushed over in
+      # between can't slip in. The digests go in the Release notes.
+      - name: Verify and name the images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ runner.temp }}/release-notes.md
+          SIGNER: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
         run: |
           set -euo pipefail
           sha="sha-$(git rev-parse --short=7 HEAD)"
+          declare -A digests
           for image in echoandaura-web echoandaura-worker; do
+            digest="$(docker buildx imagetools inspect "$REGISTRY/$image:$sha" --format '{{json .Manifest}}' | jq -r .digest)"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || { echo "::error::$image:$sha did not resolve to a digest (got '$digest')"; exit 1; }
+            gh attestation verify "oci://$REGISTRY/$image@$digest" \
+              --repo "$GITHUB_REPOSITORY" \
+              --cert-identity "$SIGNER" \
+              --deny-self-hosted-runners \
+              --source-ref refs/heads/main \
+              --source-digest "$GITHUB_SHA"
+            # The images are pushed as a one-platform index, so the config
+            # is keyed by platform; a plain manifest has it at the top.
+            revision="$(docker buildx imagetools inspect "$REGISTRY/$image@$digest" --format '{{json .Image}}' \
+              | jq -r '(if has("config") then . else .["linux/amd64"] end).config.Labels["org.opencontainers.image.revision"] // ""')"
+            [ "$revision" = "$GITHUB_SHA" ] \
+              || { echo "::error::$image@$digest was built from '$revision', not $GITHUB_SHA"; exit 1; }
+            digests[$image]="$digest"
+          done
+          {
+            echo
+            echo '## Images'
+            echo
+            echo 'Built, scanned and signed by the Deploy workflow (ADR-075). Check one by'
+            echo 'its digest below (DEPLOY.md → Checking where an image came from):'
+            echo
+            echo '```sh'
+            echo "gh attestation verify oci://<image>@<digest> --repo $GITHUB_REPOSITORY \\"
+            echo "  --cert-identity $SIGNER --deny-self-hosted-runners"
+            echo '```'
+            echo
+          } >> "$NOTES"
+          for image in echoandaura-web echoandaura-worker; do
+            digest="${digests[$image]}"
             docker buildx imagetools create \
-              -t "$REGISTRY/$image:$GITHUB_REF_NAME" "$REGISTRY/$image:$sha"
+              -t "$REGISTRY/$image:$GITHUB_REF_NAME" "$REGISTRY/$image@$digest"
+            echo "- \`$REGISTRY/$image@$digest\`" >> "$NOTES"
           done
 
       - name: GitHub Release

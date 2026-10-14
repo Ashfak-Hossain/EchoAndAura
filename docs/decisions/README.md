@@ -79,6 +79,8 @@ flowchart LR
         CI fast path`"]
         a073["`**ADR-073**
         Actions pinned by SHA`"]
+        a075["`**ADR-075**
+        Image provenance + SBOM`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -90,6 +92,7 @@ flowchart LR
         a065 -.-> a071
         a067 -.-> a071
         a069 -.-> a073
+        a069 -.-> a075
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph backups ["Backups as code"]
@@ -108,6 +111,7 @@ flowchart LR
         a074["`**ADR-074**
         Release tag rulesets`"]
         a041 -.-> a074
+        a074 -.-> a075
     end
 
     subgraph mail ["The email provider"]
@@ -305,6 +309,7 @@ flowchart LR
 | 069 | [Fail the deploy on critical, fixable vulnerabilities in the images](069-image-scan-gate.md)                 | Accepted                                                                   | 2026-10-12 |
 | 071 | [CI runs the app and docs parts only when a change can affect them](071-ci-fast-path.md)                     | Accepted                                                                   | 2026-10-12 |
 | 073 | [Every GitHub Action runs at a commit SHA](073-actions-pinned-by-sha.md)                                     | Accepted                                                                   | 2026-10-14 |
+| 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                 | Accepted                                                                   | 2026-10-14 |
 
 ### Code structure and tooling
 
