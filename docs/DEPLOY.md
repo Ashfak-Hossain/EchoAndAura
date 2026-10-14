@@ -228,6 +228,16 @@ changes only through a pull request (no approval needed: one maintainer),
 and CI's `verify` check must pass before the merge button works. There is
 no bypass, for admins either.
 
+**Release tags are protected** by two more rulesets (ADR-074), created
+2026-10-14: "release tags: owner creates" lets only the repository admin
+create a `v*` tag, and "release tags never move" lets nobody, admins
+included, move or delete one. A wrong tag is fixed with the next patch
+version, not by moving it. All three rulesets are files in
+`ops/github/rulesets/`; `pnpm rulesets:check` (read-only, needs `gh`) fails
+if GitHub differs from them. To change one, edit its file, then
+`gh api -X PUT repos/Ashfak-Hossain/EchoAndAura/rulesets/<id> --input <file>`
+and run the check.
+
 The two packages on GHCR are **public** (checked 2026-09-27: anonymous
 pull works), so the server pulls them with no key. That is safe: the
 repo is public too, and no secret is in the images (the build fails if a
