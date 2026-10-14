@@ -57,8 +57,11 @@ holds (the `gh` session, any personal access token), so a leaked owner token
 can create a tag; and an admin can switch "never move" off. Neither is
 prevented, only seen: `pnpm rulesets:check` reports a disabled or changed
 ruleset after the fact. Rulesets cover git tags, not GHCR: anyone with
-`packages: write` can still push a new image as `:vX.Y.Z`. Until releases
-record each image's digest, pin a rollback by digest when it matters. The
+`packages: write` can still push a new image as `:vX.Y.Z`, even an older
+image the Deploy workflow signed, so a valid signature alone doesn't prove
+a tag is its version. ADR-075 answers that: the digests listed in the
+GitHub Release are what protect a version; compare the tag's digest with
+them. The
 rulesets live on GitHub, so the files can drift; `pnpm
 rulesets:check` is how to tell, and a change is made by editing the file and
 applying it with `gh api -X PUT`. On the free plan this protection needs the

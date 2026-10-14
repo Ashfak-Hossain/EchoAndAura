@@ -258,10 +258,13 @@ for a batch of features and `v1.0.1` for fixes only.
 4. The **Release** workflow first checks the notes
    (`.github/scripts/release-notes.mjs`): it stops, before naming anything,
    when the tag has no dated `CHANGELOG.md` section or `package.json`
-   carries another version. Then it names the deployed images `v1.0.0` (a
+   carries another version. Then it checks, for both images before naming
+   either, that the Deploy workflow on `main` signed them and that they were
+   built from the tagged commit (ADR-075; it stops if not, so wait for the
+   whole Deploy run, its `attest` job included), names them `v1.0.0` by digest (a
    rollback can pin `IMAGE_TAG=v1.0.0`) and publishes the GitHub Release:
-   the CHANGELOG section, then the merged PRs grouped by label
-   (`.github/release.yml`), so give PRs a label.
+   the CHANGELOG section, the images' digests, then the merged PRs grouped
+   by label (`.github/release.yml`), so give PRs a label.
 5. The tag can't be moved or deleted afterwards, by anyone, while the
    rulesets are on (ADR-074). If it is wrong, release the next patch instead.
 

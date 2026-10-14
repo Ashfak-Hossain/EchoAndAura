@@ -77,12 +77,23 @@ jobs:
     # from main always select it; automatic runs may skip when the complete
     # confirmed-baseline diff contains no production-image input.
     needs: selection
-    if: needs.selection.outputs.deploy == 'true'
+    # ADR-075: the signed provenance names github.sha, which on workflow_run
+    # is main's newest commit when CI finished, not always the commit CI
+    # passed. The selector already skips a run main has moved past
+    # (stale_candidate); this repeats it where the images are built, so no
+    # image is ever signed with another commit's name.
+    if: >-
+      needs.selection.outputs.deploy == 'true' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.head_sha == github.sha)
     # Pinned like CI (ci.yml → verify): ubuntu-latest moves to Ubuntu 26.
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+    # For the attest job, which signs what this job pushed (ADR-075).
+    outputs:
+      web-digest: ${{ steps.digests.outputs.web }}
+      worker-digest: ${{ steps.digests.outputs.worker }}
 
     # For the smoke test: the images must boot against a real Postgres + Redis.
     services:
@@ -174,13 +185,25 @@ jobs:
       # `docker save` export: no Docker socket, and none of this job's secrets
       # in its environment (CVE-2026-33634 hijacked Trivy's GitHub Actions to
       # read runner memory). Accepted exceptions live in .trivyignore.yaml.
+      # ADR-075: the same export also gives each image's SBOM (SPDX), so the
+      # package list is of exactly what was scanned and is pushed.
       - name: Scan images
         env:
           WEB: ${{ env.REGISTRY }}/echoandaura-web:${{ steps.tags.outputs.sha }}
           WORKER: ${{ env.REGISTRY }}/echoandaura-worker:${{ steps.tags.outputs.sha }}
+          SBOM_DIR: ${{ runner.temp }}/sbom
         run: |
           set -euo pipefail
           trap 'rm -f image.tar' EXIT
+          mkdir -p "$SBOM_DIR"
+          sbom() {
+            docker run --rm \
+              -v "$PWD/image.tar:/scan/image.tar:ro" \
+              -v "$SBOM_DIR:/sbom" \
+              -v trivy-cache:/root/.cache \
+              "$TRIVY_IMAGE" image --input /scan/image.tar --format spdx-json \
+              --no-progress --output "/sbom/$1.spdx.json"
+          }
           scan() {
             docker run --rm \
               -v "$PWD/image.tar:/scan/image.tar:ro" \
@@ -191,13 +214,17 @@ jobs:
               --db-repository mirror.gcr.io/aquasec/trivy-db:2,public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2 \
               "$@"
           }
-          for image in "$WEB" "$WORKER"; do
+          for name in web worker; do
+            if [ "$name" = web ]; then image="$WEB"; else image="$WORKER"; fi
             echo "::group::Scan $image"
             docker save "$image" -o image.tar
             scan --severity HIGH --exit-code 0
             scan --severity CRITICAL --exit-code 1
+            sbom "$name"
             echo "::endgroup::"
           done
+          test -s "$SBOM_DIR/web.spdx.json"
+          test -s "$SBOM_DIR/worker.spdx.json"
 
       # The images that will run in production, booted for real: every
       # migration from an empty database, the web server answering its
@@ -255,11 +282,35 @@ jobs:
           docker logs web || true
           docker logs worker || true
 
+      # Before the push, so the attest job has the SBOMs even if pushing the
+      # second image fails after the first is on GHCR.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: ${{ runner.temp }}/sbom/
+          if-no-files-found: error
+          retention-days: 90
+
+      # ADR-075: a tag can be pushed over; a digest names one image forever.
+      # The digest signed is the one GHCR acknowledged for this push, and it
+      # must still be what the tag resolves to when read back: if anything
+      # pushed over the tag in between, the job fails instead of signing.
       - name: Push
+        id: digests
         run: |
-          for image in echoandaura-web echoandaura-worker; do
-            docker push "$REGISTRY/$image:${{ steps.tags.outputs.sha }}"
-            docker push "$REGISTRY/$image:main"
+          set -euo pipefail
+          for name in web worker; do
+            image="$REGISTRY/echoandaura-$name"
+            pushed="$(docker push "$image:${{ steps.tags.outputs.sha }}" | tee /dev/stderr \
+              | sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' | tail -n 1)"
+            [[ "$pushed" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || { echo "::error::no digest in the push output for $image"; exit 1; }
+            docker push "$image:main"
+            digest="$(docker buildx imagetools inspect "$image:${{ steps.tags.outputs.sha }}" --format '{{json .Manifest}}' | jq -r .digest)"
+            [ "$digest" = "$pushed" ] \
+              || { echo "::error::$image:${{ steps.tags.outputs.sha }} resolves to '$digest', but the push was $pushed"; exit 1; }
+            echo "$name=$digest" >> "$GITHUB_OUTPUT"
+            echo "::notice::echoandaura-$name@$digest"
           done
 
       - name: Deploy
@@ -298,3 +349,64 @@ jobs:
         env:
           DEPLOYMENT_URL: https://echoandaura.com/api/deployment
           DEPLOYMENT_REVISION: ${{ steps.tags.outputs.revision }}
+
+  # ADR-075: signed records of how each pushed image was built (SLSA
+  # provenance: this workflow, this run, this commit) and what is in it (the
+  # SBOM). `gh attestation verify oci://<image>@<digest> --repo <repo>` checks
+  # them; the Release workflow refuses to version an image without one.
+  # A job of its own so the signing token (id-token) never shares a runner
+  # with the build, the scanner or the Sentry and deploy secrets. It runs
+  # whenever an image was pushed, even if a later step of that job failed
+  # (each image on its own: a failed second push leaves the first signed),
+  # so nothing on GHCR goes unsigned.
+  attest:
+    needs: images
+    if: ${{ !cancelled() && (needs.images.outputs.web-digest != '' || needs.images.outputs.worker-digest != '') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      attestations: write
+    env:
+      WEB: ghcr.io/ashfak-hossain/echoandaura-web
+      WORKER: ghcr.io/ashfak-hossain/echoandaura-worker
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: ${{ runner.temp }}/sbom
+
+      # Kept in GitHub's attestation store, not pushed to GHCR: this job has
+      # no packages: write.
+      - name: Provenance, web
+        if: needs.images.outputs.web-digest != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.WEB }}
+          subject-digest: ${{ needs.images.outputs.web-digest }}
+          create-storage-record: false
+
+      - name: Provenance, worker
+        if: needs.images.outputs.worker-digest != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.WORKER }}
+          subject-digest: ${{ needs.images.outputs.worker-digest }}
+          create-storage-record: false
+
+      - name: SBOM, web
+        if: needs.images.outputs.web-digest != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.WEB }}
+          subject-digest: ${{ needs.images.outputs.web-digest }}
+          sbom-path: ${{ runner.temp }}/sbom/web.spdx.json
+          create-storage-record: false
+
+      - name: SBOM, worker
+        if: needs.images.outputs.worker-digest != ''
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.WORKER }}
+          subject-digest: ${{ needs.images.outputs.worker-digest }}
+          sbom-path: ${{ runner.temp }}/sbom/worker.spdx.json
+          create-storage-record: false

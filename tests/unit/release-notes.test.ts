@@ -89,7 +89,7 @@ describe('the release workflow', () => {
 
   it('checks the notes before naming any image, then publishes them', () => {
     expect(at('Release notes')).toBeGreaterThan(-1);
-    expect(at('Release notes')).toBeLessThan(at('Name the images with the version'));
+    expect(at('Release notes')).toBeLessThan(at('Verify and name the images'));
     expect(steps[at('Release notes')]?.run).toContain('release-notes.mjs "$GITHUB_REF_NAME"');
     const publish = steps[at('GitHub Release')]?.run ?? '';
     expect(publish).toContain('--notes-file "$RUNNER_TEMP/release-notes.md"');

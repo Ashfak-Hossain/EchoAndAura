@@ -62,7 +62,10 @@ branch → PR → CI green → merge to main → compare with running revision
       answering `/api/health` and `/`, the worker staying up, and
       `/api/deployment` confirming the full revision of both images;
    6. pushes them to GHCR (GitHub's container registry) tagged `main` and
-      `sha-<commit>`;
+      `sha-<commit>`, takes each image's digest from the push and checks
+      that the tag still resolves to it on GHCR (it fails if not). A separate
+      `attest` job then signs, for each digest, where it was built and what
+      is in it (ADR-075; [below](#checking-where-an-image-came-from));
    7. calls Dokploy, which pulls the new images and runs
       `docker-compose.prod.yml`:
       **migrate** first; **web** and **worker** start only if it succeeded;
@@ -160,10 +163,15 @@ The app, in Dokploy → the compose app → **Environment**:
    confirmation succeeded. Its summary says `Deploy of sha-abc1234`.
    A successful selection-only skip creates no new image; do not use that
    run's commit as a rollback tag.
-2. Set `IMAGE_TAG=sha-abc1234` and click **Deploy**. Dokploy pulls that
-   exact version. A released version works too: `IMAGE_TAG=v1.0.0`
+2. Check that the tag still names what the Deploy workflow built, for both
+   images ([below](#checking-where-an-image-came-from)). For a version,
+   the digests must also match the ones in its GitHub Release. Images built
+   before ADR-075, v1.0.0's included, were never signed and fail this
+   check; rolling back to one of them trusts the tag alone.
+3. Set `IMAGE_TAG=sha-abc1234` and click **Deploy**. Dokploy pulls that
+   exact version. A released version works too: `IMAGE_TAG=v1.1.0`
    (DEVELOPMENT.md → Releases).
-3. Fix forward on a branch as usual. Once the fix is on `main`, set
+4. Fix forward on a branch as usual. Once the fix is on `main`, set
    `IMAGE_TAG` back to `main` (or delete it) and deploy.
 
 **Migrations are not rolled back.** An old version runs against the newer
@@ -303,6 +311,43 @@ token: repo secrets `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`
 the app, then Run workflow once to prove a deploy still gets through. A
 `403` from `curl` in the Deploy step means the token is missing or was
 rotated.
+
+## Checking where an image came from
+
+Every image the Deploy workflow pushes carries two signed attestations
+(ADR-075): its build provenance (this repository, `deploy.yml`, the run and
+the commit) and its SBOM (every package inside). Check a tag with `gh`. It
+needs no registry login, but it does need `gh auth login`: the attestations
+are fetched through GitHub's API.
+
+```sh
+SIGNER=https://github.com/Ashfak-Hossain/EchoAndAura/.github/workflows/deploy.yml@refs/heads/main
+gh attestation verify oci://ghcr.io/ashfak-hossain/echoandaura-web:sha-abc1234 --repo Ashfak-Hossain/EchoAndAura --cert-identity "$SIGNER" --deny-self-hosted-runners
+gh attestation verify oci://ghcr.io/ashfak-hossain/echoandaura-worker:sha-abc1234 --repo Ashfak-Hossain/EchoAndAura --cert-identity "$SIGNER" --deny-self-hosted-runners
+```
+
+It resolves the tag to a digest and passes only if that exact image was
+signed by this repository's `deploy.yml`, run from `main` on GitHub's own
+runners. The output names the workflow run and the commit it signed. The
+Deploy workflow only builds when that commit is the one CI passed, and
+each image also carries the commit as a label, so this shows the commit:
+
+```sh
+docker buildx imagetools inspect ghcr.io/ashfak-hossain/echoandaura-web:sha-abc1234 --format '{{json .Image}}' \
+  | jq -r '(if has("config") then . else .["linux/amd64"] end).config.Labels["org.opencontainers.image.revision"]'
+```
+
+To read the package list, add
+`--predicate-type https://spdx.dev/Document/v2.3 --format json` to the
+verify command. The version in that URL is whatever SPDX version the
+pinned Trivy writes (2.3 today); a Trivy update can change it. Every
+Deploy run also keeps the two SBOMs as an artifact named `sbom` for 90
+days.
+
+A release checks the same things before it names anything: the Release
+workflow verifies both images' provenance and their commit label, both
+before naming either, and refuses to version an image that fails. The
+version's digests are listed in its GitHub Release.
 
 ## Checking an image locally
 
