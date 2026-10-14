@@ -44,9 +44,10 @@ surrounding code and the ADRs a change cites.
   least needed; no `pull_request_target`; no `${{ github.event.* }}` text
   interpolated straight into `run:` (pass it through `env:`); secrets only in
   the jobs that need them.
-- **Actions pinned by SHA**: every `uses:` names a 40-character commit SHA with
-  the version as a trailing comment. Until the repo's test enforces it, a new
-  or changed `uses:` without a SHA is SHOULD FIX; once it is enforced, BLOCKER.
+- **Actions pinned by SHA** (ADR-073): every `uses:` names a 40-character
+  commit SHA with the version as a trailing comment (`# v7.0.1`). Any `uses:`
+  without one is a BLOCKER. `tests/unit/actions-pinned.test.ts` enforces it.
+  On a Dependabot bump, check that the SHA belongs to the tag in the comment.
 - **Dockerfile and compose**: the runtime runs as a non-root user; no secret in
   `ARG`, `ENV`, a `COPY`ed file or a layer; base images pinned.
 - **Terraform** (`ops/terraform/`): resources whose loss is costly keep

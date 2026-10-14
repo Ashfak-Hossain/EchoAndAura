@@ -295,7 +295,7 @@ describe('the verify job (ci.yml)', () => {
       [(s) => s.name === 'Package docs export', docs, 1],
       [
         (s) =>
-          s.uses === 'actions/upload-artifact@v7' &&
+          s.uses?.startsWith('actions/upload-artifact@') === true &&
           JSON.stringify(s).includes('docs-site-${{ github.run_id }}'),
         docs,
         1,
@@ -303,7 +303,7 @@ describe('the verify job (ci.yml)', () => {
       [(s) => s.name === 'Mark docs unaffected', "steps.select.outputs.docs == 'false'", 1],
       [
         (s) =>
-          s.uses === 'actions/upload-artifact@v7' &&
+          s.uses?.startsWith('actions/upload-artifact@') === true &&
           JSON.stringify(s).includes('docs-unchanged-${{ github.run_id }}'),
         "steps.select.outputs.docs == 'false'",
         1,

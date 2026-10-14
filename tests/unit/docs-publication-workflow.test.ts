@@ -20,7 +20,7 @@ describe('docs publication trust boundary', () => {
 
   it('uses trusted default-branch code, never runs artifact code or a PR install', () => {
     for (const job of Object.values(workflow.jobs) as { steps: Record<string, unknown>[] }[]) {
-      const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v7');
+      const checkout = job.steps.find((step) => String(step.uses).startsWith('actions/checkout@'));
       expect(checkout?.with).toEqual({ ref: '${{ github.sha }}', 'persist-credentials': false });
     }
     // Check executable steps; comments also explain forbidden patterns.
