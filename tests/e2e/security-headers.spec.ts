@@ -22,7 +22,8 @@ test.describe('security headers (ADR-043)', () => {
       expect(res.status()).toBe(200);
       const headers = res.headers();
       expect(headers).toMatchObject(STATIC_HEADERS);
-      expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+      // ADR-077: the origin only, so a ticket or order address never becomes a referrer.
+      expect(headers['referrer-policy']).toBe('strict-origin');
       expect(headers['permissions-policy']).toContain('camera=()');
       expect(headers['x-powered-by']).toBeUndefined();
 

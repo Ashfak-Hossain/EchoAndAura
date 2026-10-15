@@ -446,6 +446,43 @@ until then they fall back to the status ping.
 deploy. The door works as before ADR-058, sharing by the ping alone. The
 Worker can stay, unused.
 
+## Web Analytics (ADR-077)
+
+Cookieless visit counts: page views, referrers, countries, browsers and
+Core Web Vitals, in the dashboard under Analytics & Logs → Web Analytics.
+
+**Terraform** (ADR-062): `ops/terraform/cloudflare/analytics.tf` owns the
+site, with **automatic setup off** (`auto_install = false`). Never switch
+it on in the dashboard: Cloudflare would inject its script into every page,
+our CSP blocks it, and it would reach the ticket and order pages the app
+leaves unmeasured. The app adds the beacon itself, with the page's nonce,
+on the measured pages only (`src/lib/web-analytics.ts`).
+
+**Set up (once):**
+
+1. The `terraform` token: add **Account Settings → Read**, and **Edit**
+   for this apply only (TERRAFORM.md → The Cloudflare token).
+2. `pnpm tf:cloudflare plan`: expect `1 to add, 0 to change, 0 to destroy`
+   (the site). If the apply later says the site already exists, the zone
+   was enabled in the dashboard first: import it instead (TERRAFORM.md).
+3. `pnpm tf:cloudflare apply`, then
+   `pnpm tf:cloudflare output -raw web_analytics_token`. Take the token's
+   Account Settings back to Read; a new `plan` says no changes.
+4. Dokploy → the compose app → Environment:
+   `CF_WEB_ANALYTICS_TOKEN=<the token>` → Deploy. The token is public (it
+   is in the page source), so it is not kept in Bitwarden.
+
+**Check it:** the home page's source has a `beacon.min.js` script with a
+`nonce` and `data-cf-beacon`; a ticket page's source has none; the browser
+console shows no CSP error. From the home page, Find my order opens with a
+full page load (the Network tab shows a document request), so the beacon
+never comes along. From a ticket page, open Events in a new tab: its
+request's `Referer` is the origin only. Visits appear in the dashboard
+within minutes.
+
+**Switch it off:** clear `CF_WEB_ANALYTICS_TOKEN` in Dokploy and deploy.
+The beacon and its CSP entry go with it.
+
 ## Email Address Obfuscation: keep it off
 
 **Terraform** (ADR-062): `ops/terraform/cloudflare/zone.tf → `email_obfuscation`. A plan shows it if someone switches it back on`. Change it there and apply; a change made in the dashboard is undone by the next apply.

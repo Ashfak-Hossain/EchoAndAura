@@ -6,6 +6,7 @@ import { SiteShell } from '@/components/public/site-shell';
 import { LocaleProvider } from '@/i18n/locale-context';
 import { publicLocales } from '@/i18n/locales';
 import { FooterSponsors } from '@/components/public/sponsors/footer-sponsors';
+import { WebAnalytics } from '@/components/public/web-analytics';
 import { getPublicSession } from '@/lib/session';
 import { getSiteSettings } from '@/lib/settings';
 import { SITE_NAME, ogLocale, siteUrl } from '@/lib/seo';
@@ -54,6 +55,7 @@ export default async function PublicLayout({ children }: { children: ReactNode }
         >
           {children}
         </SiteShell>
+        <WebAnalytics />
       </LocaleProvider>
     </NextIntlClientProvider>
   );

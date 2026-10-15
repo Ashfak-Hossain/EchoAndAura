@@ -95,6 +95,18 @@ flowchart LR
         a069 -.-> a075
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
+    subgraph analytics ["Visit counts"]
+        direction LR
+        a042["`**ADR-042**
+        Discoverability`"]
+        a043["`**ADR-043**
+        Nonce CSP`"]
+        a077["`**ADR-077**
+        Web Analytics`"]
+        a042 -.-> a077
+        a043 -.-> a077
+    end
+
     subgraph backups ["Backups as code"]
         direction LR
         a051["`**ADR-051**
@@ -262,6 +274,7 @@ flowchart LR
 | 032 | [Home, navigation & sponsors (Canvas 6): logos through the server, one offer rule, a path-aware header](032-home-navigation-sponsors.md)              | Partly superseded by [ADR-033](033-covers-through-next-image.md) | 2026-09-25 |
 | 042 | [Discoverability: structured data, sitemap, robots, a generated share image](042-discoverability.md)                                                  | Accepted                                                         | 2026-09-29 |
 | 055 | [Per-event option to hide how many tickets are left](055-hide-tickets-left.md)                                                                        | Accepted                                                         | 2026-10-04 |
+| 077 | [Cloudflare Web Analytics: our own nonce, an allowlist of pages, a full page load out of them](077-web-analytics.md)                                  | Accepted                                                         | 2026-10-15 |
 
 ### Localisation
 

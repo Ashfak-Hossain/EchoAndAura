@@ -115,20 +115,29 @@ permissions keeps its value, so `.env` does not change.
 | Specified domain `echoandaura.com` | Zone Settings → Edit                        | `zone.tf`: email obfuscation, DNSSEC   |
 | Entire account                     | Access (Cloudflare One / Zero Trust) → Edit | `access.tf`: apps and policies         |
 | Intended account                   | Cloudflare Pages → Edit                     | `pages.tf`: project and domain         |
+| Intended account                   | Account Settings → Read                     | `analytics.tf`: reading the site       |
+
+**Account Settings → Edit, only for the apply that changes `analytics.tf`.**
+Cloudflare accepts no narrower permission for creating, changing or
+deleting a Web Analytics site, and it reaches across the whole account.
+So the token keeps Read (every `plan` reads the site) and gets Edit just
+before that apply; set it back to Read straight after, then confirm with
+a `plan` that says no changes.
 
 ## What is managed
 
-| Folder        | File                 | Resources                                                                                                                                  | Since               |
-| ------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `cloudflare/` | `dns.tf`             | 12 owned DNS records: the original 11 plus the docs CNAME ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))        | 2026-10-05          |
-| `cloudflare/` | `pages.tf`           | Static Direct Upload project `echoandaura-docs` and custom domain `docs.echoandaura.com`; destruction guards on both                       | 2026-10-08 verified |
-| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                      | 2026-10-05          |
-| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                       | 2026-10-05          |
-| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                            | 2026-10-05          |
-| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription       | 2026-10-05          |
-| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                   | 2026-10-05          |
-| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                        | 2026-10-05          |
-| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation | 2026-10-06          |
+| Folder        | File                 | Resources                                                                                                                                                        | Since               |
+| ------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `cloudflare/` | `dns.tf`             | 12 owned DNS records: the original 11 plus the docs CNAME ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                              | 2026-10-05          |
+| `cloudflare/` | `pages.tf`           | Static Direct Upload project `echoandaura-docs` and custom domain `docs.echoandaura.com`; destruction guards on both                                             | 2026-10-08 verified |
+| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                                            | 2026-10-05          |
+| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                                             | 2026-10-05          |
+| `cloudflare/` | `analytics.tf`       | Web Analytics site for the zone, `auto_install = false`, destruction guard; output `web_analytics_token` (public) ([ADR-077](../decisions/077-web-analytics.md)) | not applied yet     |
+| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                                                  | 2026-10-05          |
+| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription                             | 2026-10-05          |
+| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                                         | 2026-10-05          |
+| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                                              | 2026-10-05          |
+| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation                       | 2026-10-06          |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say

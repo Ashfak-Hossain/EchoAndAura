@@ -90,6 +90,9 @@ services:
       # ADR-061: public languages. `en` (default) keeps Bangla off: /bn is a
       # 404 and the switch is hidden. `en,bn` once every page is translated.
       PUBLIC_LOCALES: ${PUBLIC_LOCALES:-en}
+      # ADR-077: Cloudflare Web Analytics' site token (public; `pnpm
+      # tf:cloudflare output -raw web_analytics_token`). Empty = no beacon.
+      CF_WEB_ANALYTICS_TOKEN: ${CF_WEB_ANALYTICS_TOKEN:-}
       # docs/ERROR-TRACKING.md: `1` shows /admin/diagnostics for the
       # synthetic-error proof. Empty (default) = the page is a 404.
       ERROR_TRACKING_DIAGNOSTICS: ${ERROR_TRACKING_DIAGNOSTICS:-}
