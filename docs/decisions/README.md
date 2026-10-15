@@ -336,6 +336,7 @@ flowchart LR
 | 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted | 2026-10-14 |
 | 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted | 2026-10-14 |
 | 076 | [Node 26 is held by devEngines; engines admits Node 24 for Dependabot](076-node-in-dev-engines.md)               | Accepted | 2026-10-15 |
+| 078 | [Local object storage from Pigsty's MinIO fork, pinned by digest](078-local-storage-minio-fork.md)               | Accepted | 2026-10-15 |
 
 ## Adding an ADR
 
