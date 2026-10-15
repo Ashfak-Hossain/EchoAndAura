@@ -322,6 +322,7 @@ flowchart LR
 | 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted | 2026-10-07 |
 | 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted | 2026-10-14 |
 | 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted | 2026-10-14 |
+| 076 | [Node 26 is held by devEngines; engines admits Node 24 for Dependabot](076-node-in-dev-engines.md)               | Accepted | 2026-10-15 |
 
 ## Adding an ADR
 

@@ -275,8 +275,11 @@ for a batch of features and `v1.0.1` for fixes only.
 
 Versions are pinned exactly, never with `^`: `saveExact` in
 `pnpm-workspace.yaml` (pnpm 11 ignores non-auth settings in `.npmrc`), and a
-unit test refuses any range in either `package.json`. `engineStrict` refuses
-an install on a Node or pnpm outside `engines` (Node 26, pnpm 11). Dependabot
+unit test refuses any range in either `package.json`. pnpm refuses to
+install or run on a Node other than 26 (`devEngines.runtime`) or a pnpm other
+than 11 (`engines`, with `engineStrict`). `engines.node` itself says
+`>=24 <27`: Dependabot's npm updater runs Node 24 and gives up on a project
+whose `engines` leave it out (ADR-076). Dependabot
 (`.github/dependabot.yml`) opens one grouped PR a week for minor and patch
 bumps, per ecosystem (npm, GitHub Actions, Docker), and one PR per major
 bump. It also opens security fixes as soon as an advisory lands. Treat them

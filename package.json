@@ -28,8 +28,15 @@
     "url": "https://github.com/Ashfak-Hossain"
   },
   "engines": {
-    "node": ">=26 <27",
+    "node": ">=24 <27",
     "pnpm": ">=11 <12"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=26 <27",
+      "onFail": "error"
+    }
   },
   "packageManager": "pnpm@11.9.0",
   "scripts": {

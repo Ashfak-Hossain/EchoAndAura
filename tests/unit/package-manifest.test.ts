@@ -6,6 +6,7 @@ interface Manifest {
   version: string;
   license?: string;
   engines?: Record<string, string>;
+  devEngines?: { runtime?: { name: string; version: string; onFail?: string } };
   packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -41,8 +42,15 @@ describe('the package manifests', () => {
   it('require the Node in .nvmrc and the pnpm in packageManager', () => {
     const node = readFileSync('.nvmrc', 'utf8').trim();
     const pnpmMajor = /^pnpm@(\d+)\./.exec(app.packageManager ?? '')?.[1];
+    // devEngines is what holds people to .nvmrc's Node: pnpm refuses
+    // install and run outside it (ADR-076).
+    expect(app.devEngines).toEqual({
+      runtime: { name: 'node', version: `>=${node} <${Number(node) + 1}`, onFail: 'error' },
+    });
+    // engines stays wide enough for Dependabot's npm updater, which runs
+    // Node 24 and refuses a project whose engines exclude it (ADR-076).
     expect(app.engines).toEqual({
-      node: `>=${node} <${Number(node) + 1}`,
+      node: `>=24 <${Number(node) + 1}`,
       pnpm: `>=${pnpmMajor} <${Number(pnpmMajor) + 1}`,
     });
   });
