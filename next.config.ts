@@ -65,7 +65,10 @@ const nextConfig: NextConfig = {
           // HTTPS already). No `preload`: leaving the browser list is slow.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // ADR-077: only the origin, even to our own pages. A path here can
+          // be an access key (/tickets/<code>, /orders/<uuid>), and the
+          // analytics beacon on the next page reads document.referrer.
+          { key: 'Referrer-Policy', value: 'strict-origin' },
           // Old browsers; modern ones follow the CSP's frame-ancestors.
           { key: 'X-Frame-Options', value: 'DENY' },
           {

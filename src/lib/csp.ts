@@ -29,6 +29,11 @@ export interface CspOptions {
   relayOrigin?: string | null;
   /** Exact, validated hosted Sentry ingest origin; no wildcard or script exception. */
   errorOrigin?: string | null;
+  /**
+   * Cloudflare Web Analytics' report origin (ADR-077), on measured pages
+   * only. Its script needs no entry: the layout gives it this nonce.
+   */
+  analyticsOrigin?: string | null;
   /** `next dev`: React rebuilds server error stacks with eval. */
   dev: boolean;
 }
@@ -40,6 +45,7 @@ export function buildCsp({
   door,
   relayOrigin = null,
   errorOrigin = null,
+  analyticsOrigin = null,
   dev,
 }: CspOptions): string {
   const script = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
@@ -54,6 +60,7 @@ export function buildCsp({
   if (uploadOrigin) connect.push(uploadOrigin);
   if (door && relayOrigin) connect.push(relayOrigin);
   if (errorOrigin) connect.push(errorOrigin);
+  if (analyticsOrigin) connect.push(analyticsOrigin);
 
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],

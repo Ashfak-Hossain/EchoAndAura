@@ -26,7 +26,8 @@ ever lets a script through.
   - `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
     No `preload`: getting off the browsers' list takes months.
   - `X-Content-Type-Options: nosniff`;
-    `Referrer-Policy: strict-origin-when-cross-origin`;
+    `Referrer-Policy: strict-origin` (was `strict-origin-when-cross-origin`
+    until ADR-077: our own paths can be access keys);
     `X-Frame-Options: DENY`; `Cross-Origin-Opener-Policy: same-origin`;
     `Permissions-Policy` turning off camera, microphone, geolocation and
     payment.

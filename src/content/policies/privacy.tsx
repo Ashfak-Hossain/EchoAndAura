@@ -48,7 +48,7 @@ export const privacy: PolicyDoc = {
     'We collect what is needed to issue your tickets and check your payment, and nothing for advertising.',
     'We never see your bKash PIN or balance.',
     'The organizer sees your details; door staff see only what they need to let you in. Nothing is sold or shared for marketing.',
-    'One cookie, and only if you sign in. No newsletter.',
+    'One cookie, and only if you sign in. Visits are counted without cookies. No newsletter.',
     'You can ask what we hold about you, and ask us to correct or delete it.',
   ],
   intro: (
@@ -129,11 +129,22 @@ export const privacy: PolicyDoc = {
       id: 'where-it-lives',
       title: 'Where it lives',
       body: (
-        <p>
-          Order and ticket data is stored in our own database. Emails are sent through Amazon Web
-          Services, which handles your email address for that purpose only. Event cover images are
-          stored on Cloudflare. Nothing about you is sent to analytics or advertising services.
-        </p>
+        <>
+          <p>
+            Order and ticket data is stored in our own database. Emails are sent through Cloudflare,
+            which handles your email address for that purpose only. Event cover images are stored on
+            Cloudflare too.
+          </p>
+          <p>
+            We count visits with Cloudflare Web Analytics, on our public pages: the home page, the
+            event pages, the archive, and the about, help and policy pages. It sets no cookies and
+            does not follow you to other sites. It records the address of each of those pages you
+            open (without anything after a &ldquo;?&rdquo;), the site that sent you here, your
+            browser, device type and operating system, your country, and how quickly the page loaded
+            and responded. It never runs on the registration form, your order or ticket pages, or
+            your account. Nothing about you is sent to advertising services.
+          </p>
+        </>
       ),
     },
     {

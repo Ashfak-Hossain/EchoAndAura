@@ -53,6 +53,9 @@ export default defineConfig({
         DATABASE_URL: e2eDatabaseUrl(),
         MAILER: 'log',
         E2E_EXPOSE_MAGIC_LINK: '1',
+        // ADR-077: never the beacon, even if `.env` holds a real token, so
+        // test runs can't reach the production dashboard.
+        CF_WEB_ANALYTICS_TOKEN: '',
         APP_ENV: 'test',
         BETTER_AUTH_URL: baseURL,
         RELAY_URL,

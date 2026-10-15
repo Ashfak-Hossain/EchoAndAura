@@ -71,6 +71,13 @@ describe('buildCsp', () => {
     ).toEqual(["'self'", 'https://acct.r2.cloudflarestorage.com']);
   });
 
+  it('lets a measured page report to Cloudflare Web Analytics (ADR-077)', () => {
+    const d = directives(buildCsp({ ...base, analyticsOrigin: 'https://cloudflareinsights.com' }));
+    expect(d.get('connect-src')).toEqual(["'self'", 'https://cloudflareinsights.com']);
+    // The beacon loads by nonce: no script host is added.
+    expect(d.get('script-src')).toEqual(["'self'", "'nonce-abc123'", "'strict-dynamic'"]);
+  });
+
   it('allows images from the media origin when there is one', () => {
     expect(directives(buildCsp(base)).get('img-src')).toEqual(["'self'", 'data:', 'blob:']);
     expect(

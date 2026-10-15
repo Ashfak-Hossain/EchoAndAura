@@ -10,6 +10,12 @@ import {
 import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
 import { sentryDsn } from '@/lib/error-tracking/privacy';
 import {
+  BEACON_REPORT_ORIGIN,
+  WEB_ANALYTICS_HEADER,
+  isMeasuredPath,
+  webAnalyticsToken,
+} from '@/lib/web-analytics';
+import {
   LOCALE_COOKIE,
   LOCALE_HEADER,
   type LocaleStep,
@@ -76,6 +82,8 @@ export async function proxy(request: NextRequest) {
   // Always set, never passed through: a visitor's own header must not make
   // an English URL render (and be cached) in Bangla.
   requestHeaders.set(LOCALE_HEADER, step.locale);
+  // ADR-077: the same for the analytics token — only this proxy sets it.
+  requestHeaders.delete(WEB_ANALYTICS_HEADER);
 
   // A public prefetch gets only the language step — before ADR-061 it got
   // nothing: a nonce on a prefetched render broke the navigation after it
@@ -84,6 +92,14 @@ export async function proxy(request: NextRequest) {
     return forward(request, step, requestHeaders);
   }
 
+  // ADR-077: measured by the English route, so `/bn/tickets/…` is not.
+  const analyticsToken = webAnalyticsToken(process.env.CF_WEB_ANALYTICS_TOKEN);
+  const measured =
+    analyticsToken !== null &&
+    !admin &&
+    isMeasuredPath(step.kind === 'rewrite' ? step.path : pathname);
+  if (measured) requestHeaders.set(WEB_ANALYTICS_HEADER, analyticsToken);
+
   const csp = buildCsp({
     nonce: newNonce(),
     mediaOrigin: originFrom(process.env.R2_PUBLIC_URL),
@@ -91,6 +107,7 @@ export async function proxy(request: NextRequest) {
     door: pathname === '/door' || pathname.startsWith('/door/'),
     relayOrigin: wsOriginFrom(process.env.RELAY_URL),
     errorOrigin: sentryDsn(process.env.NEXT_PUBLIC_SENTRY_DSN)?.origin ?? null,
+    analyticsOrigin: measured ? BEACON_REPORT_ORIGIN : null,
     dev: process.env.NODE_ENV === 'development',
   });
   requestHeaders.set('Content-Security-Policy', csp);
