@@ -33,7 +33,7 @@
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "mermaid": "12.1.0",
+    "mermaid": "12.2.0",
     "parse5": "8.0.1",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"

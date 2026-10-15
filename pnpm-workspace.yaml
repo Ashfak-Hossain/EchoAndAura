@@ -7,8 +7,10 @@ packages:
 # Pin exact versions on every `pnpm add` (CLAUDE.md: "Pin dependency versions
 # exactly. No ^ ranges."). A unit test also refuses any range in package.json.
 saveExact: true
-# Refuse to install on a Node or pnpm outside package.json's `engines`
-# (Node 26, pnpm 11), instead of failing later in odd ways.
+# Refuse to install on a pnpm outside package.json's `engines` (pnpm 11),
+# instead of failing later in odd ways. Node 26 is held by `devEngines`, which
+# pnpm checks on install and run; `engines.node` also admits Node 24 so
+# Dependabot's npm updater can run (ADR-076).
 engineStrict: true
 # The bleeding-edge stack (Next 16 / React 19 / Tailwind 4) has unavoidable
 # peer mismatches from packages not yet updated for React 19. Don't hard-fail
