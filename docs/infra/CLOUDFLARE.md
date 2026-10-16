@@ -475,8 +475,10 @@ on the measured pages only (`src/lib/web-analytics.ts`).
 **Check it:** the home page's source has a `beacon.min.js` script with a
 `nonce` and `data-cf-beacon`; a ticket page's source has none; the browser
 console shows no CSP error. From the home page, Find my order opens with a
-full page load (the Network tab shows a document request), so the beacon
-never comes along. From a ticket page, open Events in a new tab: its
+full page load (the Network tab shows a document request), and so does
+Back to the home page: the measured pages are a root layout of their own
+(ADR-079), so the beacon never shares a page with an unmeasured one. From
+a ticket page, open Events in a new tab: its
 request's `Referer` is the origin only. Visits appear in the dashboard
 within minutes.
 

@@ -197,7 +197,7 @@ server ever dies that way anyway, `rm -rf .next` and start it again.
 
 ```
 src/
-  app/            # Next.js App Router — (public) and (admin) routes, api/
+  app/            # Next.js App Router — (measured), (public), admin and door roots, api/
   components/     # React components; components/ui is shadcn-generated
   db/             # Drizzle schema + client
   server/         # All business logic — imports no next/*

@@ -33,13 +33,13 @@ vi.mock('@/lib/settings', () => ({
 }));
 vi.mock('@/lib/sponsors', () => ({ getPublicSponsors: async () => [] }));
 
-const { TicketList } = await import('@/app/(public)/events/[slug]/ticket-list');
-const { EventCta } = await import('@/app/(public)/events/[slug]/cta');
+const { TicketList } = await import('@/app/(measured)/events/[slug]/ticket-list');
+const { EventCta } = await import('@/app/(measured)/events/[slug]/cta');
 const { RegistrationForm } =
   await import('@/app/(public)/events/[slug]/register/registration-form');
 const { default: RegisterPage } = await import('@/app/(public)/events/[slug]/register/page');
-const { default: PublicEventPage } = await import('@/app/(public)/events/[slug]/page');
-const { Hero } = await import('@/app/(public)/home/hero');
+const { default: PublicEventPage } = await import('@/app/(measured)/events/[slug]/page');
+const { Hero } = await import('@/app/(measured)/home/hero');
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
 /** Visible text, tags stripped and React's text separators dropped. */

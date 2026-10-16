@@ -24,7 +24,7 @@ import { formatDhakaLong, formatDhakaShort } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { EventCta } from './cta';
 import { CalendarIcon, PinIcon } from '../../home/icons';
-import { PhaseNotice } from './phase-notice';
+import { PhaseNotice } from '@/components/public/phase-notice';
 import { ShareRow } from './share-row';
 import { TicketList } from './ticket-list';
 

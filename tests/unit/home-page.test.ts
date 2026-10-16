@@ -24,15 +24,15 @@ vi.mock('@/server/container', () => ({
   sponsorsService: { listPublic },
 }));
 
-const { Hero } = await import('@/app/(public)/home/hero');
-const { Countdown, countdownLabel, countdownParts } = await import('@/app/(public)/home/countdown');
-const { DormantHero } = await import('@/app/(public)/home/dormant-hero');
-const { BAND_COVER_SIZES } = await import('@/app/(public)/home/cover-placeholder');
-const { UpcomingGrid } = await import('@/app/(public)/home/upcoming-grid');
-const { HowItWorks, howItWorksSteps } = await import('@/app/(public)/home/how-it-works');
-const { PastStrip } = await import('@/app/(public)/home/past-strip');
-const { FollowBlock } = await import('@/app/(public)/home/follow-block');
-const { default: HomePage } = await import('@/app/(public)/page');
+const { Hero } = await import('@/app/(measured)/home/hero');
+const { Countdown, countdownLabel, countdownParts } = await import('@/app/(measured)/home/countdown');
+const { DormantHero } = await import('@/app/(measured)/home/dormant-hero');
+const { BAND_COVER_SIZES } = await import('@/app/(measured)/home/cover-placeholder');
+const { UpcomingGrid } = await import('@/app/(measured)/home/upcoming-grid');
+const { HowItWorks, howItWorksSteps } = await import('@/app/(measured)/home/how-it-works');
+const { PastStrip } = await import('@/app/(measured)/home/past-strip');
+const { FollowBlock } = await import('@/app/(measured)/home/follow-block');
+const { default: HomePage } = await import('@/app/(measured)/page');
 
 /**
  * Canvas 6 home page (H1–H3, N6–N9), rendered to markup. Times are UTC;

@@ -10,7 +10,7 @@ import { siteUrl } from '@/lib/env.public';
 import { getSiteSettings } from '@/lib/settings';
 import { DHAKA_TZ } from '@/lib/time';
 import { cn } from '@/lib/utils';
-import { loadHome } from '../home/load';
+import { loadHome } from '@/lib/home';
 
 export const metadata: Metadata = {
   title: 'About',

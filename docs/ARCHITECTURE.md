@@ -17,15 +17,20 @@ diagrams (ER, class, state machine, sequence) live in [DIAGRAMS.md](DIAGRAMS.md)
    Buyer / Admin  ─────► │   Next.js 16 App         │
    (browser)             │   (App Router)           │
                          │                          │
-                         │  (public)/ events,       │
-                         │            register,     │
-                         │            ticket/[..]   │
+                         │  (measured)/ events, faq │
+                         │              policies    │
                          │                          │
-                         │  (admin)/  verify,       │
-                         │            events CRUD   │
+                         │  (public)/   register,   │
+                         │              orders,     │
+                         │              tickets     │
                          │                          │
-                         │  api/      route         │
-                         │            handlers      │
+                         │  admin/      verify,     │
+                         │              events CRUD │
+                         │                          │
+                         │  door/       gate        │
+                         │                          │
+                         │  api/        route       │
+                         │              handlers    │
                          └──────┬────────┬──────────┘
                                 │        │
                      src/server/│        │ enqueue job

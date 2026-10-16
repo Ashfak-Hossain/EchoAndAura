@@ -11,7 +11,7 @@ import { DormantHero } from './home/dormant-hero';
 import { FollowBlock } from './home/follow-block';
 import { Hero } from './home/hero';
 import { HowItWorks } from './home/how-it-works';
-import { loadHome } from './home/load';
+import { loadHome } from '@/lib/home';
 import { PastStrip } from './home/past-strip';
 import { UpcomingGrid } from './home/upcoming-grid';
 

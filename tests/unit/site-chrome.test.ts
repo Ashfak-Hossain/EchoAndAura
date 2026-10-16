@@ -13,7 +13,7 @@ const getHomePage = vi.fn();
 vi.mock('@/server/container', () => ({ eventsService: { getHomePage } }));
 
 const { SiteFooter, SiteHeader } = await import('@/components/public/site-shell');
-const { featuredCta } = await import('@/app/(public)/home/load');
+const { featuredCta } = await import('@/lib/home');
 const { accountLink } = await import('@/lib/public-nav');
 
 const html = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);

@@ -2,13 +2,22 @@
 id: ADR-077
 title: 'Cloudflare Web Analytics: our own nonce, an allowlist of pages, a full page load out of them'
 date: 2026-10-15
-status: accepted
+status: partly-superseded
 area: Public site
 supersedes: []
 extends: [ADR-042, ADR-043]
 ---
 
 # ADR-077 — Cloudflare Web Analytics: our own nonce, an allowlist of pages, a full page load out of them
+
+**Status:** Partly superseded by [ADR-079](079-separate-root-for-measured-pages.md):
+the click guard and the proxy's header hand-off are gone. The measured
+pages are a root layout of their own, so Next.js loads a new document for
+every navigation out of them, Back and Forward included. The (measured)
+layout renders the beacon, not the public one. Of the Consequences, the
+guard's gap is closed, and a visitor who lands on an unmeasured page and
+moves to a measured one is now counted. The rest stands: the allowlist,
+the token, the referrer policy, what is sent and the privacy policy.
 
 **Context:** The owner wants visit counts: how many people come, from where,
 and which posts send them. The sales report (ADR-026) already counts orders
@@ -51,7 +60,7 @@ and never on a page that is not measured.
   skips (`/api/nope`) renders the not-found page in this layout with the
   visitor's own headers.
 - **A full page load out of the measured pages**
-  ([web-analytics-guard.tsx](../../src/components/public/web-analytics-guard.tsx)).
+  (`web-analytics-guard.tsx`, removed by ADR-079).
   Next to the beacon, a capture-phase click listener on `window` turns a
   plain click on a link to an unmeasured page of ours into
   `location.assign`, and stops the click there. `<Link>` and every other

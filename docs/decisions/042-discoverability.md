@@ -61,7 +61,7 @@ What was missing:
   - `robots.txt`, the sitemap and security.txt render per request;
   - `metadataBase` and the Open Graph defaults live in the **public**
     layout, which renders per request anyway;
-  - the share image sits in `(public)/`.
+  - the share image sits in `(public)/` (in `(measured)/` since ADR-079).
 
   The root layout's metadata stays static and holds no URL. It also
   covers the pages Next prerenders (the 404 page,
