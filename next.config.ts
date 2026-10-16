@@ -53,6 +53,11 @@ const nextConfig: NextConfig = {
   },
   // ADR-043: no `X-Powered-By: Next.js` advert.
   poweredByHeader: false,
+  experimental: {
+    // ADR-079: the app has several root layouts, so the 404 for a URL no
+    // route matches is src/app/global-not-found.tsx, a whole document.
+    globalNotFound: true,
+  },
   headers() {
     return Promise.resolve([
       {

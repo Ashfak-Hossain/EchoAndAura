@@ -9,12 +9,7 @@ import {
 } from '@/lib/cf-access';
 import { buildCsp, newNonce, originFrom, wsOriginFrom } from '@/lib/csp';
 import { sentryDsn } from '@/lib/error-tracking/privacy';
-import {
-  BEACON_REPORT_ORIGIN,
-  WEB_ANALYTICS_HEADER,
-  isMeasuredPath,
-  webAnalyticsToken,
-} from '@/lib/web-analytics';
+import { BEACON_REPORT_ORIGIN, isMeasuredPath, webAnalyticsToken } from '@/lib/web-analytics';
 import {
   LOCALE_COOKIE,
   LOCALE_HEADER,
@@ -44,7 +39,7 @@ const PUBLIC_PATHS = new Set([
  * 1. ADR-043: a fresh CSP nonce per request. Next reads the policy from
  *    the request headers and stamps the nonce on its own scripts, which
  *    only works for pages rendered per request; the few Next would
- *    prerender are made dynamic (see src/app/not-found.tsx).
+ *    prerender are made dynamic (see src/app/global-not-found.tsx).
  * 2. An optimistic auth redirect for the admin area: it only checks that a
  *    session cookie is *present*. The authoritative, DB-backed check lives
  *    in src/app/admin/(protected)/layout.tsx; this just saves a render
@@ -82,8 +77,6 @@ export async function proxy(request: NextRequest) {
   // Always set, never passed through: a visitor's own header must not make
   // an English URL render (and be cached) in Bangla.
   requestHeaders.set(LOCALE_HEADER, step.locale);
-  // ADR-077: the same for the analytics token — only this proxy sets it.
-  requestHeaders.delete(WEB_ANALYTICS_HEADER);
 
   // A public prefetch gets only the language step — before ADR-061 it got
   // nothing: a nonce on a prefetched render broke the navigation after it
@@ -92,13 +85,13 @@ export async function proxy(request: NextRequest) {
     return forward(request, step, requestHeaders);
   }
 
-  // ADR-077: measured by the English route, so `/bn/tickets/…` is not.
-  const analyticsToken = webAnalyticsToken(process.env.CF_WEB_ANALYTICS_TOKEN);
+  // ADR-077, ADR-079: only a measured page may send the beacon's reports.
+  // The (measured) layout renders the beacon; this is the second lock, by
+  // the English route, so `/bn/tickets/…` is not measured.
   const measured =
-    analyticsToken !== null &&
+    webAnalyticsToken(process.env.CF_WEB_ANALYTICS_TOKEN) !== null &&
     !admin &&
     isMeasuredPath(step.kind === 'rewrite' ? step.path : pathname);
-  if (measured) requestHeaders.set(WEB_ANALYTICS_HEADER, analyticsToken);
 
   const csp = buildCsp({
     nonce: newNonce(),

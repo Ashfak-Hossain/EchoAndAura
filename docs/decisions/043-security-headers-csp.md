@@ -58,6 +58,7 @@ ever lets a script through.
   - `/admin/forgot-password` calls `connection()`;
   - a root `app/not-found.tsx` wraps the public 404 in the public
     layout. Unknown URLs used to get Next's unbranded default 404.
+    (Now `app/global-not-found.tsx`, ADR-079.)
   - Still prerendered: Next's `_global-error` page (shown only when the
     root layout itself fails). It is plain HTML and reads fine without
     its scripts.

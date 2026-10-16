@@ -7,8 +7,8 @@ import { phaseChipLabel } from '@/lib/phase-chip-label';
 import { buildEventMetadata, buildHomeMetadata } from '@/lib/seo';
 import { formatDhakaDate, formatDhakaDayMonth, formatDhakaMonth } from '@/lib/time';
 import { SiteFooter } from '@/components/public/site-shell';
-import { countdownLabel } from '@/app/(public)/home/countdown';
-import { howItWorksSteps } from '@/app/(public)/home/how-it-works';
+import { countdownLabel } from '@/app/(measured)/home/countdown';
+import { howItWorksSteps } from '@/app/(measured)/home/how-it-works';
 import { useTestLocale } from './setup/intl';
 
 /**

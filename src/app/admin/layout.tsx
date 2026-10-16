@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { RootDocument, rootMetadata } from '../root-document';
 
 /**
  * The whole admin, the sign-in and password pages included, stays out of
@@ -6,9 +7,11 @@ import type { Metadata } from 'next';
  * crawler that arrives by a link anyway.
  */
 export const metadata: Metadata = {
+  ...rootMetadata,
   robots: { index: false, follow: false },
 };
 
+/** ADR-079: a root of its own, so a link to the public site loads a new document. */
 export default function AdminRootLayout({ children }: LayoutProps<'/admin'>) {
-  return children;
+  return <RootDocument root="admin">{children}</RootDocument>;
 }

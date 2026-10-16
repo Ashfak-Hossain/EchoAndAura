@@ -103,8 +103,12 @@ flowchart LR
         Nonce CSP`"]
         a077["`**ADR-077**
         Web Analytics`"]
+        a079["`**ADR-079**
+        Measured root layout`"]
         a042 -.-> a077
         a043 -.-> a077
+        a077 --> a079
+        a043 -.-> a079
     end
 
     subgraph backups ["Backups as code"]
@@ -263,18 +267,19 @@ flowchart LR
 
 ### Public site
 
-| ADR | Decision                                                                                                                                              | Status                                                           | Date       |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------- |
-| 009 | [Public event page: phase as a pure function, archived pages stay live, OG from server metadata, e2e on a production build](009-public-event-page.md) | Partly superseded by [ADR-030](030-gate-scanner-slice-a.md)      | 2026-09-18 |
-| 018 | [Static pages: copy in TSX, contact from env, a native accordion](018-static-pages.md)                                                                | Accepted                                                         | 2026-09-20 |
-| 019 | [Archive read model, error reference from Next's digest, auth limiter off only in e2e](019-archive-and-error-reference.md)                            | Partly superseded by [ADR-048](048-bot-check-turnstile.md)       | 2026-09-21 |
-| 020 | [Public design pass to the approved canvas](020-public-design-pass.md)                                                                                | Partly superseded by [ADR-032](032-home-navigation-sponsors.md)  | 2026-09-21 |
-| 029 | [Private venue: stripped from the public read models, revealed to ticket holders](029-private-venue.md)                                               | Accepted                                                         | 2026-09-23 |
-| 031 | [Help & policies (Canvas 5): content as data, repo copy wins, an accessible focus ring](031-help-and-policies.md)                                     | Accepted                                                         | 2026-09-25 |
-| 032 | [Home, navigation & sponsors (Canvas 6): logos through the server, one offer rule, a path-aware header](032-home-navigation-sponsors.md)              | Partly superseded by [ADR-033](033-covers-through-next-image.md) | 2026-09-25 |
-| 042 | [Discoverability: structured data, sitemap, robots, a generated share image](042-discoverability.md)                                                  | Accepted                                                         | 2026-09-29 |
-| 055 | [Per-event option to hide how many tickets are left](055-hide-tickets-left.md)                                                                        | Accepted                                                         | 2026-10-04 |
-| 077 | [Cloudflare Web Analytics: our own nonce, an allowlist of pages, a full page load out of them](077-web-analytics.md)                                  | Accepted                                                         | 2026-10-15 |
+| ADR | Decision                                                                                                                                              | Status                                                                  | Date       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------- |
+| 009 | [Public event page: phase as a pure function, archived pages stay live, OG from server metadata, e2e on a production build](009-public-event-page.md) | Partly superseded by [ADR-030](030-gate-scanner-slice-a.md)             | 2026-09-18 |
+| 018 | [Static pages: copy in TSX, contact from env, a native accordion](018-static-pages.md)                                                                | Accepted                                                                | 2026-09-20 |
+| 019 | [Archive read model, error reference from Next's digest, auth limiter off only in e2e](019-archive-and-error-reference.md)                            | Partly superseded by [ADR-048](048-bot-check-turnstile.md)              | 2026-09-21 |
+| 020 | [Public design pass to the approved canvas](020-public-design-pass.md)                                                                                | Partly superseded by [ADR-032](032-home-navigation-sponsors.md)         | 2026-09-21 |
+| 029 | [Private venue: stripped from the public read models, revealed to ticket holders](029-private-venue.md)                                               | Accepted                                                                | 2026-09-23 |
+| 031 | [Help & policies (Canvas 5): content as data, repo copy wins, an accessible focus ring](031-help-and-policies.md)                                     | Accepted                                                                | 2026-09-25 |
+| 032 | [Home, navigation & sponsors (Canvas 6): logos through the server, one offer rule, a path-aware header](032-home-navigation-sponsors.md)              | Partly superseded by [ADR-033](033-covers-through-next-image.md)        | 2026-09-25 |
+| 042 | [Discoverability: structured data, sitemap, robots, a generated share image](042-discoverability.md)                                                  | Accepted                                                                | 2026-09-29 |
+| 055 | [Per-event option to hide how many tickets are left](055-hide-tickets-left.md)                                                                        | Accepted                                                                | 2026-10-04 |
+| 077 | [Cloudflare Web Analytics: our own nonce, an allowlist of pages, a full page load out of them](077-web-analytics.md)                                  | Partly superseded by [ADR-079](079-separate-root-for-measured-pages.md) | 2026-10-15 |
+| 079 | [The measured pages get a root layout of their own](079-separate-root-for-measured-pages.md)                                                          | Accepted                                                                | 2026-10-16 |
 
 ### Localisation
 

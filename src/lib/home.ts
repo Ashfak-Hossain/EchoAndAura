@@ -5,7 +5,7 @@ import { formatDhakaDate } from '@/lib/time';
 import { eventsService } from '@/server/container';
 
 /**
- * The home read model, memoised per request: the public layout needs the
+ * The home read model, memoised per request: the public shell needs the
  * featured event for the header's "Get tickets" button and the home page
  * needs all of it. React `cache()` makes that one query, not two.
  */

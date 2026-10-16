@@ -205,7 +205,7 @@ locally? `pnpm admin:reset-2fa <email>` clears it. The full guide is
 
 ```text
 src/
-  app/            Next.js routes: (public) site, admin, door scanner, api
+  app/            Next.js routes: (measured) and (public) site, admin, door scanner, api
   server/         business logic, no Next.js imports
     services/       orders, fulfilment, inventory, door, reports, ...
     repositories/   the only code that queries the database

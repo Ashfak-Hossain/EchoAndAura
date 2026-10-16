@@ -11,7 +11,7 @@ import { ButtonLink } from '@/components/button-link';
 import { getPublicSession } from '@/lib/session';
 import { formatDhakaLong } from '@/lib/time';
 import { readTurnstileConfig } from '@/lib/turnstile-config';
-import { PhaseNotice } from '../phase-notice';
+import { PhaseNotice } from '@/components/public/phase-notice';
 import { checkPromoCodeAction, registerAction } from './actions';
 import { RegistrationForm, type TicketOption } from './registration-form';
 

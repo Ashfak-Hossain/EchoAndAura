@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Archivo, Geist_Mono, Noto_Sans_Bengali } from 'next/font/google';
 import { getLocale } from 'next-intl/server';
+import type { ReactNode } from 'react';
 import './globals.css';
 import { SITE_NAME } from '@/lib/seo';
 import { cn } from '@/lib/utils';
@@ -27,23 +28,40 @@ const geistMono = Geist_Mono({
 });
 
 /**
- * Static on purpose: this also covers any page Next prerenders at build
- * (today only its global error page, ADR-043), where SITE_URL is only a
- * placeholder. Anything built from the site URL (metadataBase, the share
- * image) lives in the public layout, which renders per request (ADR-042).
+ * What every root layout starts from. Static on purpose: anything built
+ * from the site URL (metadataBase, the share image) lives in the public
+ * shell, which renders per request (ADR-042).
  */
-export const metadata: Metadata = {
+export const rootMetadata: Metadata = {
   title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
   description: 'Tickets for Echo & Aura events in Dhaka.',
   applicationName: SITE_NAME,
 };
 
-export default async function RootLayout({ children }: LayoutProps<'/'>) {
+/**
+ * ADR-079: the <html> and <body> of every root layout. The app has four
+ * roots: (measured), (public), admin and door, plus global-not-found.
+ * Next.js loads a new document whenever a navigation crosses from one
+ * root to another, which is what keeps the analytics beacon of a measured
+ * page out of every other page.
+ *
+ * `data-root` names the root that rendered the page, so the e2e suite can
+ * tell the global 404 from a group's: if Next ever served an unknown URL
+ * from the (measured) root, it would carry the beacon.
+ */
+export async function RootDocument({
+  root,
+  children,
+}: {
+  root: 'measured' | 'public' | 'admin' | 'door' | 'global';
+  children: ReactNode;
+}) {
   // ADR-061: the proxy's locale header (`bn` on /bn pages, else `en`).
   const locale = await getLocale();
   return (
     <html
       lang={locale}
+      data-root={root}
       className={cn(
         'h-full font-sans antialiased',
         archivo.variable,
