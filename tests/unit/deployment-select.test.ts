@@ -29,6 +29,7 @@ describe('application deployment path policy', () => {
       '.agents/skills/source-command-slice/SKILL.md',
       '.claude/commands/slice.md',
       '.codex/config.toml',
+      '.devcontainer/Dockerfile',
       'notes/PROGRESS.md',
       'ops/ansible/site.yml',
       'ops/terraform/aws/main.tf',

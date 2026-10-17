@@ -24,6 +24,40 @@ pnpm db:seed                    # realistic demo data (see "Demo data" below)
 pnpm dev                        # http://localhost:3000
 ```
 
+### Dev container
+
+Instead of installing Node and pnpm, open the repository in a dev
+container ([ADR-080](decisions/080-dev-container.md)): VS Code's **Dev
+Containers: Reopen in Container**, or **Code → Codespaces** on GitHub (a
+4-core machine at least). It brings Node 26, pnpm 11, git and the GitHub
+CLI, and starts Postgres, Redis and MinIO beside it. It has no Docker of
+its own: run `docker` commands on the host.
+
+On first start it copies `.env.example` to `.env` (only if you have none),
+installs, creates the test database and migrates. Then, in its terminal:
+
+```bash
+pnpm admin:create               # the admin login
+pnpm db:seed                    # demo data
+pnpm dev                        # http://localhost:3000, forwarded
+pnpm worker                     # in a second terminal
+```
+
+- Postgres, Redis and MinIO are on `localhost` inside the container, as
+  `.env.example` expects. They publish no ports on your machine and keep
+  their own volumes, so a `docker compose up` stack on the host can run
+  at the same time; the two hold different data.
+- `node_modules` lives in a volume, Linux builds, separate from the host's.
+  Switching between the container and the host needs no reinstall either
+  way.
+- The e2e suite needs browsers, once:
+  `sudo pnpm exec playwright install-deps chromium && pnpm exec playwright install chromium`.
+- **Codespaces:** the app is not on `localhost` for your browser. For
+  sign-in, set `BETTER_AUTH_URL` and `SITE_URL` in `.env` to the forwarded
+  address of port 3000 (the Ports tab), then restart `pnpm dev`. Cover
+  images need port 9000 forwarded and `R2_PUBLIC_URL` pointed at it.
+- After changing `.devcontainer/`, **Dev Containers: Rebuild Container**.
+
 ## Demo data
 
 `pnpm db:seed` builds five Dhaka events — one open with ~60 orders, one

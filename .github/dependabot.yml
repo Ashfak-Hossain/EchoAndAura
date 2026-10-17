@@ -37,7 +37,21 @@ updates:
       actions:
         update-types: [minor, patch]
 
+  # The dev container's image (ADR-080). Dependabot reads only a literal
+  # FROM, so the root Dockerfile's Node (an ARG) is bumped by hand in the
+  # same PR: tests/unit/devcontainer.test.ts fails a bump of one alone.
   - package-ecosystem: docker
+    directories: [/, /.devcontainer]
+    schedule:
+      interval: weekly
+      day: sunday
+      time: '04:00'
+      timezone: Asia/Dhaka
+    labels: [dependencies, infra]
+
+  # Dev container features (ADR-080): moves the exact version in
+  # devcontainer.json and the digest in devcontainer-lock.json together.
+  - package-ecosystem: devcontainers
     directory: /
     schedule:
       interval: weekly
@@ -45,6 +59,9 @@ updates:
       time: '04:00'
       timezone: Asia/Dhaka
     labels: [dependencies, infra]
+    groups:
+      features:
+        update-types: [minor, patch]
 
   # Terraform providers (ADR-062): moves the exact `version` pin in
   # versions.tf and the lock file. Not Terraform itself (required_version,

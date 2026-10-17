@@ -36,5 +36,7 @@ next-env.d.ts
 ops/terraform
 ops/ansible
 .vscode
+# ADR-080: the dev container's .ts imports tests/, which the build can't see.
+.devcontainer
 # D3B: always regenerated from the checked-out commit in the build stage.
 deployment-revision.json

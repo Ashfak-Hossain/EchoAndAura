@@ -1,0 +1,42 @@
+// The dev container (ADR-080). Node, pnpm and the compose services in one
+// box, for VS Code and Codespaces. docs/DEVELOPMENT.md → "Dev container".
+{
+  "name": "echoandaura",
+  "dockerComposeFile": ["../docker-compose.yml", "compose.yaml"],
+  "service": "dev",
+  "runServices": ["dev", "postgres", "redis", "minio", "minio-init"],
+  "workspaceFolder": "/workspaces/echoandaura",
+  "remoteUser": "node",
+
+  // Runs on the host before Compose starts: Compose reads its variables from
+  // .env, so a fresh clone gets the example values. Never overwrites one.
+  "initializeCommand": "test -f .env || cp .env.example .env",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  // Exact versions; devcontainer-lock.json pins each to a digest, and
+  // Dependabot moves both (ADR-080).
+  "features": {
+    "ghcr.io/devcontainers/features/git:1.3.8": { "version": "os-provided", "ppa": false },
+    "ghcr.io/devcontainers/features/github-cli:1.1.3": {}
+  },
+
+  "forwardPorts": [3000, 3100, 9000, 9001],
+  "portsAttributes": {
+    "3000": { "label": "app (pnpm dev)" },
+    "3100": { "label": "e2e server", "onAutoForward": "ignore" },
+    // Cover images load from R2_PUBLIC_URL, http://localhost:9000/<bucket>.
+    "9000": { "label": "MinIO S3 API", "onAutoForward": "silent" },
+    "9001": { "label": "MinIO console", "onAutoForward": "silent" }
+  },
+  // Nothing else reaches the host: Postgres and Redis (no password) stay inside.
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+
+  // A production build, Postgres and the e2e suite's browsers side by side.
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  }
+}

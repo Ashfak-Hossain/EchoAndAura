@@ -1,0 +1,54 @@
+# Merged over the root docker-compose.yml (devcontainer.json lists both, like
+# `docker compose -f ../docker-compose.yml -f compose.yaml`). So relative
+# paths here are relative to the repository root, the first file's folder.
+#
+# The services join the dev container's network (`network_mode`), so inside
+# it Postgres, Redis and MinIO are on localhost at their usual ports and
+# .env.example works unchanged (ADR-080). They publish nothing to the host:
+# a stack started with `docker compose up` on the host can run beside this
+# one, and VS Code forwards only what devcontainer.json lists.
+#
+# Its own project name: without one it is the folder's, `echoandaura`, the
+# host stack's, and Compose would take over those containers and volumes.
+name: echoandaura-devcontainer
+
+services:
+  dev:
+    build:
+      context: .devcontainer
+    command: ['sleep', 'infinity']
+    volumes:
+      - .:/workspaces/echoandaura:cached
+      # Linux builds of the dependencies, kept off the host's checkout (a
+      # macOS node_modules holds the wrong esbuild, sharp and next-swc).
+      - node-modules:/workspaces/echoandaura/node_modules
+      - docs-node-modules:/workspaces/echoandaura/docs-site/node_modules
+      - pnpm-store:/home/node/.local/share/pnpm
+    networks:
+      default:
+        # minio-init stays on the network and calls http://minio:9000; MinIO
+        # listens in this container's network, so the name points here.
+        aliases: [minio]
+
+  postgres:
+    network_mode: service:dev
+    ports: !reset []
+    container_name: !reset null
+
+  redis:
+    network_mode: service:dev
+    ports: !reset []
+    container_name: !reset null
+
+  minio:
+    network_mode: service:dev
+    ports: !reset []
+    container_name: !reset null
+
+  minio-init:
+    container_name: !reset null
+
+volumes:
+  node-modules:
+  docs-node-modules:
+  pnpm-store:

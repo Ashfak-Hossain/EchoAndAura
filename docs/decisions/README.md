@@ -342,6 +342,7 @@ flowchart LR
 | 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted | 2026-10-14 |
 | 076 | [Node 26 is held by devEngines; engines admits Node 24 for Dependabot](076-node-in-dev-engines.md)               | Accepted | 2026-10-15 |
 | 078 | [Local object storage from Pigsty's MinIO fork, pinned by digest](078-local-storage-minio-fork.md)               | Accepted | 2026-10-15 |
+| 080 | [A dev container: the services share its network, its image and features pinned](080-dev-container.md)           | Accepted | 2026-10-17 |
 
 ## Adding an ADR
 
