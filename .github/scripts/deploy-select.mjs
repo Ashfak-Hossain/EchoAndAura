@@ -10,6 +10,7 @@ const nonRuntimePrefixes = [
   '.agents/',
   '.claude/',
   '.codex/',
+  '.devcontainer/',
   '.github/',
   'docs/',
   'notes/',

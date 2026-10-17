@@ -1,6 +1,7 @@
 {
   // CloudFormation's short-form functions (ops/aws/*.yaml). Without these the
   // YAML extension marks every !Sub / !GetAtt / !Ref as "Unresolved tag".
+  // Compose's !reset clears an inherited value (.devcontainer/compose.yaml).
   "yaml.customTags": [
     "!And sequence",
     "!Base64 scalar",
@@ -20,6 +21,8 @@
     "!Not sequence",
     "!Or sequence",
     "!Ref scalar",
+    "!reset scalar",
+    "!reset sequence",
     "!Select sequence",
     "!Split sequence",
     "!Sub scalar",

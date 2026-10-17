@@ -184,6 +184,10 @@ pnpm dev                        # http://localhost:3000
 pnpm worker                     # in a second terminal: emails and hold expiry
 ```
 
+Or open it in the dev container (VS Code or Codespaces): it brings Node,
+pnpm and the services, and runs the install and migration for you
+([docs/DEVELOPMENT.md → Dev container](docs/DEVELOPMENT.md#dev-container)).
+
 The first admin sign-in asks you to set up an authenticator app. Lost it
 locally? `pnpm admin:reset-2fa <email>` clears it. The full guide is
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

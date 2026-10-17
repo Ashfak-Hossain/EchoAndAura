@@ -41,7 +41,8 @@ export function e2eAppDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string 
   return url.toString();
 }
 
-async function ensureDatabase(url: string): Promise<void> {
+/** Creates the database the URL names if it is missing; the dev container uses it too. */
+export async function ensureDatabase(url: string): Promise<void> {
   const target = new URL(url);
   const name = target.pathname.slice(1);
   const admin = new URL(url);
