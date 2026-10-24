@@ -19,7 +19,7 @@
 
 # ADR-081: literal FROM references let Dependabot update both Dockerfiles
 # together. Keep both production stages and the dev image on this digest.
-FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS base
+FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS base
 # Node 25+ ships without corepack: install the pnpm package.json names.
 RUN npm install -g pnpm@11.9.0 && npm cache clean --force
 ENV PNPM_HOME=/pnpm NEXT_TELEMETRY_DISABLED=1
@@ -100,7 +100,7 @@ RUN for entry in $(ls -A .next-build/standalone); do \
 
 # ---- plain Node runtime, without build tooling ----------------------------
 # Start fresh, not from base: pnpm belongs only in the build stages.
-FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runtime-base
+FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS runtime-base
 # The runtimes run node only. npm ships dependencies the app never uses,
 # which otherwise become findings in both runtime image scans (9.9).
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
