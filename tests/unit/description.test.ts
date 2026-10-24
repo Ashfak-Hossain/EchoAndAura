@@ -18,6 +18,17 @@ describe('sanitizeDescriptionHtml', () => {
     expect(sanitizeDescriptionHtml('<p>Hi</p><script>alert(1)</script>')).toBe('<p>Hi</p>');
   });
 
+  it('discards deeply nested, unclosed iframe input without exhausting the stack', () => {
+    // GHSA-c9rx-x947-fp3h: sanitize-html < 2.18.1 re-sanitised a discarded
+    // <iframe>'s fallback once per unclosed <iframe>. Listing iframe in
+    // nonTextTags skips that path, so this pins our config on every read
+    // path, not the library fix: keep iframe there.
+    const html = '<iframe>'.repeat(2000);
+    expect(sanitizeDescriptionHtml(html)).toBe('');
+    expect(descriptionToHtml(html)).toBeNull();
+    expect(descriptionToPlainText(html)).toBe('');
+  });
+
   it('strips event handlers and unknown tags but keeps their text', () => {
     expect(sanitizeDescriptionHtml('<p onclick="x()">Hi <span>there</span></p>')).toBe(
       '<p>Hi there</p>',
