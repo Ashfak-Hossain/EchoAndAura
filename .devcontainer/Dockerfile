@@ -2,7 +2,7 @@
 # image (the root Dockerfile's Node image, package.json's packageManager);
 # tests/unit/devcontainer.test.ts keeps them equal. Pinned by digest as well
 # as tag, like the MinIO fork (ADR-078); Dependabot moves both together.
-FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4
+FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec
 
 # sudo for `node`: post-create hands the node_modules volumes to `node`, and
 # `playwright install-deps` needs root. A dev box, never an image we ship.
