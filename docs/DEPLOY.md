@@ -87,7 +87,9 @@ the package, the installed and fixed versions, and where in the image it sits.
 
 1. **Update the package** to the fixed version: a Dependabot or hand bump of
    the npm dependency, a pnpm override for a transitive one, or a newer
-   `NODE_IMAGE` for the base image. Merge it; the next deploy scans again.
+   Node tag and digest in both Dockerfiles for the base image (ADR-081).
+   Dependabot groups these references into one PR. Merge it; the next deploy
+   scans again.
 2. **If the fix cannot ship yet**, and the finding is in code the app never
    runs, add it to [.trivyignore.yaml](../.trivyignore.yaml) in a PR: the CVE
    id, a `statement` saying why it is safe for now, and an `expired_at` no more

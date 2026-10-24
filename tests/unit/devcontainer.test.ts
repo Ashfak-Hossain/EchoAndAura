@@ -32,10 +32,14 @@ const override = (service: string, key: string): { tag?: string; value?: unknown
 
 describe('the dev container', () => {
   it('runs the Node image production builds from, pinned by digest', () => {
-    const prodImage = /^ARG NODE_IMAGE=(\S+)$/m.exec(read('Dockerfile'))?.[1];
-    const from = /^FROM (\S+)@sha256:[0-9a-f]{64}$/m.exec(devDockerfile)?.[1];
-    expect(prodImage).toBeDefined();
-    expect(from).toBe(prodImage);
+    const prodImages = [...read('Dockerfile').matchAll(/^FROM (node:\S+) AS \S+$/gm)].map(
+      (match) => match[1],
+    );
+    const devImage = /^FROM (\S+)$/m.exec(devDockerfile)?.[1];
+    // One build base, one plain runtime base; compare digests as well as tags.
+    expect(prodImages).toHaveLength(2);
+    expect(devImage).toMatch(/^node:\d+\.\d+\.\d+-trixie-slim@sha256:[0-9a-f]{64}$/);
+    for (const image of prodImages) expect(image).toBe(devImage);
   });
 
   it('runs the Node major .nvmrc names', () => {
@@ -95,13 +99,20 @@ describe('the dev container', () => {
 
   it('is watched by Dependabot: the image and the features', () => {
     const { updates } = parse(read('.github/dependabot.yml')) as {
-      updates: { 'package-ecosystem': string; directory?: string; directories?: string[] }[];
+      updates: {
+        'package-ecosystem': string;
+        directory?: string;
+        directories?: string[];
+        groups?: Record<string, { patterns?: string[] }>;
+      }[];
     };
     const dirs = (ecosystem: string) =>
       updates
         .filter((u) => u['package-ecosystem'] === ecosystem)
         .flatMap((u) => u.directories ?? (u.directory === undefined ? [] : [u.directory]));
-    expect(dirs('docker')).toContain('/.devcontainer');
+    const docker = updates.find((u) => u['package-ecosystem'] === 'docker');
+    expect(docker?.directories).toEqual(expect.arrayContaining(['/', '/.devcontainer']));
+    expect(docker?.groups?.node.patterns).toEqual(['node']);
     expect(dirs('devcontainers')).toContain('/');
   });
 });

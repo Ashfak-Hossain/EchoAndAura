@@ -54,6 +54,14 @@ from an older ADR to the later one.
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 260}}}%%
 flowchart LR
+    subgraph nodeimages ["Node images updated together"]
+        direction LR
+        a080["`**ADR-080**
+        Dev container`"]
+        a081["`**ADR-081**
+        Grouped Node images`"]
+        a080 --> a081
+    end
     subgraph publication ["Developer docs publication"]
         direction LR
         a064["`**ADR-064**
@@ -331,18 +339,19 @@ flowchart LR
 
 ### Code structure and tooling
 
-| ADR | Decision                                                                                                         | Status   | Date       |
-| --- | ---------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
-| 003 | [Adopt latest major versions at scaffold time](003-latest-major-versions.md)                                     | Accepted | 2026-09-15 |
-| 004 | [Auth instance lives outside `src/server/`](004-auth-outside-server.md)                                          | Accepted | 2026-09-15 |
-| 005 | [Service/repository shape: factories, a composition root, typed domain errors](005-service-repository-shape.md)  | Accepted | 2026-09-16 |
-| 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)           | Accepted | 2026-09-29 |
-| 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted | 2026-10-07 |
-| 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted | 2026-10-14 |
-| 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted | 2026-10-14 |
-| 076 | [Node 26 is held by devEngines; engines admits Node 24 for Dependabot](076-node-in-dev-engines.md)               | Accepted | 2026-10-15 |
-| 078 | [Local object storage from Pigsty's MinIO fork, pinned by digest](078-local-storage-minio-fork.md)               | Accepted | 2026-10-15 |
-| 080 | [A dev container: the services share its network, its image and features pinned](080-dev-container.md)           | Accepted | 2026-10-17 |
+| ADR | Decision                                                                                                         | Status                                                              | Date       |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
+| 003 | [Adopt latest major versions at scaffold time](003-latest-major-versions.md)                                     | Accepted                                                            | 2026-09-15 |
+| 004 | [Auth instance lives outside `src/server/`](004-auth-outside-server.md)                                          | Accepted                                                            | 2026-09-15 |
+| 005 | [Service/repository shape: factories, a composition root, typed domain errors](005-service-repository-shape.md)  | Accepted                                                            | 2026-09-16 |
+| 041 | [The repository: public and proprietary, merge commits, versions as milestones](041-the-repository.md)           | Accepted                                                            | 2026-09-29 |
+| 064 | [Developer docs: static Fumadocs, source-linked learning, and selective interaction](064-developer-docs-site.md) | Accepted                                                            | 2026-10-07 |
+| 072 | [Guardrails for AI-assisted development: Claude reads production, the owner changes it](072-ai-guardrails.md)    | Accepted                                                            | 2026-10-14 |
+| 074 | [Release tags: only the owner creates them, nobody moves or deletes them](074-release-tag-rulesets.md)           | Accepted                                                            | 2026-10-14 |
+| 076 | [Node 26 is held by devEngines; engines admits Node 24 for Dependabot](076-node-in-dev-engines.md)               | Accepted                                                            | 2026-10-15 |
+| 078 | [Local object storage from Pigsty's MinIO fork, pinned by digest](078-local-storage-minio-fork.md)               | Accepted                                                            | 2026-10-15 |
+| 080 | [A dev container: the services share its network, its image and features pinned](080-dev-container.md)           | Partly superseded by [ADR-081](081-node-images-updated-together.md) | 2026-10-17 |
+| 081 | [Node images pinned by digest and updated together](081-node-images-updated-together.md)                         | Accepted                                                            | 2026-10-25 |
 
 ## Adding an ADR
 

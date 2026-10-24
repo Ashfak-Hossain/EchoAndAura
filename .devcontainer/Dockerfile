@@ -1,8 +1,8 @@
 # The dev container (ADR-080): the same Node and pnpm as the production
-# image (the root Dockerfile's NODE_IMAGE, package.json's packageManager);
+# image (the root Dockerfile's Node image, package.json's packageManager);
 # tests/unit/devcontainer.test.ts keeps them equal. Pinned by digest as well
 # as tag, like the MinIO fork (ADR-078); Dependabot moves both together.
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
+FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4
 
 # sudo for `node`: post-create hands the node_modules volumes to `node`, and
 # `playwright install-deps` needs root. A dev box, never an image we ship.

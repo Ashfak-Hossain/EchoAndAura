@@ -2,13 +2,18 @@
 id: ADR-080
 title: 'A dev container: the services share its network, its image and features pinned'
 date: 2026-10-17
-status: accepted
+status: partly-superseded
 area: Code structure and tooling
 supersedes: []
 extends: []
 ---
 
 # ADR-080 — A dev container: the services share its network, its image and features pinned
+
+The manual production-Node update rule below is replaced by
+[ADR-081](081-node-images-updated-together.md): both Dockerfiles now use
+literal, digest-pinned references, grouped into one Dependabot PR.
+The other dev-container decisions remain in force.
 
 **Context:** Setting up locally takes Node 26, pnpm 11 and Docker, then six
 commands (README → Getting started). The repository is meant to be a
