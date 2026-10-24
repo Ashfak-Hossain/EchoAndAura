@@ -17,10 +17,9 @@
 # with it) and must be known at build time: Next bakes the image optimizer's
 # allow-list into the build (ADR-033).
 
-# Pinned exactly (CLAUDE.md). Keep in step with .nvmrc.
-ARG NODE_IMAGE=node:26.10.0-trixie-slim
-
-FROM ${NODE_IMAGE} AS base
+# ADR-081: literal FROM references let Dependabot update both Dockerfiles
+# together. Keep both production stages and the dev image on this digest.
+FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS base
 # Node 25+ ships without corepack: install the pnpm package.json names.
 RUN npm install -g pnpm@11.9.0 && npm cache clean --force
 ENV PNPM_HOME=/pnpm NEXT_TELEMETRY_DISABLED=1
@@ -99,8 +98,16 @@ RUN for entry in $(ls -A .next-build/standalone); do \
   echo "Next traced unexpected source files into the server image (above)." >&2; exit 1; \
   fi
 
+# ---- plain Node runtime, without build tooling ----------------------------
+# Start fresh, not from base: pnpm belongs only in the build stages.
+FROM node:26.12.0-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runtime-base
+# The runtimes run node only. npm ships dependencies the app never uses,
+# which otherwise become findings in both runtime image scans (9.9).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 # ---- web -----------------------------------------------------------------
-FROM ${NODE_IMAGE} AS web
+FROM runtime-base AS web
 ARG SOURCE_REVISION
 # Links the GHCR package to the repo, so it inherits the repo's access.
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
@@ -116,10 +123,6 @@ COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # The image optimizer's cache (ADR-033): a volume in production, so resized
 # covers survive a deploy. Created here so the node user owns it.
 RUN mkdir -p .next-build/cache/images && chown -R node:node .next-build/cache
-# The runtimes run `node` only. npm (from the base image) ships its own
-# dependencies, the source of the image scan's findings in both images (9.9).
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 EXPOSE 3000
 # Traefik routes nothing to a container until it reports healthy, and
@@ -130,7 +133,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s -
 CMD ["node", "server.js"]
 
 # ---- worker (and ops scripts) --------------------------------------------
-FROM ${NODE_IMAGE} AS worker
+FROM runtime-base AS worker
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
@@ -146,9 +149,5 @@ COPY --from=build /app/deployment-revision.json ./deployment-revision.json
 # without this line every ticket email failed (2026-09-28). The worker
 # refuses to start if they are missing.
 COPY --from=build --chown=node:node /app/src/server/pdf/fonts ./src/server/pdf/fonts
-# The runtimes run `node` only. npm (from the base image) ships its own
-# dependencies, the source of the image scan's findings in both images (9.9).
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 USER node
 CMD ["node", "dist/worker.mjs"]

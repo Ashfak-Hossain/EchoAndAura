@@ -37,9 +37,9 @@ updates:
       actions:
         update-types: [minor, patch]
 
-  # The dev container's image (ADR-080). Dependabot reads only a literal
-  # FROM, so the root Dockerfile's Node (an ARG) is bumped by hand in the
-  # same PR: tests/unit/devcontainer.test.ts fails a bump of one alone.
+  # ADR-081: both Dockerfiles use literal, digest-pinned FROM references.
+  # Group Node across the directories so a bump cannot leave production
+  # and the dev container on different images (devcontainer.test.ts).
   - package-ecosystem: docker
     directories: [/, /.devcontainer]
     schedule:
@@ -48,6 +48,9 @@ updates:
       time: '04:00'
       timezone: Asia/Dhaka
     labels: [dependencies, infra]
+    groups:
+      node:
+        patterns: [node]
 
   # Dev container features (ADR-080): moves the exact version in
   # devcontainer.json and the digest in devcontainer-lock.json together.

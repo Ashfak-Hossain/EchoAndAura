@@ -19,11 +19,22 @@ describe('runtime image contents', () => {
     );
   });
 
-  it('removes npm from both runtime images; they run node only', () => {
+  it('keeps package managers out of the shared runtime base', () => {
+    const runtime = stage('runtime-base');
+    expect(runtime).toMatch(/^FROM node:\S+@sha256:[0-9a-f]{64} AS runtime-base/m);
+    expect(runtime).toContain('rm -rf /usr/local/lib/node_modules/npm');
+    expect(runtime).toContain('/usr/local/bin/npx');
+    expect(runtime).not.toMatch(/npm install|pnpm/);
     for (const name of ['web', 'worker']) {
-      expect(stage(name)).toContain('rm -rf /usr/local/lib/node_modules/npm');
-      expect(stage(name)).toContain('/usr/local/bin/npx');
+      expect(stage(name)).toMatch(new RegExp(`^FROM runtime-base AS ${name}$`, 'm'));
     }
+  });
+
+  it('installs the manifest package manager only in the build base', () => {
+    const { packageManager } = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      packageManager: string;
+    };
+    expect(stage('base')).toContain(`npm install -g ${packageManager}`);
   });
 
   it("keeps drizzle-kit's esbuild on the app's own version", () => {
