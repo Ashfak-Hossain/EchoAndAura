@@ -13,7 +13,7 @@
 [![Release](https://img.shields.io/github/v/release/Ashfak-Hossain/EchoAndAura?label=release)](https://github.com/Ashfak-Hossain/EchoAndAura/releases)
 [![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey.svg)](LICENSE)
 
-**[echoandaura.com](https://echoandaura.com)** · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+**[echoandaura.com](https://echoandaura.com)** · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 </div>
 

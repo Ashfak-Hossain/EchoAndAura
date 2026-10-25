@@ -17,7 +17,11 @@ change here is made.
   an issue instead.
 - **A problem with a ticket or an order?** Contact the organizer at
   [echoandaura.com/contact](https://echoandaura.com/contact). This
-  repository is for the code.
+  repository is for the code. [SUPPORT.md](SUPPORT.md) says where each kind
+  of question goes.
+
+Everyone taking part in issues follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## How a change is made
 
