@@ -9,6 +9,7 @@
 
 [![CI](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/deploy.yml/badge.svg)](https://github.com/Ashfak-Hossain/EchoAndAura/actions/workflows/deploy.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ashfak-Hossain/EchoAndAura/badge)](https://scorecard.dev/viewer/?uri=github.com/Ashfak-Hossain/EchoAndAura)
 [![Uptime](https://uptime.betterstack.com/status-badges/v1/monitor/2yysn.svg)](https://uptime.betterstack.com/?utm_source=status_badge)
 [![Release](https://img.shields.io/github/v/release/Ashfak-Hossain/EchoAndAura?label=release)](https://github.com/Ashfak-Hossain/EchoAndAura/releases)
 [![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey.svg)](LICENSE)

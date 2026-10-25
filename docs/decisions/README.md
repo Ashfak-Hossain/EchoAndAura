@@ -336,6 +336,7 @@ flowchart LR
 | 071 | [CI runs the app and docs parts only when a change can affect them](071-ci-fast-path.md)                     | Accepted                                                                   | 2026-10-12 |
 | 073 | [Every GitHub Action runs at a commit SHA](073-actions-pinned-by-sha.md)                                     | Accepted                                                                   | 2026-10-14 |
 | 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                 | Accepted                                                                   | 2026-10-14 |
+| 082 | [OpenSSF Scorecard, published, without an admin token](082-openssf-scorecard.md)                             | Accepted                                                                   | 2026-10-25 |
 
 ### Code structure and tooling
 

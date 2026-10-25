@@ -1,0 +1,54 @@
+name: Scorecard
+
+# ADR-082: the OpenSSF Scorecard grades how this repository is run (pinned
+# actions, token permissions, branch rules, reviews, dependency updates) and
+# publishes the score behind the README badge. Findings land in Code
+# scanning, next to CodeQL's.
+on:
+  push:
+    branches: [main]
+  # Sundays 04:30 Asia/Dhaka, after Dependabot's 04:00 run. Catches a score
+  # that changes without a push (a new check, an archived dependency).
+  schedule:
+    - cron: '30 22 * * 6'
+  # Run by hand after changing a ruleset. `branch_protection_rule` fires
+  # only for classic branch protection, which this repository does not use.
+  workflow_dispatch:
+
+# Nothing at the top level: only the one job below gets a token, and only
+# what it needs.
+permissions: {}
+
+jobs:
+  analysis:
+    runs-on: ubuntu-24.04
+    # publish_results: Scorecard's API refuses a result from a job with
+    # steps, env, defaults or a container beyond these. Keep it exactly so;
+    # tests/unit/scorecard-workflow.test.ts checks it.
+    permissions:
+      # Read the code and the workflow runs. Public anyway; listed so the
+      # job does not depend on the repository staying public.
+      contents: read
+      actions: read
+      # Upload the findings to Code scanning.
+      security-events: write
+      # Sign the result for the public API and the badge.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No repo_token: an admin token would let Branch-Protection read every
+      # rule, but a long-lived admin secret costs more than the points
+      # (ADR-082). The default token reads what it can.
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: results.sarif

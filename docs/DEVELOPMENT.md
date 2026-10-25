@@ -329,7 +329,7 @@ an action by hand, find the commit its release tag points to
 its version.
 
 **The CI runner's operating system is pinned** to `ubuntu-24.04` in every
-workflow (ci, deploy, release), not `ubuntu-latest`. GitHub moves
+workflow (ci, deploy, docs-deploy, release, scorecard), not `ubuntu-latest`. GitHub moves
 `ubuntu-latest` to a new Ubuntu on its own schedule (Ubuntu 26 from
 2026-10-19), and Dependabot does not bump runner labels. Upgrade on
 purpose: one PR changing all of them, CI green, a deploy run through, and
