@@ -126,6 +126,13 @@ obtain each.
 ## Testing
 
 - **Unit** (`pnpm test`) — pure logic, no external services. Part of `pnpm verify`.
+- **Property** (`tests/unit/*.property.test.ts`, run by `pnpm test`) —
+  [fast-check](https://fast-check.dev) generates inputs for money, promo
+  pricing and the order state machine and checks rules that must hold for
+  all of them. Each run uses a new random seed. A failure prints the seed
+  and the smallest input that breaks the rule; replay it by passing
+  `{ seed, path }` from that message as the second argument to `fc.assert`
+  (`{ seed, path, endOnFailure: true }`).
 - **Integration** (`pnpm test:integration`) — runs against the real
   `docker compose` stack. Loads `.env`; the vitest integration project
   points `DATABASE_URL` at `TEST_DATABASE_URL`, so the code under test and
