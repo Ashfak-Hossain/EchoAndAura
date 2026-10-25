@@ -8,6 +8,8 @@ New to the codebase? Read in this order:
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [../CLAUDE.md](../CLAUDE.md)                           | The invariants — payment model, money, inventory, order state machine, architecture rules. The rules that cause financial loss if violated.        |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md)               | What outside help is accepted (issues, not PRs), and the path every change takes: plan, slice, verify, reviewers, PR, ADR.                         |
+| [../SUPPORT.md](../SUPPORT.md)                         | Where each kind of question goes: buyers to the organizer, bugs and ideas to issues, security problems privately.                                  |
+| [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)         | The Contributor Covenant 2.1, and how to report a breach of it.                                                                                    |
 | [DEVELOPMENT.md](DEVELOPMENT.md)                       | Setup, environment, scripts, testing, the `pnpm verify` gate, branching, commits, Definition of Done.                                              |
 | [ENVIRONMENT.md](ENVIRONMENT.md)                       | Every environment variable — what it's for, whether it's required, and how to obtain it.                                                           |
 | [ARCHITECTURE.md](ARCHITECTURE.md)                     | System diagram, data flow, data model overview, deployment topology.                                                                               |

@@ -6,3 +6,6 @@ contact_links:
   - name: A problem with a ticket or an order
     url: https://echoandaura.com/contact
     about: Buyers — contact the organizer; this repository is for the code.
+  - name: Questions and support
+    url: https://github.com/Ashfak-Hossain/EchoAndAura/blob/main/SUPPORT.md
+    about: Where each kind of question goes.
