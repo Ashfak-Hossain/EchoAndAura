@@ -187,6 +187,33 @@ describe('application deployment selection', () => {
     expect(readRevision).not.toHaveBeenCalled();
   });
 
+  // ADR-083: the job checks out github.sha. On workflow_run a different
+  // candidate is one main moved past, even before origin/main shows it.
+  it('skips a workflow run whose checkout is a newer main', async () => {
+    const readRevision = vi.fn(async () => running);
+    await expect(
+      selectDeployment({
+        eventName: 'workflow_run',
+        candidate,
+        deploymentUrl: 'https://example.com/api/deployment',
+        readRevision,
+        git: git({ head: () => running }),
+      }),
+    ).resolves.toEqual({ deploy: false, reason: 'stale_candidate', running: null });
+    expect(readRevision).not.toHaveBeenCalled();
+  });
+
+  it('still refuses a manual run whose checkout is not the candidate', async () => {
+    await expect(
+      selectDeployment({
+        eventName: 'workflow_dispatch',
+        candidate,
+        deploymentUrl: 'https://example.com/api/deployment',
+        git: git({ head: () => running }),
+      }),
+    ).rejects.toThrow('Checked-out revision');
+  });
+
   it('fails when the confirmed revision is absent, ahead or unrelated', async () => {
     await expect(
       selectDeployment({
@@ -250,6 +277,19 @@ describe('production deployment selection workflow contract', () => {
       item.uses?.startsWith('actions/checkout@'),
     );
     expect(checkout.with['fetch-depth']).toBe(0);
+    // ADR-083: both checkouts take github.sha; the images job's if makes it
+    // the commit CI passed.
+    expect(checkout.with.ref).toBeUndefined();
+    const images = workflow.jobs.images.steps.find((item: { uses?: string }) =>
+      item.uses?.startsWith('actions/checkout@'),
+    );
+    expect(images.with?.ref).toBeUndefined();
+    // Exactly: the images checkout relies on this guard alone, so any edit
+    // to it must be seen.
+    expect(workflow.jobs.images.if).toBe(
+      "needs.selection.outputs.deploy == 'true' && " +
+        "(github.event_name != 'workflow_run' || github.event.workflow_run.head_sha == github.sha)",
+    );
     expect(workflow.concurrency['cancel-in-progress']).toBe(false);
     expect(readFileSync('.github/scripts/deploy-select.mjs', 'utf8')).toContain("'--no-renames'");
   });

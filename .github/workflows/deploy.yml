@@ -53,9 +53,11 @@ jobs:
       deploy: ${{ steps.selection.outputs.deploy }}
       reason: ${{ steps.selection.outputs.reason }}
     steps:
+      # github.sha, never the workflow_run's head_sha (OpenSSF
+      # Dangerous-Workflow, ADR-083). The selector skips the candidate when
+      # this is a newer main.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           # The live baseline can be many merges behind main. A shallow diff
           # could falsely call an application change docs-only.
           fetch-depth: 0
@@ -115,10 +117,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
+      # github.sha: the job's if makes it the commit CI just passed (ADR-083).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The commit CI just passed, not whatever main is now.
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Tags
         id: tags

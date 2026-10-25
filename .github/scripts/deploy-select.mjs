@@ -105,8 +105,13 @@ export async function selectDeployment({
   git = repositoryGit,
 }) {
   if (!shaPattern.test(candidate)) throw new Error('Invalid deployment selection configuration');
+  // The job checks out github.sha, never the workflow_run's head_sha
+  // (OpenSSF Dangerous-Workflow, ADR-083). On workflow_run that is main when
+  // the run started, so a different candidate is one main has moved past:
+  // skip it, like a candidate behind origin/main. A manual run checks out
+  // the candidate itself, so a mismatch there is still a broken setup.
   const head = git.head();
-  if (head !== candidate)
+  if (head !== candidate && eventName !== 'workflow_run')
     throw new Error('Checked-out revision does not match the deployment candidate');
 
   if (eventName === 'workflow_dispatch')
@@ -119,7 +124,10 @@ export async function selectDeployment({
       paths: [],
     });
 
-  const currentMain = git.currentMain();
+  // Either newer commit makes the candidate stale; hand that one on so the
+  // decision says so.
+  const fetchedMain = git.currentMain();
+  const currentMain = candidate !== head ? head : fetchedMain;
   if (candidate !== currentMain)
     return decideDeployment({
       eventName,

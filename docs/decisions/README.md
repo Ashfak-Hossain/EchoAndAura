@@ -89,6 +89,10 @@ flowchart LR
         Actions pinned by SHA`"]
         a075["`**ADR-075**
         Image provenance + SBOM`"]
+        a082["`**ADR-082**
+        OpenSSF Scorecard`"]
+        a083["`**ADR-083**
+        Workflows pass Scorecard`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -101,6 +105,8 @@ flowchart LR
         a067 -.-> a071
         a069 -.-> a073
         a069 -.-> a075
+        a067 -.-> a083
+        a082 -.-> a083
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph analytics ["Visit counts"]
@@ -337,6 +343,7 @@ flowchart LR
 | 073 | [Every GitHub Action runs at a commit SHA](073-actions-pinned-by-sha.md)                                     | Accepted                                                                   | 2026-10-14 |
 | 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                 | Accepted                                                                   | 2026-10-14 |
 | 082 | [OpenSSF Scorecard, published, without an admin token](082-openssf-scorecard.md)                             | Accepted                                                                   | 2026-10-25 |
+| 083 | [Workflows check out github.sha and grant writes per job](083-workflows-pass-scorecard.md)                   | Accepted                                                                   | 2026-10-25 |
 
 ### Code structure and tooling
 
