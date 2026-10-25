@@ -140,8 +140,13 @@ describe('the release workflow', () => {
   const steps = release.jobs.release.steps;
   const run = steps[at(steps, 'Verify and name the images')]?.run ?? '';
 
-  it('may read attestations', () => {
-    expect(release.permissions.attestations).toBe('read');
+  it('may read attestations, from the job alone', () => {
+    expect(release.permissions).toEqual({});
+    expect(release.jobs.release.permissions).toEqual({
+      contents: 'write',
+      packages: 'write',
+      attestations: 'read',
+    });
   });
 
   it('names a version only from a digest Deploy signed on main, built from this commit', () => {
