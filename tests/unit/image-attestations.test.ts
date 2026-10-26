@@ -33,6 +33,11 @@ const release = parse(readFileSync('.github/workflows/release.yml', 'utf8')) as 
 const images = deploy.jobs.images!;
 const attest = deploy.jobs.attest!;
 const at = (steps: Step[], name: string) => steps.findIndex((step) => step.name === name);
+// The whole backslash-continued shell command that starts at `from`.
+const command = (script: string, from: number) => {
+  const end = script.slice(from).search(/[^\\]\n/);
+  return end === -1 ? script.slice(from) : script.slice(from, from + end + 1);
+};
 
 describe('the images job', () => {
   it('can not mint a signing token', () => {
@@ -157,11 +162,12 @@ describe('the release workflow', () => {
     expect(label).toBeGreaterThan(verify);
     expect(name).toBeGreaterThan(label);
     // The exact signing identity: this repository's deploy.yml, run from main.
-    expect(run).toContain('--cert-identity "$SIGNER"');
-    expect(run).toContain('--deny-self-hosted-runners');
+    const verifyCommand = command(run, verify);
+    expect(verifyCommand).toContain('--cert-identity "$SIGNER"');
+    expect(verifyCommand).toContain('--deny-self-hosted-runners');
     // The signed provenance itself must name main and this commit.
-    expect(run).toContain('--source-ref refs/heads/main');
-    expect(run).toContain('--source-digest "$GITHUB_SHA"');
+    expect(verifyCommand).toContain('--source-ref refs/heads/main');
+    expect(verifyCommand).toContain('--source-digest "$GITHUB_SHA"');
     expect(run).not.toContain('--signer-workflow');
     expect(steps[at(steps, 'Verify and name the images')]?.env?.SIGNER).toBe(
       'https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main',
@@ -175,10 +181,55 @@ describe('the release workflow', () => {
     const loops = [...run.matchAll(/for image in echoandaura-web echoandaura-worker; do/g)];
     expect(loops).toHaveLength(2);
     const naming = loops[1]!.index;
+    expect(run.lastIndexOf('gh attestation download')).toBeLessThan(naming);
     expect(run.lastIndexOf('gh attestation verify')).toBeLessThan(naming);
     expect(run.lastIndexOf('[ "$revision" = "$GITHUB_SHA" ]')).toBeLessThan(naming);
     expect(run.indexOf('imagetools create')).toBeGreaterThan(naming);
     expect(run).toMatch(/\[\[ "\$digest" =~ \^sha256:\[0-9a-f\]\{64\}\$ \]\] \\\n\s+\|\| \{/);
+  });
+
+  // ADR-086 (OpenSSF Signed-Releases): the Release carries each image's
+  // provenance, and only the bundles the check above passed.
+  it('downloads provenance by digest and attaches only the bundles it verified', () => {
+    const download = run.indexOf('gh attestation download "oci://$REGISTRY/$image@$digest"');
+    const downloaded = run.indexOf('[ -s "$downloaded" ]');
+    const verify = run.indexOf('gh attestation verify "oci://$REGISTRY/$image@$digest"');
+    const kept = run.indexOf('[ -s "$bundle" ]');
+    expect(download).toBeGreaterThan(-1);
+    expect(downloaded).toBeGreaterThan(download);
+    expect(verify).toBeGreaterThan(downloaded);
+    expect(kept).toBeGreaterThan(verify);
+    // gh writes <digest>.jsonl into the directory it runs in.
+    expect(run).toContain('downloaded="$RUNNER_TEMP/$digest.jsonl"');
+    expect(run).toContain('(cd "$RUNNER_TEMP" && gh attestation download');
+    expect(command(run, download)).toContain('--predicate-type https://slsa.dev/provenance/v1');
+    // Verify passes if any line passes; the file keeps only those that did.
+    expect(command(run, verify)).toContain('--bundle "$downloaded"');
+    expect(command(run, verify)).toMatch(
+      /--format json \\\n\s+\| jq -c '\.\[\]\.attestation\.bundle' > "\$bundle"$/,
+    );
+    expect(run).toContain('bundle="$ASSETS/$image-$GITHUB_REF_NAME.intoto.jsonl"');
+    for (const file of ['downloaded', 'bundle']) {
+      expect(run).toMatch(
+        new RegExp(`\\[ -s "\\$${file}" \\] \\\\\\n\\s+\\|\\| \\{[^\\n]*exit 1; \\}`),
+      );
+    }
+    // Never by the sha tag, which can be pushed over.
+    expect(run).not.toMatch(/gh attestation download[^\n]*:\$sha/);
+  });
+
+  it('attaches both provenance files when it creates the Release, its last step', () => {
+    const create = steps[at(steps, 'GitHub Release')]?.run ?? '';
+    expect(create).toContain('gh release create');
+    // runner.temp is $RUNNER_TEMP in the shell: the files verified above.
+    expect(steps[at(steps, 'Verify and name the images')]?.env?.ASSETS).toBe(
+      '${{ runner.temp }}/assets',
+    );
+    for (const image of ['echoandaura-web', 'echoandaura-worker']) {
+      expect(create).toContain(`"$RUNNER_TEMP/assets/${image}-$GITHUB_REF_NAME.intoto.jsonl"`);
+    }
+    // Nothing is added to the Release after it is published.
+    expect(at(steps, 'GitHub Release')).toBe(steps.length - 1);
   });
 
   it('records the digests in the Release', () => {
