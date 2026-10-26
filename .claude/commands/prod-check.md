@@ -56,6 +56,13 @@ counts only. Run the steps in parallel where they are independent.
    Any `f` → Admin → Settings.
 6. **TLS**: `echo | openssl s_client -connect echoandaura.com:443 -servername echoandaura.com 2>/dev/null | openssl x509 -noout -enddate`.
    More than 14 days left.
+7. **Restore drill** (reads the repo, not production): the newest row of the
+   drill log in `docs/RUNBOOK.md` → Restore drill, read with
+   `git show origin/main:docs/RUNBOOK.md`. ✅ when it is ✓ and at most 31 days
+   old; ⚠️ when older, ✗, or `–` (a check was skipped after a deploy: it
+   proves less, so it doesn't count as a pass); ❌ when the log is empty. The
+   fix is always `aws login --profile echoandaura && pnpm backup:drill`
+   (ADR-088).
 
 Report one table, one row per step: ✅ / ⚠️ / ❌ and a short reason. End with
 what, if anything, the owner should do, as exact commands or clicks.

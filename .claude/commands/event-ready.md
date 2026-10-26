@@ -28,7 +28,12 @@ Event night; read that section first, it is the source of truth.
 3. **Freeze**: in the last 7 days, list merges to main
    (`git log --first-parent --since=… origin/main`) and the Dokploy rule
    (no update within a week of the event).
-4. **The rest of the checklist** (Dokploy backups, R2 files, gate phones,
+4. **Restore drill**: the newest row of the drill log in `docs/RUNBOOK.md` →
+   Restore drill (`git show origin/main:docs/RUNBOOK.md`, so a merged run
+   counts). A ✓ row dated within 7 days before registration opens (or since,
+   once the sale is on) is ✅. Older, ✗, `–` (a check was skipped) or no row
+   is ❌: the owner runs `pnpm backup:drill`.
+5. **The rest of the checklist** (Dokploy backups, R2 files, gate phones,
    printouts, power banks) cannot be seen from here. List each item as
    **owner to confirm**, with where to look.
 

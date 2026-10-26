@@ -136,6 +136,74 @@ describe('guard-bash: nothing outward-facing runs from a session', () => {
   });
 });
 
+describe('guard-bash: the restore drill is the owner’s (ADR-088)', () => {
+  it.each([
+    'pnpm backup:drill',
+    'pnpm run backup:drill',
+    'aws login --profile echoandaura && pnpm backup:drill',
+    'pnpm backup:drill --file x.gz',
+    'dotenv -e .env -- tsx scripts/restore-drill.ts',
+    'node --import tsx scripts/restore-drill.ts',
+    `ssh echoandaura 'bash /tmp/tmp.abc/restore-drill.sh echoandaura-db-ljctqy echoandaura echoandaura 1'`,
+    // Flags before the script name, other package managers, wrappers.
+    'pnpm -s backup:drill',
+    'pnpm --silent backup:drill',
+    'pnpm run --silent backup:drill',
+    'pnpm -C . backup:drill',
+    'pnpm --dir . backup:drill',
+    'pnpm "backup:drill"',
+    'pnpm backup:drill>out.txt',
+    'time pnpm backup:drill',
+    'npm run backup:drill',
+    'corepack pnpm backup:drill',
+    // The script by any runner, and a --local that isn't its flag.
+    'pnpm tsx scripts/restore-drill.ts',
+    'npx -y tsx scripts/restore-drill.ts',
+    'node_modules/.bin/tsx scripts/restore-drill.ts',
+    'tsx scripts/restore-drill',
+    'tsx scripts/restore-drill.ts # --local',
+    'LAB=--local tsx scripts/restore-drill.ts',
+  ])('refuses %s', (command) => {
+    const result = bash(command);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('backup:drill-lab');
+  });
+
+  it.each([
+    'pnpm backup:drill-lab',
+    'pnpm backup:drill-lab --file /tmp/x.sql.gz',
+    'dotenv -e .env -- tsx scripts/restore-drill.ts --local',
+    'pnpm -s backup:drill-lab',
+    'grep -n backup:drill package.json',
+    'pnpm vitest run tests/unit/restore-drill.test.ts',
+    'pnpm exec eslint scripts/restore-drill.ts',
+    `ssh echoandaura 'docker ps -a --format "{{.Names}}" | grep -c echoandaura-restore-drill'`,
+  ])('allows %s', (command) => {
+    expect(bash(command).status).toBe(0);
+  });
+
+  it('is denied in the settings too', () => {
+    const { permissions } = JSON.parse(readFileSync('.claude/settings.json', 'utf8')) as {
+      permissions: { deny: string[] };
+    };
+    expect(permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Bash(pnpm backup:drill)',
+        'Bash(pnpm backup:drill *)',
+        'Bash(pnpm run backup:drill)',
+        'Bash(pnpm run backup:drill *)',
+        'Bash(npm run backup:drill)',
+        'Bash(npm run backup:drill *)',
+        'Bash(pnpm tsx scripts/restore-drill*)',
+        'Bash(npx tsx scripts/restore-drill*)',
+        'Bash(tsx scripts/restore-drill*)',
+      ]),
+    );
+    // `backup:drill*`, without the space, would deny the lab too.
+    expect(permissions.deny.filter((rule) => rule.includes('backup:drill*'))).toEqual([]);
+  });
+});
+
 describe('no-secrets: writes that look like committed secrets', () => {
   it.each([
     ['a Sentry token', join('SENTRY_AUTH_TOKEN=sntrys', '_eyJpYXQiOjE3OTAwMDAwMDAuMCwidXJsIjoi')],

@@ -17,6 +17,13 @@ detailed history.
   Aura name, logo, event content and photos stay the organizer's and are not
   covered ([TRADEMARKS.md](TRADEMARKS.md)).
 
+### Reliability
+
+- The off-site backup is now restored on purpose, monthly and before every
+  event: a drill rebuilds the newest copy in a throwaway database on the
+  server and checks it against the live one, orders and audit trail
+  included. A backup that would not restore is found before it is needed.
+
 ### Security
 
 Publicly known vulnerabilities fixed since 1.0.0 in what the site's

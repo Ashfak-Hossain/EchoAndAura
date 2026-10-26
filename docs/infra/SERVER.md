@@ -738,8 +738,13 @@ bucket only.
    `settings`, `users` and `accounts` row.
 4. The container and the downloaded file were deleted afterwards.
 
-Repeat the test after any change to the backup settings, and before
-the first event.
+Since 2026-10-27 the test is a script: the
+[restore drill](../RUNBOOK.md#restore-drill) (ADR-088) restores the newest
+S3 copy on this server, in a throwaway container with no network and its
+data in memory, and compares it with the live database. Run it monthly,
+before each event, and after any change to the backup settings. It
+changes nothing on the server: the container and its temp folder are
+gone when it ends.
 
 **Restore into an empty database** (rebuilding the server, "Rebuilding
 from scratch" step 5). Before the app starts:

@@ -194,6 +194,66 @@ so first decide whether fixing forward is cheaper.
    rm ~/pre-restore-*.dump ~/echoandaura-db-ljctqy_postgres_*.sql.gz
    ```
 
+## Restore drill
+
+Proves the newest off-site backup restores and matches production
+(ADR-088). **Monthly, and within 7 days before each event's
+registration opens** (Event night). `/prod-check` warns once the newest
+row in the log below is over 31 days old.
+
+From the repository on the laptop:
+
+```sh
+aws login --profile echoandaura     # as ash-admin
+pnpm backup:drill
+```
+
+Run it from your own terminal, on committed code: it refuses a Claude Code
+session, a run with no one at the terminal, and uncommitted changes to
+`ops/db/`, the script or `package.json`.
+
+It takes under a minute. It downloads the newest file from
+`s3://echoandaura-offsite-backups/echoandaura-db-ljctqy/postgres/` and
+streams it over ssh into a throwaway Postgres on the server (no network,
+memory only, removed at the end, even when it fails). Then it compares the
+copy with the live database, read-only. The dump is never written to a
+file, and the output is counts and names only. Then add the row it prints
+to the log below and commit it. **Only that row**: the counts above it
+stay out of PRs, issues and chat.
+
+A row that starts with `–` lists checks it skipped, after a deploy added a
+migration since the backup. Nothing failed, but less was proven: run
+again the next day for a ✓.
+
+| ✗ on                                | Means                                                                                    | Do                                                                                                                                                                                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fresh                               | No S3 backup in 26 hours: the 03:30 schedule stopped                                     | Dokploy → the Postgres service → Backups → the `aws-offsite` row: enabled? Run it by hand; [A backup failed](#a-backup-failed)                                                                                                       |
+| Download                            | The file arrived incomplete                                                              | Run again. Twice in a row: check the laptop's connection, then the object's size in S3                                                                                                                                               |
+| Restores                            | The backup does not restore. The error line names the table or constraint                | **Serious: the backups are not usable.** Run a manual backup and drill again with it. If that fails too, stop deploys and look at the error before anything else. "Out of memory": raise `--memory` in `ops/db/restore-drill.sh`     |
+| Tables / Migrations / Schema        | The backup's structure differs from live                                                 | `–` after a deploy that added (or dropped) a migration's table: run again tomorrow. A ✗ means the backup is from the wrong database or a failed migration                                                                            |
+| Rows: orders, order_events, tickets | Live has rows from before the backup that the backup doesn't (or the other way round)    | Run again the next day first: a row written in the same instant as the backup can rarely land on the wrong side. Twice: rows were deleted or changed on live, or the backup is incomplete. Look at the audit trail around the cutoff |
+| Up to date                          | Live has audit rows from well before the upload that the backup lacks: it is an old file | Dokploy uploaded a stale dump, or the dump is not of the live database. Check the backup's settings and its database name                                                                                                            |
+| App role grants                     | `ops/db/app-role.sql` no longer gives the app its rights on a restored copy              | Fix `app-role.sql` before anyone needs [Restore from backup](#restore-from-backup)                                                                                                                                                   |
+| Audit append-only                   | The app role could change an audit table: on the restored copy, or on live               | Fix the REVOKE in `app-role.sql` (invariant 6). On live, re-run it as the owner                                                                                                                                                      |
+| Completed                           | The script stopped part-way: a query failed or the connection dropped                    | The messages above the table say where. Run again                                                                                                                                                                                    |
+
+"Printed … more than once" or "more than one line" before the table: a
+value from the backup tried to add lines to the report. Treat the backup
+as tampered with: [A secret leaked](#a-secret-leaked) → `AWS offsite
+backups key (Dokploy)`, the key that writes to that bucket.
+
+`pnpm backup:drill-lab` runs the same drill against the compose
+Postgres, to test a change to the drill itself (`--file x.sql.gz` for a
+given dump). Claude runs only this one: the production drill refuses a
+Claude Code session, and its settings and `guard-bash.sh` refuse the
+usual commands too (ADR-072).
+
+**Drill log** (newest first). No counts or sizes: this file is public, and
+either, month by month, would publish sales.
+
+| Date | Backup | Restore | Result |
+| ---- | ------ | ------- | ------ |
+
 ## A secret leaked
 
 [infra/SECRETS.md](infra/SECRETS.md): each row says what the secret
@@ -409,6 +469,8 @@ tickets, and messages to the organizer.
 
 **When registration opens (20 days before)**
 
+- [ ] A [restore drill](#restore-drill) passed in the last 7 days: the
+      newest row in its log is ✓.
 - [ ] Dokploy → the Postgres service → Backups → the `postgres-hourly/`
       row → **Enabled** on. A restore during the sale then loses at most
       an hour, not a day (ADR-051).

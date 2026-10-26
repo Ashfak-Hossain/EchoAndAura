@@ -140,13 +140,16 @@ flowchart LR
         a043 -.-> a079
     end
 
-    subgraph backups ["Backups as code"]
+    subgraph backups ["Backups"]
         direction LR
         a051["`**ADR-051**
         Off-site backups`"]
         a062["`**ADR-062**
         Terraform`"]
+        a088["`**ADR-088**
+        Restore drill`"]
         a051 --> a062
+        a051 -.-> a088
     end
 
     subgraph releases ["Release versions"]
@@ -352,26 +355,27 @@ flowchart LR
 
 ### Infrastructure and deploys
 
-| ADR | Decision                                                                                                     | Status                                                                     | Date       |
-| --- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ---------- |
-| 036 | [Deployment: Dokploy on one VPS, images built in CI, pull-only deploys](036-deployment-dokploy.md)           | Partly superseded by [ADR-067](067-confirmed-baseline-deploy-filtering.md) | 2026-09-27 |
-| 040 | [Monitoring: an outside check, one alert group, a worker heartbeat](040-monitoring.md)                       | Accepted                                                                   | 2026-09-28 |
-| 051 | [Off-site backup copy in AWS S3, and hourly backups during an event's sales window](051-off-site-backups.md) | Partly superseded by [ADR-062](062-terraform.md)                           | 2026-10-03 |
-| 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)         | Accepted                                                                   | 2026-10-05 |
-| 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                      | Accepted                                                                   | 2026-10-06 |
-| 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                      | Accepted                                                                   | 2026-10-07 |
-| 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)              | Accepted                                                                   | 2026-10-08 |
-| 067 | [Skip application deploys from a confirmed non-runtime diff](067-confirmed-baseline-deploy-filtering.md)     | Accepted                                                                   | 2026-10-08 |
-| 068 | [Error-only Sentry reporting with an outbound privacy allowlist](068-private-error-tracking.md)              | Accepted                                                                   | 2026-10-08 |
-| 069 | [Fail the deploy on critical, fixable vulnerabilities in the images](069-image-scan-gate.md)                 | Accepted                                                                   | 2026-10-12 |
-| 071 | [CI runs the app and docs parts only when a change can affect them](071-ci-fast-path.md)                     | Accepted                                                                   | 2026-10-12 |
-| 073 | [Every GitHub Action runs at a commit SHA](073-actions-pinned-by-sha.md)                                     | Accepted                                                                   | 2026-10-14 |
-| 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                 | Accepted                                                                   | 2026-10-14 |
-| 082 | [OpenSSF Scorecard, published, without an admin token](082-openssf-scorecard.md)                             | Accepted                                                                   | 2026-10-25 |
-| 083 | [Workflows check out github.sha and grant writes per job](083-workflows-pass-scorecard.md)                   | Accepted                                                                   | 2026-10-25 |
-| 084 | [Build tools installed by hash; the decoder .wasm built from the lockfile](084-pinned-by-hash.md)            | Accepted                                                                   | 2026-10-26 |
-| 085 | [Docker from its signed apt repository, before Dokploy's script](085-docker-from-signed-apt.md)              | Accepted                                                                   | 2026-10-26 |
-| 086 | [Each GitHub Release carries its images' signed provenance](086-releases-carry-provenance.md)                | Accepted                                                                   | 2026-10-26 |
+| ADR | Decision                                                                                                                     | Status                                                                     | Date       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------- |
+| 036 | [Deployment: Dokploy on one VPS, images built in CI, pull-only deploys](036-deployment-dokploy.md)                           | Partly superseded by [ADR-067](067-confirmed-baseline-deploy-filtering.md) | 2026-09-27 |
+| 040 | [Monitoring: an outside check, one alert group, a worker heartbeat](040-monitoring.md)                                       | Accepted                                                                   | 2026-09-28 |
+| 051 | [Off-site backup copy in AWS S3, and hourly backups during an event's sales window](051-off-site-backups.md)                 | Partly superseded by [ADR-062](062-terraform.md)                           | 2026-10-03 |
+| 062 | [Terraform for Cloudflare and AWS: imported, never recreated; no secrets in state](062-terraform.md)                         | Accepted                                                                   | 2026-10-05 |
+| 063 | [The server as code: Ansible, checked before it changes](063-server-as-code-ansible.md)                                      | Accepted                                                                   | 2026-10-06 |
+| 065 | [Publish tested static docs through a separate Pages uploader](065-docs-publication.md)                                      | Accepted                                                                   | 2026-10-07 |
+| 066 | [Confirm the running web and worker revision after deploying](066-confirmed-app-deployments.md)                              | Accepted                                                                   | 2026-10-08 |
+| 067 | [Skip application deploys from a confirmed non-runtime diff](067-confirmed-baseline-deploy-filtering.md)                     | Accepted                                                                   | 2026-10-08 |
+| 068 | [Error-only Sentry reporting with an outbound privacy allowlist](068-private-error-tracking.md)                              | Accepted                                                                   | 2026-10-08 |
+| 069 | [Fail the deploy on critical, fixable vulnerabilities in the images](069-image-scan-gate.md)                                 | Accepted                                                                   | 2026-10-12 |
+| 071 | [CI runs the app and docs parts only when a change can affect them](071-ci-fast-path.md)                                     | Accepted                                                                   | 2026-10-12 |
+| 073 | [Every GitHub Action runs at a commit SHA](073-actions-pinned-by-sha.md)                                                     | Accepted                                                                   | 2026-10-14 |
+| 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                                 | Accepted                                                                   | 2026-10-14 |
+| 082 | [OpenSSF Scorecard, published, without an admin token](082-openssf-scorecard.md)                                             | Accepted                                                                   | 2026-10-25 |
+| 083 | [Workflows check out github.sha and grant writes per job](083-workflows-pass-scorecard.md)                                   | Accepted                                                                   | 2026-10-25 |
+| 084 | [Build tools installed by hash; the decoder .wasm built from the lockfile](084-pinned-by-hash.md)                            | Accepted                                                                   | 2026-10-26 |
+| 085 | [Docker from its signed apt repository, before Dokploy's script](085-docker-from-signed-apt.md)                              | Accepted                                                                   | 2026-10-26 |
+| 086 | [Each GitHub Release carries its images' signed provenance](086-releases-carry-provenance.md)                                | Accepted                                                                   | 2026-10-26 |
+| 088 | [Restore drill: the newest off-site backup, restored on the server in a throwaway, compared with live](088-restore-drill.md) | Accepted                                                                   | 2026-10-27 |
 
 ### Code structure and tooling
 
