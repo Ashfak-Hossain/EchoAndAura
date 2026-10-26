@@ -58,25 +58,45 @@ jobs:
       # tag alone could collide). Both images pass before either is named,
       # and the version is named from the digest, so a sha tag pushed over in
       # between can't slip in. The digests go in the Release notes.
+      # ADR-086: the provenance is downloaded first and verified from that
+      # file, and only the bundles that passed are attached to the Release.
       - name: Verify and name the images
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ runner.temp }}/release-notes.md
+          ASSETS: ${{ runner.temp }}/assets
           SIGNER: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
         run: |
           set -euo pipefail
           sha="sha-$(git rev-parse --short=7 HEAD)"
+          mkdir -p "$ASSETS"
           declare -A digests
           for image in echoandaura-web echoandaura-worker; do
             digest="$(docker buildx imagetools inspect "$REGISTRY/$image:$sha" --format '{{json .Manifest}}' | jq -r .digest)"
             [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
               || { echo "::error::$image:$sha did not resolve to a digest (got '$digest')"; exit 1; }
+            # One Sigstore bundle per line; a re-run Deploy adds a line.
+            # gh names the file after the digest, in the current directory.
+            downloaded="$RUNNER_TEMP/$digest.jsonl"
+            (cd "$RUNNER_TEMP" && gh attestation download "oci://$REGISTRY/$image@$digest" \
+              --repo "$GITHUB_REPOSITORY" \
+              --predicate-type https://slsa.dev/provenance/v1)
+            [ -s "$downloaded" ] \
+              || { echo "::error::$image@$digest has no provenance to download"; exit 1; }
+            # Verify passes if any one line passes, so only the lines it
+            # verified are kept: every bundle attached passed this policy.
+            bundle="$ASSETS/$image-$GITHUB_REF_NAME.intoto.jsonl"
             gh attestation verify "oci://$REGISTRY/$image@$digest" \
+              --bundle "$downloaded" \
               --repo "$GITHUB_REPOSITORY" \
               --cert-identity "$SIGNER" \
               --deny-self-hosted-runners \
               --source-ref refs/heads/main \
-              --source-digest "$GITHUB_SHA"
+              --source-digest "$GITHUB_SHA" \
+              --format json \
+              | jq -c '.[].attestation.bundle' > "$bundle"
+            [ -s "$bundle" ] \
+              || { echo "::error::$image@$digest has no verified provenance to attach"; exit 1; }
             # The images are pushed as a one-platform index, so the config
             # is keyed by platform; a plain manifest has it at the top.
             revision="$(docker buildx imagetools inspect "$REGISTRY/$image@$digest" --format '{{json .Image}}' \
@@ -97,6 +117,11 @@ jobs:
             echo "  --cert-identity $SIGNER --deny-self-hosted-runners"
             echo '```'
             echo
+            echo 'The signed provenance of each image is attached below as'
+            echo '`<image>-<version>.intoto.jsonl`. Adding `--bundle <file>` checks the'
+            echo 'image against that file; without it, the check also confirms the'
+            echo 'repository is still this one, not a later holder of its name.'
+            echo
           } >> "$NOTES"
           for image in echoandaura-web echoandaura-worker; do
             digest="${digests[$image]}"
@@ -109,6 +134,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # The CHANGELOG section first; gh appends the generated PR list.
+        # The provenance files go up with the Release, never after it
+        # (OpenSSF Signed-Releases, ADR-086).
         run: >-
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME"
           --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes
+          "$RUNNER_TEMP/assets/echoandaura-web-$GITHUB_REF_NAME.intoto.jsonl"
+          "$RUNNER_TEMP/assets/echoandaura-worker-$GITHUB_REF_NAME.intoto.jsonl"

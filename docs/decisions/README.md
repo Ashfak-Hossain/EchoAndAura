@@ -99,6 +99,8 @@ flowchart LR
         Server as Ansible`"]
         a085["`**ADR-085**
         Docker from signed apt`"]
+        a086["`**ADR-086**
+        Releases carry provenance`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -118,6 +120,8 @@ flowchart LR
         a082 -.-> a084
         a063 -.-> a085
         a084 -.-> a085
+        a075 -.-> a086
+        a082 -.-> a086
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph analytics ["Visit counts"]
@@ -357,6 +361,7 @@ flowchart LR
 | 083 | [Workflows check out github.sha and grant writes per job](083-workflows-pass-scorecard.md)                   | Accepted                                                                   | 2026-10-25 |
 | 084 | [Build tools installed by hash; the decoder .wasm built from the lockfile](084-pinned-by-hash.md)            | Accepted                                                                   | 2026-10-26 |
 | 085 | [Docker from its signed apt repository, before Dokploy's script](085-docker-from-signed-apt.md)              | Accepted                                                                   | 2026-10-26 |
+| 086 | [Each GitHub Release carries its images' signed provenance](086-releases-carry-provenance.md)                | Accepted                                                                   | 2026-10-26 |
 
 ### Code structure and tooling
 

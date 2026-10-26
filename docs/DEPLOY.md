@@ -355,7 +355,22 @@ days.
 A release checks the same things before it names anything: the Release
 workflow verifies both images' provenance and their commit label, both
 before naming either, and refuses to version an image that fails. The
-version's digests are listed in its GitHub Release.
+version's digests are listed in its GitHub Release, and each image's
+provenance is attached to it as `<image>-<version>.intoto.jsonl` (ADR-086):
+only the signed bundles the workflow verified. To check a versioned image
+against that file instead of GitHub's attestation store, download it from
+the Release and add `--bundle`:
+
+```sh
+SIGNER=https://github.com/Ashfak-Hossain/EchoAndAura/.github/workflows/deploy.yml@refs/heads/main
+gh attestation verify oci://ghcr.io/ashfak-hossain/echoandaura-web@<digest> --bundle echoandaura-web-v1.1.0.intoto.jsonl \
+  --repo Ashfak-Hossain/EchoAndAura --cert-identity "$SIGNER" --deny-self-hosted-runners
+```
+
+With `--bundle`, `--repo` is compared only with the name written in the
+signing certificate, so it can't tell this repository from a later one
+that took the name after a rename. The command without `--bundle` asks
+GitHub for the repository as it is now, and is the stronger check.
 
 ## Checking an image locally
 
