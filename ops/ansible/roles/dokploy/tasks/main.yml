@@ -1,6 +1,7 @@
 # SERVER.md § 8, ADR-036: Dokploy (the dashboard), its own Postgres, and
 # Traefik, the front door. Installed once, by Dokploy's own script, which
-# also installs Docker 28.5.0 (held) and makes the server a one-node Swarm.
+# makes the server a one-node Swarm. Docker itself comes first, from the
+# docker_engine role (ADR-085); the script stops if it is missing.
 #
 # Installed, never upgraded: Dokploy updates itself from its dashboard.
 # Everything INSIDE Dokploy (projects, the app's Postgres and Redis, the
@@ -56,9 +57,9 @@
           before updating the hash.
         quiet: true
 
-    # Pulls Docker and three images: a few minutes. Copied over, run, and
+    # Pulls three images: a few minutes. Copied over, run, and
     # removed by Ansible; nothing is left in /root.
-    - name: Run Dokploy's install script (Docker, Swarm, Dokploy, Traefik)
+    - name: Run Dokploy's install script (Swarm, Dokploy, Traefik)
       ansible.builtin.script:
         cmd: dokploy-install.sh
         executable: /bin/bash

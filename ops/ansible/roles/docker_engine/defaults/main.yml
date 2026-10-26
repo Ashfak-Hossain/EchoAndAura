@@ -1,0 +1,26 @@
+# The Docker Engine a NEW server gets (SERVER.md § 8, ADR-085). The same
+# version Dokploy's install script names (its DOCKER_VERSION), held, so
+# unattended upgrades never move it: a Docker upgrade restarts every
+# container, the site and its database included. Moving it is a planned
+# change: bump this, test on the lab VM, then apply at a quiet time.
+docker_engine_version: 28.5.0
+
+# files/docker.asc is Docker's apt signing key, kept in the repo so a
+# rebuild trusts the key that was reviewed, not whatever the download
+# serves that night. Downloaded from
+# https://download.docker.com/linux/ubuntu/gpg on 2026-10-26, identical to
+# the one get.docker.com put on production on 2026-09-27. Fingerprint
+# 9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88 (Docker Release (CE deb)).
+# tests/unit/ansible-docker-engine.test.ts keeps the hash equal.
+docker_engine_apt_key_sha256: 1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570
+
+# What get.docker.com installs, less docker-model-plugin (nothing here
+# uses it). The compose plugin runs the app (SERVER.md § 11).
+docker_engine_held_packages:
+  - docker-ce
+  - docker-ce-cli
+  - docker-ce-rootless-extras
+docker_engine_other_packages:
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin

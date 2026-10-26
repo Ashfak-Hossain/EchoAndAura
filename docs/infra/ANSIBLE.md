@@ -109,7 +109,7 @@ Every section of [SERVER.md](SERVER.md), and who owns it today:
 | 5   | Hostname and clock                        | `base`                                                                                      |
 | 6   | Firewall (ufw)                            | `firewall`                                                                                  |
 | 7   | Docker's log limits                       | `docker_config`                                                                             |
-| 8   | Dokploy                                   | `dokploy` installs it; the owner account by hand                                            |
+| 8   | Dokploy                                   | `docker_engine` installs Docker, `dokploy` Dokploy; the owner account by hand               |
 | 9   | The dashboard's address, port 3000 closed | `origin_lockdown` drops 3000; the address, in Dokploy, by hand                              |
 | 10  | The app's Postgres and Redis              | In Dokploy, by hand; `sysctl` sets what Redis needs from the kernel                         |
 | 11  | The app (Dokploy Compose)                 | In Dokploy, by hand; the compose file is in the repository                                  |
@@ -142,6 +142,7 @@ SERVER.md section.
 | `firewall`        | 6, 9, 20 | ufw: SSH allowed **first**, then deny incoming; 80, 443, 3000 kept closed            |
 | `docker_config`   | 7        | container logs capped at 3 × 10 MB. **Never restarts Docker**: it prints a reminder  |
 | `origin_lockdown` | 9, 20    | only Cloudflare reaches 80 and 443; **nobody reaches 3000**. Armed before Docker     |
+| `docker_engine`   | 8        | Docker 28.5.0 from Docker's signed apt repo, key kept in the repo; held              |
 | `dokploy`         | 8        | installs Dokploy **once**, from its reviewed script; never upgrades; checks health   |
 | `sysctl`          | 10       | `vm.overcommit_memory = 1`, so Redis can save its snapshots                          |
 | `apt_clean`       | 17       | apt's cache cleaned every 7 days                                                     |
@@ -157,10 +158,17 @@ Details worth knowing:
   it. It reads the internet-facing interface from
   `/etc/default/origin-lockdown`, written from the server's facts (`eth0`
   in production).
+- **Docker comes from Docker's apt repository** (ADR-085). `docker_engine`
+  installs the signing key from `roles/docker_engine/files/` (hash-pinned,
+  never downloaded at run time), the repository line with `signed-by`, and
+  Docker at `docker_engine_version`, held so automatic updates never
+  restart the site. Production already had the same files from
+  `get.docker.com`, so the role changes nothing there.
 - **Dokploy installs itself, once.** The role runs Dokploy's own install
-  script, kept in `roles/dokploy/files/` exactly as reviewed and pinned
-  by checksum (a unit test fails on any edit), pinned to
-  `dokploy_version`. Dokploy then updates itself from its dashboard; when
+  script, kept in `roles/dokploy/files/` as reviewed and pinned by
+  checksum (a unit test fails on any edit), pinned to `dokploy_version`.
+  One change from upstream: where Docker is missing it stops, instead of
+  piping `get.docker.com` into a shell. Dokploy then updates itself from its dashboard; when
   production moves past the pin, a run says so. Every run checks that
   `dokploy` and `dokploy-postgres` are running (1/1) and Traefik is up,
   and stops with the fix on an install that ended half way.
@@ -290,3 +298,4 @@ Rehearsed on the lab VM on 2026-10-06.
 | 2026-10-06 | Slice C: roles `origin_lockdown`, `disk_alert`, `traefik` (scripts moved from `ops/server/`; unit test path updated). Production check (alerts secret skipped until `.env` has it): **ok=37 changed=0**. Traefik guard tested on broken copies: a missing range and a missing middleware both fail. Lab: changed=29, then changed=0                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-10-06 | Slice D: role `dokploy` (installs once with the reviewed script kept in the repo, hash-pinned, `dokploy_version` v0.30.8; checks dokploy/postgres 1/1 + Traefik on every run; stops on a half install). `origin_lockdown` runs before it, drops 3000 for everyone, and reads its interface from `/etc/default/origin-lockdown`. **Rebuild rehearsal** on the lab from `fresh`: full run 7 min 23 s, stopped at the `traefik` guard as expected; 3000/80/443 closed from the Mac, open with the lockdown removed (control); tunnel to 3000 works; hand edits → `lab test` changed=0; snapshot `with-dokploy`. A cut-short install (Traefik missing) fails with its fix. Production check: **changed=4**, all the lockdown (script, `/etc/default`, unit, re-apply); `dokploy` all ok |
 | 2026-10-06 | Slice D applied to production: changed=4 (the lockdown), then check changed=0. Slice E: ADR-063; this page restructured (where Ansible fits, what is code and what stays by hand, the change and rebuild diagrams). **9.2 done**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 2026-10-26 | Role `docker_engine` (ADR-085): Docker 28.5.0 from Docker's signed apt repository (key kept in the repo, hash-checked), held, before `dokploy`; Dokploy's script no longer pipes `get.docker.com` into a shell and stops if Docker is missing. Lab from `fresh`: Docker from apt, lockdown applied at Docker's first start, Dokploy 1/1, stopped at the `traefik` guard as expected. Lab from `with-dokploy`: second run **ok=50 changed=0**. On `fresh`, `--tags dokploy` alone fails (Docker is missing). Production check: **ok=50 changed=0**                                                                                                                                                                                                                                   |
