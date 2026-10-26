@@ -105,7 +105,7 @@ obtain each.
 | `pnpm dev`                 | Next.js dev server                                                                                                                                                        |
 | `pnpm build` / `start`     | Production build / serve                                                                                                                                                  |
 | `pnpm typecheck`           | `next typegen` + `tsc --noEmit`                                                                                                                                           |
-| `pnpm lint`                | ESLint                                                                                                                                                                    |
+| `pnpm lint`                | ESLint; any warning fails it (`--max-warnings 0`)                                                                                                                         |
 | `pnpm format`              | Prettier                                                                                                                                                                  |
 | `pnpm test`                | Unit tests (Vitest)                                                                                                                                                       |
 | `pnpm test:integration`    | Integration tests — requires Docker Postgres + MinIO                                                                                                                      |
@@ -121,7 +121,7 @@ obtain each.
 | `pnpm email:render`        | Render the four emails with sample data to `tmp/emails/preview-*.html`                                                                                                    |
 | `pnpm email:test <to>`     | Send one test message through the configured mailer (`MAILER=ses` to prove SES)                                                                                           |
 | `pnpm infra:check`         | Read-only audit of AWS, DNS, SES and local services against `docs/infra/` (needs `aws login`)                                                                             |
-| `pnpm verify`              | **The gate:** typecheck + lint + test + build                                                                                                                             |
+| `pnpm verify`              | **The gate:** typecheck + lint + unit tests + build + docs verify                                                                                                         |
 
 ## Testing
 
@@ -292,7 +292,22 @@ for a batch of features and `v1.0.1` for fixes only.
 1. On a branch, add the version's section to `CHANGELOG.md`, written for
    the organizer (what changed for them and for buyers), headed
    `## [X.Y.Z] - YYYY-MM-DD`; set `version` in `package.json` to the same
-   number; merge it.
+   number; merge it. Its `### Security` list names every publicly known
+   vulnerability (CVE, or GHSA where there is none) fixed since the last
+   tag in what the images ship: Node, and the production dependencies (the
+   base image's Debian packages are left to the image scan, not listed).
+   Audit the previous tag's lockfile on its own, then today's, and list
+   what the first reports and the second doesn't (`pnpm audit` exits 1
+   when it finds anything; ignore docs-site-only packages):
+   ```bash
+   prev=$(git describe --tags --abbrev=0)   # the last release, e.g. v1.0.0
+   dir=$(mktemp -d)
+   git show "$prev:pnpm-lock.yaml" > "$dir/pnpm-lock.yaml"
+   pnpm -C "$dir" audit --prod; pnpm audit --prod
+   ```
+   Then read Node's changelog for each security release between the two
+   image versions. Say which ones the site never runs. OpenSSF Best
+   Practices requires this (`release_notes_vulns`).
 2. Wait for that merge's Deploy to go green.
 3. Tag the merge commit and push the tag:
    ```bash

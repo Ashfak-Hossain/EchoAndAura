@@ -39,9 +39,12 @@ links to where it is written down in full.
 3. **Keep the invariants.** Money, inventory, orders, fulfilment and the
    order state machine follow the seven rules in [CLAUDE.md](CLAUDE.md).
    Breaking one loses money or corrupts data.
-4. **Pass the gate.** `pnpm verify` runs type checks, lint, every test, the
-   build and the docs check. If it fails, the change isn't done. The full
-   list is the
+4. **Add tests, then pass the gate.** New behaviour comes with tests for
+   it, including the failure path, not only the happy path
+   ([docs/DEVELOPMENT.md → Testing](docs/DEVELOPMENT.md#testing)).
+   `pnpm verify` runs type checks, lint (a warning fails it), the unit
+   tests, the build and the docs check. If it fails, the change isn't done. The
+   full list is the
    [Definition of Done](docs/DEVELOPMENT.md#definition-of-done).
 5. **Run the reviewers** whose paths the change touches: code, security,
    migrations, public safety
