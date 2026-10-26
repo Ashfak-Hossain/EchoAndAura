@@ -1,9 +1,10 @@
 # Contributing
 
-echoandaura is public so that its code can be read and learned from. It is
-not open source: the [LICENSE](LICENSE) grants no right to copy, reuse or
-deploy it. This page says what outside help we can take, and how every
-change here is made.
+echoandaura is open source, under the [AGPL-3.0](LICENSE): you may read,
+learn from, change and run it on that licence's terms. The Echo & Aura name,
+logo and event content are not licensed ([TRADEMARKS.md](TRADEMARKS.md)).
+This page says what outside help we can take, and how every change here is
+made.
 
 ## What we accept
 
@@ -12,9 +13,9 @@ change here is made.
 - **Security problems: privately.** Never in a public issue.
   [SECURITY.md](SECURITY.md) says how to report one.
 - **Pull requests from outside the maintainers: no.** They are closed
-  without review. That isn't about the quality of the work: the licence
-  means we can't merge code we don't own. If you found a fix, describe it in
-  an issue instead.
+  without review. That isn't about the quality of the work: one maintainer
+  reviews everything, and the copyright stays with one holder. If you found
+  a fix, describe it in an issue instead. You are free to keep it in a fork.
 - **A problem with a ticket or an order?** Contact the organizer at
   [echoandaura.com/contact](https://echoandaura.com/contact). This
   repository is for the code. [SUPPORT.md](SUPPORT.md) says where each kind

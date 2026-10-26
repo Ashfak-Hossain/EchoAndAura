@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -55,8 +56,35 @@ describe('the package manifests', () => {
     });
   });
 
-  it('declare the code proprietary, as LICENSE does', () => {
-    expect(app.license).toBe('UNLICENSED');
-    expect(readFileSync('LICENSE', 'utf8')).toContain('All rights reserved.');
+  // ADR-087: one licence, said the same way wherever a tool or a reader
+  // looks for it. LICENSE stays the bare FSF text so GitHub detects it.
+  it('declare AGPL-3.0-only, as LICENSE, TRADEMARKS.md and both images do', () => {
+    expect(app.license).toBe('AGPL-3.0-only');
+    expect(docs.license).toBe('AGPL-3.0-only');
+
+    // sha256 of https://www.gnu.org/licenses/agpl-3.0.txt (2026-10-26): any
+    // added line could stop GitHub and Scorecard detecting it.
+    expect(createHash('sha256').update(readFileSync('LICENSE')).digest('hex')).toBe(
+      '0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0',
+    );
+
+    // The brand exclusion must name files that still exist.
+    const trademarks = readFileSync('TRADEMARKS.md', 'utf8');
+    expect(trademarks).toContain('`AGPL-3.0-only`');
+    const listed = [
+      ...[...trademarks.matchAll(/\]\(([^)#:]+)\)/g)].map((m) => m[1] ?? ''),
+      ...[...trademarks.matchAll(/`([\w.-]+\/[\w./-]+)`/g)].map((m) => m[1] ?? ''),
+    ];
+    expect(listed).toContain('src/lib/brand/marks.ts');
+    for (const path of listed) expect(existsSync(path), path).toBe(true);
+
+    const stages = readFileSync('Dockerfile', 'utf8').split(/^FROM /m);
+    for (const name of ['web', 'worker']) {
+      const stage = stages.find((s) => s.split('\n')[0]?.endsWith(` AS ${name}`)) ?? '';
+      expect(stage.match(/^LABEL org\.opencontainers\.image\.licenses=.*$/gm), name).toEqual([
+        'LABEL org.opencontainers.image.licenses=AGPL-3.0-only',
+      ]);
+      expect(stage, name).toContain('COPY LICENSE TRADEMARKS.md ./\n');
+    }
   });
 });

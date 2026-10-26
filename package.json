@@ -22,7 +22,7 @@
     "type": "git",
     "url": "git+https://github.com/Ashfak-Hossain/EchoAndAura.git"
   },
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
   "author": {
     "name": "Ashfak Hossain Evan",
     "url": "https://github.com/Ashfak-Hossain"

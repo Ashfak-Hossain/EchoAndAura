@@ -2,6 +2,7 @@
  * The brand (docs/BRAND.md): one source of truth for every rendering of the
  * mark and the wordmark: the site, generated icons and share images, emails
  * and the ticket PDF. Plain data: no React, no fonts, safe on server and client.
+ * The artwork here is not under the AGPL: TRADEMARKS.md (ADR-087).
  */
 
 /** Charcoal ink, warm paper and the marigold accent (globals.css tokens). */

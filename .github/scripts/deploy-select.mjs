@@ -19,10 +19,14 @@ const nonRuntimePrefixes = [
   'tests/',
 ];
 
+// Root Markdown the runtime images copy in (ADR-087), so a change to it alone
+// must still rebuild them.
+const runtimeRootMarkdown = ['TRADEMARKS.md'];
+
 export function isNonRuntimePath(path) {
   if (typeof path !== 'string' || path === '' || path.includes('\0') || path.includes('\ufffd'))
     return false;
-  if (!path.includes('/')) return path.endsWith('.md');
+  if (!path.includes('/')) return path.endsWith('.md') && !runtimeRootMarkdown.includes(path);
   if (path === 'docs-site/package.json') return false;
   if (path.startsWith('docs-site/')) return true;
   return nonRuntimePrefixes.some((prefix) => path.startsWith(prefix));
