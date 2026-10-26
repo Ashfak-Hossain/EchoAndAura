@@ -4,8 +4,10 @@
 # by one, because each needs its own reading of the upgrade notes.
 version: 2
 updates:
+  # Two manifests, one PR per group: the docs uploader (.github/docs-tools,
+  # ADR-084) moves with the app's own wrangler.
   - package-ecosystem: npm
-    directory: /
+    directories: [/, /.github/docs-tools]
     schedule:
       interval: weekly
       day: sunday
@@ -15,8 +17,8 @@ updates:
     labels: [dependencies]
     ignore:
       # The door scanner runs the zxing-wasm that barcode-detector pins
-      # exactly, and serves its .wasm from public/vendor/. It moves only with
-      # barcode-detector, by hand (docs/DEVELOPMENT.md → Dependencies).
+      # exactly; the build copies its .wasm to public/vendor/. It moves only
+      # with barcode-detector, by hand (docs/DEVELOPMENT.md → Dependencies).
       - dependency-name: zxing-wasm
     groups:
       minor-and-patch:

@@ -1,9 +1,18 @@
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ZXING_WASM_SHA256, ZXING_WASM_VERSION } from 'zxing-wasm/reader';
+import { copyZxingWasm, installedZxing } from '../../scripts/vendor-wasm.mjs';
 import { ZXING_WASM_URL } from '@/app/door/decoder';
 import { inAppBrowser, isIos } from '@/app/door/platform';
 import { DOOR_LIMITS, createDoorLimiter } from '@/lib/door-limits';
@@ -163,9 +172,43 @@ describe('self-hosted QR decoder', () => {
     expect(manifest(dir)).toMatchObject({ name: 'zxing-wasm', version: ZXING_WASM_VERSION });
   });
 
-  it('serves exactly the .wasm the pinned zxing-wasm ships', () => {
-    expect(ZXING_WASM_URL).toContain(ZXING_WASM_VERSION);
-    const file = readFileSync(join(process.cwd(), 'public', ZXING_WASM_URL));
+  // ADR-084: the build copies the .wasm out of node_modules (pnpm vendor:build).
+  it('builds and serves exactly the .wasm the pinned zxing-wasm ships', async () => {
+    const zxing = await installedZxing();
+    expect(zxing).toMatchObject({ version: ZXING_WASM_VERSION, sha256: ZXING_WASM_SHA256 });
+    const publicDir = mkdtempSync(join(tmpdir(), 'vendor-'));
+    mkdirSync(join(publicDir, 'vendor'));
+    writeFileSync(join(publicDir, 'vendor', 'zxing_reader-0.0.1.wasm'), 'old');
+    expect(await copyZxingWasm(publicDir)).toBe(ZXING_WASM_URL);
+    const file = readFileSync(join(publicDir, ZXING_WASM_URL));
     expect(createHash('sha256').update(file).digest('hex')).toBe(ZXING_WASM_SHA256);
+    // An upgrade leaves no older decoder behind to be served.
+    expect(readdirSync(join(publicDir, 'vendor'))).toEqual([
+      ZXING_WASM_URL.slice('/vendor/'.length),
+    ]);
+  });
+
+  it('every build and dev server copies the decoder first', () => {
+    const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(scripts['vendor:build']).toBe('node scripts/vendor-wasm.mjs');
+    expect(scripts.build).toMatch(/pnpm vendor:build && .*next build/);
+    expect(scripts.dev).toMatch(/^pnpm vendor:build && next dev/);
+  });
+
+  it('refuses a .wasm whose hash is not the one the package publishes', async () => {
+    const publicDir = mkdtempSync(join(tmpdir(), 'vendor-'));
+    mkdirSync(join(publicDir, 'vendor'));
+    writeFileSync(join(publicDir, ZXING_WASM_URL), 'served');
+    const zxing = await installedZxing();
+    await expect(copyZxingWasm(publicDir, { ...zxing, sha256: '0'.repeat(64) })).rejects.toThrow(
+      'is not the file zxing-wasm',
+    );
+    await expect(copyZxingWasm(publicDir, { ...zxing, version: '' })).rejects.toThrow(
+      'has no version',
+    );
+    // A refused copy leaves the file already served in place.
+    expect(readFileSync(join(publicDir, ZXING_WASM_URL), 'utf8')).toBe('served');
   });
 });

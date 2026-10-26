@@ -30,11 +30,21 @@ describe('runtime image contents', () => {
     }
   });
 
-  it('installs the manifest package manager only in the build base', () => {
+  it('installs the manifest package manager only in the build base, checked by hash', () => {
     const { packageManager } = JSON.parse(readFileSync('package.json', 'utf8')) as {
       packageManager: string;
     };
-    expect(stage('base')).toContain(`npm install -g ${packageManager}`);
+    // ADR-084: the registry tarball by sha256, never `npm install -g`, which
+    // Scorecard (rightly) counts as unpinned.
+    const version = /^pnpm@(\d+\.\d+\.\d+)\+sha512\.[0-9a-f]{128}$/.exec(packageManager)?.[1];
+    expect(version, packageManager).toBeDefined();
+    expect(stage('base')).toMatch(
+      new RegExp(
+        `^ADD --checksum=sha256:[0-9a-f]{64} \\\\\\n  https://registry\\.npmjs\\.org/pnpm/-/pnpm-${version}\\.tgz /tmp/pnpm\\.tgz$`,
+        'm',
+      ),
+    );
+    expect(dockerfile).not.toMatch(/^[^#\n]*(?<![\w-])npm (?:install|i)\b/m);
   });
 
   it("keeps drizzle-kit's esbuild on the app's own version", () => {

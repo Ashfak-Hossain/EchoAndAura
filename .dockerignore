@@ -14,6 +14,7 @@ docs-site/test-results
 docs-site/playwright-report
 dist
 public/door
+public/vendor
 coverage
 playwright-report
 test-results
