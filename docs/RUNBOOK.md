@@ -251,8 +251,9 @@ usual commands too (ADR-072).
 **Drill log** (newest first). No counts or sizes: this file is public, and
 either, month by month, would publish sales.
 
-| Date | Backup | Restore | Result |
-| ---- | ------ | ------- | ------ |
+| Date       | Backup                               | Restore | Result |
+| ---------- | ------------------------------------ | ------- | ------ |
+| 2026-10-27 | S3 `2026-10-25T21-30-00-480Z.sql.gz` | 0 s     | ✓      |
 
 ## A secret leaked
 
