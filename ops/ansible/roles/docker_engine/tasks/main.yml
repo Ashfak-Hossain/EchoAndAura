@@ -1,0 +1,78 @@
+# SERVER.md § 8, ADR-085: Docker Engine from Docker's own apt repository,
+# signed with the key in files/. Runs after docker_config (daemon.json is
+# read at Docker's first start) and origin_lockdown (enabled with
+# WantedBy=docker.service, so its rules go in as Docker first starts), and
+# before dokploy, whose install script then finds Docker and skips its own
+# `curl get.docker.com | sh`.
+#
+# The same files get.docker.com wrote on production, so production check
+# mode reports nothing to do.
+
+- name: Check the apt key is the reviewed one
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.file', 'docker.asc', rstrip=false) | hash('sha256') == docker_engine_apt_key_sha256
+    fail_msg: >-
+      roles/docker_engine/files/docker.asc is not the reviewed key (its
+      sha256 differs from docker_engine_apt_key_sha256). Check its fingerprint
+      against docs.docker.com before updating the hash.
+    quiet: true
+
+- name: Install Docker's apt key
+  ansible.builtin.copy:
+    src: docker.asc
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: '0644'
+  register: docker_engine_key
+
+# signed-by: apt trusts this key for this repository only, never for
+# Ubuntu's own packages.
+- name: Add Docker's apt repository
+  vars:
+    docker_engine_apt_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] }}"
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: >
+      deb [arch={{ docker_engine_apt_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable
+    owner: root
+    group: root
+    mode: '0644'
+  register: docker_engine_repo
+
+- name: Check whether Docker is installed
+  ansible.builtin.stat:
+    path: /usr/bin/docker
+  register: docker_engine_bin
+
+# Installing starts Docker for the first time. In check mode on a new
+# server the repository isn't really there yet, so apt can't find the
+# packages: skipped, and the real run installs them.
+#
+# The cache is refreshed whenever Docker is still missing, not only when
+# the repository file is new: a first run that fails after writing it
+# (network, apt lock) would otherwise fail every retry with "No package
+# matching docker-ce". Production has Docker, so it never refreshes here.
+#
+# allow_change_held_packages: the packages are held, so moving
+# docker_engine_version (a planned change, see defaults) needs it to get
+# past the hold. With the version unchanged apt has nothing to do.
+- name: Install Docker {{ docker_engine_version }}
+  vars:
+    docker_engine_deb_version: >-
+      5:{{ docker_engine_version }}-1~ubuntu.{{ ansible_facts['distribution_version'] }}~{{ ansible_facts['distribution_release'] }}
+  ansible.builtin.apt:
+    name: "{{ docker_engine_held_packages | map('regex_replace', '$', '=' ~ docker_engine_deb_version) + docker_engine_other_packages }}"
+    state: present
+    allow_change_held_packages: true
+    update_cache: '{{ docker_engine_repo is changed or docker_engine_key is changed or not docker_engine_bin.stat.exists }}'
+  when: not (ansible_check_mode and docker_engine_repo is changed)
+
+- name: Hold Docker at {{ docker_engine_version }}
+  ansible.builtin.dpkg_selections:
+    name: '{{ item }}'
+    selection: hold
+  loop: '{{ docker_engine_held_packages }}'
+  when: not (ansible_check_mode and docker_engine_repo is changed)

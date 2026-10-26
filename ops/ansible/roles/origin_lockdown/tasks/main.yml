@@ -2,8 +2,8 @@
 # ports, and nobody to 3000 (the Dokploy dashboard, § 9). Docker publishes
 # ports around ufw, so the rules live in the DOCKER-USER chain; the service
 # applies them at boot and again whenever Docker restarts
-# (PartOf=docker.service). Runs before the dokploy role: enabled here, it
-# starts with Docker's very first start, inside Dokploy's install script.
+# (PartOf=docker.service). Runs before docker_engine: enabled here, it
+# starts with Docker's very first start, in the docker_engine role.
 #
 # The Cloudflare ranges in files/origin-lockdown are the source of truth:
 # tests/unit/origin-lockdown.test.ts keeps them equal to src/lib/client-ip.ts,

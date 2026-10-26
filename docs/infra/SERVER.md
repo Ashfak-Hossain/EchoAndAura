@@ -295,8 +295,17 @@ reviewed script is kept in the repo
 upstream was still identical on 2026-10-06) and runs only where there is
 no Dokploy yet, pinned to `dokploy_version`. The role never upgrades;
 when Dokploy has updated itself past the pin, a run says so. To take a
-newer script: download it, read the diff, replace the file, update
-`dokploy_install_sha256` (a unit test keeps them equal).
+newer script: download it, read the diff, make ADR-085's one change
+again, replace the file, update `dokploy_install_sha256` (a unit test
+keeps them equal).
+
+**Docker, since 2026-10-26 (ADR-085): the role `docker_engine`**, before
+`dokploy`. The script used to install Docker with `curl get.docker.com |
+sh`; now Ansible installs it from Docker's apt repository, trusting only
+the signing key kept in the repo (fingerprint `9DC8 5822 9FC7 DD38 854A
+E2D8 8D81 803C 0EBF CD88`), at 28.5.0, held. Our copy of the script stops
+if Docker is missing. The files are the ones `get.docker.com` wrote here
+on 2026-09-27, so production did not change.
 
 What it installed:
 
@@ -1165,8 +1174,9 @@ flowchart TB
         machine["`**The machine**
         SSH · swap · firewall
         Docker's log limits`"] --> lock["`**Origin lockdown**
-        armed before Docker starts`"] --> dokploy["`**Dokploy installed**
-        Docker · Swarm · Traefik`"] --> rest["`**The rest**
+        armed before Docker starts`"] --> docker["`**Docker 28.5.0**
+        from its signed apt repo`"] --> dokploy["`**Dokploy installed**
+        Swarm · Traefik`"] --> rest["`**The rest**
         sysctl · apt · disk alert`"] --> guard["`**Traefik check**
         stops here, as expected`"]
     end
@@ -1211,7 +1221,7 @@ Dashed: by hand. In order:
 
    It does sections 2 to 8 and the parts of 10, 17, 18, 20
    and 21 that live in files, in the right order (firewall, `daemon.json`
-   and the origin lockdown **before** Dokploy). About 7 minutes. It is
+   and the origin lockdown **before** Docker, Docker before Dokploy). About 7 minutes. It is
    **expected to stop at the last role, `traefik`**: a fresh Dokploy's
    `traefik.yml` doesn't have the two hand edits yet (step 4).
 
@@ -1276,3 +1286,4 @@ Dashed: by hand. In order:
 | 2026-10-06 | Ansible (9.2 slice D, PR #63): `pnpm ansible apply production` changed=4, all origin lockdown: port 3000 dropped from `eth0` for everyone (IPv4 + IPv6), interface now read from `/etc/default/origin-lockdown`, service re-applied ("applied on eth0"). Checked: only 22 answers from outside; `/api/health` 200; dashboard 302 to Cloudflare Access; `pnpm ansible check production` changed=0. Dokploy itself unchanged (role `dokploy` found it, installs nothing) |
 | 2026-10-14 | **Test data removed before go-live** (§ 22): dump in `/root`, deleted the same day, one-transaction wipe of the event, order, ticket and gate tables plus the 2 test buyers; Redis finished jobs cleaned; R2 covers deleted; Settings filled. **v1.0.0** released on the deployed `23d2f08` (images tagged `v1.0.0`)                                                                                                                                                   |
 | 2026-10-15 | Web Analytics (ADR-077): Dokploy → compose app → Environment: `CF_WEB_ANALYTICS_TOKEN` (the public site token, `pnpm tf:cloudflare output -raw web_analytics_token`; not in Bitwarden) → redeployed `845fc66`. Checked live: beacon with a matching nonce on `/`, `/events`, `/terms`, none on `/orders/find` or a ticket page; `connect-src` gains `cloudflareinsights.com` only where the beacon runs                                                                |
+| 2026-10-26 | Nothing changed on the server. A rebuild now gets Docker from Docker's signed apt repository through Ansible (§ 8, ADR-085), the same repository line, key and version production already has. Production check: **ok=50 changed=0**                                                                                                                                                                                                                                   |

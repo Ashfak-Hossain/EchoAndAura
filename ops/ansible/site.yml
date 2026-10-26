@@ -14,10 +14,14 @@
       tags: [firewall]
     - role: docker_config
       tags: [docker]
-    # Before dokploy: its rules must be waiting when the install script
-    # first starts Docker and publishes port 3000.
+    # Before docker_engine: its rules must be waiting when Docker first
+    # starts, before Dokploy's script publishes port 3000.
     - role: origin_lockdown
       tags: [origin_lockdown]
+    # Docker's first start: after daemon.json and the lockdown are waiting,
+    # before Dokploy's script, which no longer installs it (ADR-085).
+    - role: docker_engine
+      tags: [docker]
     - role: dokploy
       tags: [dokploy]
     - role: sysctl

@@ -139,11 +139,11 @@ install_dokploy() {
     if command_exists docker; then
       echo "Docker already installed"
     else
-      curl -sSL https://get.docker.com | sh -s -- --version $DOCKER_VERSION
-      # Hold docker packages to prevent unintended upgrades (apt-based distros only)
-      if command_exists apt-mark; then
-        apt-mark hold docker-ce docker-ce-cli docker-ce-rootless-extras
-      fi
+      # Echo & Aura: our one change to Dokploy's script (ADR-085). Upstream
+      # pipes get.docker.com into sh here; the docker_engine role installs
+      # Docker from its signed apt repository first, so never fetch it.
+      echo "Error: Docker is missing. Run the docker_engine role first (ADR-085)." >&2
+      exit 1
     fi
 
     # Check if running in Proxmox LXC container and set endpoint mode
