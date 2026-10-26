@@ -17,6 +17,36 @@ detailed history.
   Aura name, logo, event content and photos stay the organizer's and are not
   covered ([TRADEMARKS.md](TRADEMARKS.md)).
 
+### Security
+
+Publicly known vulnerabilities fixed since 1.0.0 in what the site's
+images ship. All were patched on 2026-10-25, in production the same day.
+None is known to have been used against the site.
+
+- **Next.js** 16.4.0 → 16.4.1: two critical flaws that let anyone run code
+  on the server without signing in (GHSA-2464-fhr4-w9xw,
+  GHSA-673q-mjm6-r5xr), and a server-action denial of service
+  (CVE-2026-94482, GHSA-p3m5-59mp-jv5r). The two critical ones need SVG
+  through the image optimizer or `use cache` functions; the site used
+  neither.
+- **Node.js** 26.10.0 → 26.12.1, the security release: CVE-2026-106069,
+  CVE-2026-105482, CVE-2026-105483, CVE-2026-111497 (high);
+  CVE-2026-105481, CVE-2026-106072, CVE-2026-106074 (medium);
+  CVE-2026-106070, CVE-2026-106071, CVE-2026-106073 (low).
+- **zod** 4.6.5 → 4.6.6: oversized input could exhaust memory during
+  validation (CVE-2023-54404, GHSA-mrhx-c7xc-m3w5).
+- **nodemailer** 10.0.16 → 10.1.4: three email-address parsing flaws
+  (GHSA-85x2-q946-cp5h, GHSA-8c8m-p3m8-cjg8, GHSA-m943-m63m-w62w).
+- **sanitize-html** 2.18.0 → 2.18.1: deeply nested HTML could crash the
+  sanitizer (CVE-2026-113650, GHSA-c9rx-x947-fp3h). Our settings kept event
+  descriptions off that path; a test now holds it.
+- Installed in the images but never run by the site, patched all the same:
+  **fast-uri** 3.1.8 → 3.1.9, used only by the email-preview tool
+  (CVE-2026-110725, CVE-2026-110095, CVE-2026-110306, CVE-2026-110180), and
+  **vite** 8.3.0 → 8.3.3 with **launch-editor**, development-server code
+  (CVE-2026-112942, CVE-2026-112943, CVE-2026-112944, CVE-2026-112945,
+  CVE-2026-112946, CVE-2026-112947).
+
 ## [1.0.0] - 2026-10-14
 
 The first release: everything built before go-live. The reasoning behind

@@ -61,7 +61,7 @@
     "tf:aws": "dotenv -e .env -- terraform -chdir=ops/terraform/aws",
     "tf:cloudflare": "dotenv -e .env -- terraform -chdir=ops/terraform/cloudflare",
     "typecheck": "NEXT_DIST_DIR=.next-build next typegen && tsc --noEmit && tsc --noEmit -p relay",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "format": "prettier --write .",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
