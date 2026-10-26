@@ -1,5 +1,8 @@
 # Brand
 
+The name, the mark and the wordmark are not covered by the code's AGPL
+licence: see [TRADEMARKS.md](../TRADEMARKS.md).
+
 The Echo & Aura identity: one mark, one wordmark, three colours. Everything
 that draws them reads [src/lib/brand/marks.ts](../src/lib/brand/marks.ts), so
 a change there reaches the site, the icons and the share image together.

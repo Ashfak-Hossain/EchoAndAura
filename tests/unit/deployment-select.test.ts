@@ -39,6 +39,7 @@ describe('application deployment path policy', () => {
 
     for (const path of [
       'docs-site/package.json',
+      'TRADEMARKS.md',
       'Dockerfile',
       '.dockerignore',
       'package.json',
@@ -53,6 +54,20 @@ describe('application deployment path policy', () => {
       'docs/invalid\ufffdname.md',
     ])
       expect(isNonRuntimePath(path), path).toBe(false);
+  });
+
+  // A file the runtime images copy straight from the build context is a
+  // runtime input, whatever its name: a skip would ship the old copy.
+  it('never calls a file the runtime images copy from the context non-runtime', () => {
+    const stages = readFileSync('Dockerfile', 'utf8').split(/^FROM /m);
+    const copied = ['web', 'worker'].flatMap((name) => {
+      const stage = stages.find((s) => s.split('\n')[0]?.endsWith(` AS ${name}`)) ?? '';
+      return [...stage.matchAll(/^COPY (?!--from)(.+) \S+$/gm)].flatMap((m) =>
+        (m[1] ?? '').split(' ').filter((arg) => !arg.startsWith('--')),
+      );
+    });
+    expect(copied).toEqual(expect.arrayContaining(['LICENSE', 'TRADEMARKS.md']));
+    for (const path of copied) expect(isNonRuntimePath(path), path).toBe(false);
   });
 
   it('skips only when every change since the running revision is non-runtime', () => {

@@ -126,7 +126,11 @@ ARG SOURCE_REVISION
 # Links the GHCR package to the repo, so it inherits the repo's access.
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+LABEL org.opencontainers.image.licenses=AGPL-3.0-only
 WORKDIR /app
+# A published image is the program conveyed: its licence goes with it, and
+# the source label above says where the source is (ADR-087).
+COPY LICENSE TRADEMARKS.md ./
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 # distDir is .next-build (next.config.ts), so the standalone server looks
 # for its static files and cache there.
@@ -151,7 +155,9 @@ FROM runtime-base AS worker
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source=https://github.com/Ashfak-Hossain/EchoAndAura
 LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+LABEL org.opencontainers.image.licenses=AGPL-3.0-only
 WORKDIR /app
+COPY LICENSE TRADEMARKS.md ./
 ENV NODE_ENV=production
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./

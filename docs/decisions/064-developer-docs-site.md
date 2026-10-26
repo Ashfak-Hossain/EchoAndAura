@@ -2,13 +2,18 @@
 id: ADR-064
 title: 'Developer docs: static Fumadocs, source-linked learning, and selective interaction'
 date: 2026-10-07
-status: accepted
+status: partly-superseded
 area: Code structure and tooling
 supersedes: []
 extends: []
 ---
 
 # ADR-064 — Developer docs: static Fumadocs, source-linked learning, and selective interaction
+
+The line "The repository's proprietary license remains in effect" is
+replaced by [ADR-087](087-open-source-agpl.md): the repository, and the
+docs with it, are now AGPL-3.0, the brand left out. The other decisions
+remain in force.
 
 **Context:** The repository contains implementation records and operational
 instructions, but a developer learning the system needs a reading path:

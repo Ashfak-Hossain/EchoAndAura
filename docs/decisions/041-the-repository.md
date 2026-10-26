@@ -2,7 +2,7 @@
 id: ADR-041
 title: 'The repository: public and proprietary, merge commits, versions as milestones'
 date: 2026-09-29
-status: accepted
+status: partly-superseded
 area: Code structure and tooling
 supersedes: []
 extends: []
@@ -10,7 +10,12 @@ extends: []
 
 # ADR-041 — The repository: public and proprietary, merge commits, versions as milestones
 
-**Date:** 2026-09-29 · **Status:** Accepted
+**Date:** 2026-09-29 · **Status:** Partly superseded
+
+The licence part of "Public, proprietary" below is replaced by
+[ADR-087](087-open-source-agpl.md): the code is now AGPL-3.0, with the name,
+the logo and event content left out. The repository stays public, and the
+other decisions remain in force.
 
 **Context:** The repository had drifted from the project:
 

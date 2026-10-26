@@ -12,7 +12,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ashfak-Hossain/EchoAndAura/badge)](https://scorecard.dev/viewer/?uri=github.com/Ashfak-Hossain/EchoAndAura)
 [![Uptime](https://uptime.betterstack.com/status-badges/v1/monitor/2yysn.svg)](https://uptime.betterstack.com/?utm_source=status_badge)
 [![Release](https://img.shields.io/github/v/release/Ashfak-Hossain/EchoAndAura?label=release)](https://github.com/Ashfak-Hossain/EchoAndAura/releases)
-[![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 **[echoandaura.com](https://echoandaura.com)** · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Support](SUPPORT.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
@@ -288,6 +288,9 @@ Please report vulnerabilities privately, never in a public issue.
 
 ## License
 
-Copyright © 2026 Raj Sr, trading as Echo & Aura. All rights reserved.
+Copyright © 2026 Raj Sr, trading as Echo & Aura.
 
-This source code is public to read, not to reuse. See [LICENSE](LICENSE).
+The code is free software under the
+[GNU Affero General Public License, version 3 only](LICENSE). The Echo &
+Aura name, logo and event content are not covered by it:
+[TRADEMARKS.md](TRADEMARKS.md) says what a fork must replace.

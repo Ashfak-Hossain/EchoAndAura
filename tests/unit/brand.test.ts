@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { BrandLogo, BrandMark } from '@/components/brand';
 import { BRAND_COLORS, EMAIL_LOGO, LOCKUP, MARK, MARK_SMALL, WORDMARK } from '@/lib/brand/marks';
 import {
+  BRAND_NOTICE,
   docsBrandModule,
   faviconSvg,
   lockupSvg,
@@ -126,6 +127,18 @@ describe('generated brand files', () => {
       expect(svg).toContain(`stroke="${README_LOGOS[theme].ink}"`);
     }
     expect(README_LOGOS.dark.ink).toBe(BRAND_COLORS.paper);
+  });
+
+  it('say in every text file that the brand is not under the AGPL (ADR-087)', () => {
+    const files = [
+      'docs-site/app/icon.svg',
+      'docs-site/lib/brand.generated.ts',
+      README_LOGOS.light.path,
+      README_LOGOS.dark.path,
+    ];
+    for (const file of files) {
+      expect(readFileSync(file, 'utf8'), file).toContain(BRAND_NOTICE);
+    }
   });
 });
 

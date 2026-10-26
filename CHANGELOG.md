@@ -9,6 +9,14 @@ detailed history.
 
 ## [Unreleased]
 
+### The code
+
+- The ticketing platform's code is now open source, under the GNU Affero
+  General Public License 3.0. Anyone may run, change and share it; whoever
+  runs a changed version for others must offer them its source. The Echo &
+  Aura name, logo, event content and photos stay the organizer's and are not
+  covered ([TRADEMARKS.md](TRADEMARKS.md)).
+
 ## [1.0.0] - 2026-10-14
 
 The first release: everything built before go-live. The reasoning behind

@@ -26,9 +26,9 @@ concepts before naming their implementation. Define terms such as reservation,
 transaction, idempotence, and after-commit work at their first meaningful use.
 Link deeper explanations so experienced readers can continue without a detour.
 
-The repository remains proprietary under its existing license. This is a
-public learning resource; publishing it does not grant contribution or reuse
-rights beyond that license.
+The repository is open source under the AGPL-3.0, and the site's content
+with it. The Echo & Aura name and logo are not licensed
+([TRADEMARKS.md](../../TRADEMARKS.md), ADR-087).
 
 ## Reading paths
 
