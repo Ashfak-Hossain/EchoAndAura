@@ -20,8 +20,20 @@
 # ADR-081: literal FROM references let Dependabot update both Dockerfiles
 # together. Keep both production stages and the dev image on this digest.
 FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS base
-# Node 25+ ships without corepack: install the pnpm package.json names.
-RUN npm install -g pnpm@11.9.0 && npm cache clean --force
+# Node 25+ ships without corepack. pnpm has no dependencies, so its registry
+# tarball is the whole tool: ADD checks its sha256 before anything runs it
+# (ADR-084); a global npm install cannot be pinned by hash. Keep this block the
+# same in both Dockerfiles and the version equal to package.json's
+# packageManager (devcontainer.test.ts, runtime-images.test.ts).
+ADD --checksum=sha256:2b567aa66026238078ac2e0a33bec3febd60e962987aac697456f3180819b287 \
+  https://registry.npmjs.org/pnpm/-/pnpm-11.9.0.tgz /tmp/pnpm.tgz
+RUN mkdir -p /usr/local/lib/node_modules/pnpm \
+  && tar -xzf /tmp/pnpm.tgz -C /usr/local/lib/node_modules/pnpm --strip-components=1 --no-same-owner \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpm.mjs /usr/local/bin/pnpm \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpx.mjs /usr/local/bin/pnpx \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpm.mjs /usr/local/bin/pn \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpx.mjs /usr/local/bin/pnx \
+  && rm /tmp/pnpm.tgz
 ENV PNPM_HOME=/pnpm NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
@@ -81,6 +93,8 @@ ENV DATABASE_URL=postgresql://build:build@127.0.0.1:1/not-a-database \
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN \
   pnpm build && pnpm worker:build && pnpm ops:build && \
   node scripts/error-tracking-build.mjs finish-image && \
+  { find public/vendor -name 'zxing_reader-*.wasm' -size +100k | grep -q . || \
+  { echo "The build did not copy the door decoder (pnpm vendor:build)." >&2; exit 1; }; } && \
   if grep -rlE "build-placeholder" .next-build/standalone .next-build/static public dist; then \
   echo "A build placeholder was baked into the output (files above)." >&2; exit 1; \
   fi

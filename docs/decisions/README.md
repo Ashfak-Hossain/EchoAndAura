@@ -93,6 +93,8 @@ flowchart LR
         OpenSSF Scorecard`"]
         a083["`**ADR-083**
         Workflows pass Scorecard`"]
+        a084["`**ADR-084**
+        Installs pinned by hash`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -107,6 +109,9 @@ flowchart LR
         a069 -.-> a075
         a067 -.-> a083
         a082 -.-> a083
+        a030 -.-> a084
+        a081 -.-> a084
+        a082 -.-> a084
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph analytics ["Visit counts"]
@@ -344,6 +349,7 @@ flowchart LR
 | 075 | [Every production image carries signed provenance and an SBOM](075-image-provenance-sbom.md)                 | Accepted                                                                   | 2026-10-14 |
 | 082 | [OpenSSF Scorecard, published, without an admin token](082-openssf-scorecard.md)                             | Accepted                                                                   | 2026-10-25 |
 | 083 | [Workflows check out github.sha and grant writes per job](083-workflows-pass-scorecard.md)                   | Accepted                                                                   | 2026-10-25 |
+| 084 | [Build tools installed by hash; the decoder .wasm built from the lockfile](084-pinned-by-hash.md)            | Accepted                                                                   | 2026-10-26 |
 
 ### Code structure and tooling
 

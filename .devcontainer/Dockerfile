@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.10
+#
 # The dev container (ADR-080): the same Node and pnpm as the production
 # image (the root Dockerfile's Node image, package.json's packageManager);
 # tests/unit/devcontainer.test.ts keeps them equal. Pinned by digest as well
@@ -14,8 +16,20 @@ RUN apt-get update \
   && echo 'node ALL=(root) NOPASSWD:ALL' > /etc/sudoers.d/node \
   && chmod 0440 /etc/sudoers.d/node
 
-# Node 25+ ships without corepack: install the pnpm package.json names.
-RUN npm install -g pnpm@11.9.0 && npm cache clean --force
+# Node 25+ ships without corepack. pnpm has no dependencies, so its registry
+# tarball is the whole tool: ADD checks its sha256 before anything runs it
+# (ADR-084); a global npm install cannot be pinned by hash. Keep this block the
+# same in both Dockerfiles and the version equal to package.json's
+# packageManager (devcontainer.test.ts, runtime-images.test.ts).
+ADD --checksum=sha256:2b567aa66026238078ac2e0a33bec3febd60e962987aac697456f3180819b287 \
+  https://registry.npmjs.org/pnpm/-/pnpm-11.9.0.tgz /tmp/pnpm.tgz
+RUN mkdir -p /usr/local/lib/node_modules/pnpm \
+  && tar -xzf /tmp/pnpm.tgz -C /usr/local/lib/node_modules/pnpm --strip-components=1 --no-same-owner \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpm.mjs /usr/local/bin/pnpm \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpx.mjs /usr/local/bin/pnpx \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpm.mjs /usr/local/bin/pn \
+  && ln -s ../lib/node_modules/pnpm/bin/pnpx.mjs /usr/local/bin/pnx \
+  && rm /tmp/pnpm.tgz
 
 USER node
 # The pnpm store volume mounts here; made now so ~/.local stays node's.

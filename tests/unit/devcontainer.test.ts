@@ -47,9 +47,20 @@ describe('the dev container', () => {
     expect(major).toBe(read('.nvmrc').trim());
   });
 
-  it('installs the pnpm package.json names', () => {
-    const { packageManager } = JSON.parse(read('package.json')) as { packageManager: string };
-    expect(devDockerfile).toContain(`npm install -g ${packageManager}`);
+  it('installs pnpm exactly as the production build base does', () => {
+    // ADR-084: the same hash-checked tarball, so the box runs the pnpm the
+    // image builds with (runtime-images.test.ts ties it to packageManager).
+    const pnpmInstall = (text: string) =>
+      /^ADD --checksum=sha256:[0-9a-f]{64} \\\n.*\n(?:RUN|  &&).*(?:\n  &&.*)*/m.exec(text)?.[0];
+    const prod = pnpmInstall(read('Dockerfile'));
+    expect(prod).toContain('pnpm.tgz');
+    expect(pnpmInstall(devDockerfile)).toBe(prod);
+    // ADD --checksum needs Dockerfile 1.6+; pin the frontend as the root does
+    // rather than rely on whichever BuildKit the host happens to run.
+    const syntax = (text: string) => /^# syntax=(\S+)$/m.exec(text)?.[1];
+    expect(syntax(devDockerfile)).toBeDefined();
+    expect(syntax(devDockerfile)).toBe(syntax(read('Dockerfile')));
+    expect(devDockerfile).not.toMatch(/^[^#\n]*(?<![\w-])npm (?:install|i)\b/m);
   });
 
   it('installs jq, which the Claude hooks and statusline call', () => {

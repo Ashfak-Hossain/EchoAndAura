@@ -327,6 +327,20 @@ bump. It also opens security fixes as soon as an advisory lands. Treat them
 like any PR: CI must be green, and read the release notes of anything that
 touches money, auth, the queue or the database driver.
 
+**pnpm and the docs uploader are installed by hash** (ADR-084). Both
+Dockerfiles `ADD` pnpm's registry tarball with `--checksum=sha256:…`, and
+`packageManager` carries its sha512. To move pnpm, download
+`https://registry.npmjs.org/pnpm/-/pnpm-<version>.tgz`: `shasum -a 256` of it
+goes in both Dockerfiles' `ADD --checksum`, and `shasum -a 512` (hex) after
+`+sha512.` in `packageManager`. The tests refuse a version mismatch;
+`docker build` refuses a wrong sha256.
+Docs-deploy runs `npm ci` from `.github/docs-tools/`, which Dependabot
+updates with the root. npm doesn't read `pnpm-workspace.yaml`: when a root
+override patches a package the uploader also installs, add the same version
+to that `package.json`'s `overrides`, then
+`npm install --package-lock-only --ignore-scripts` there. A test refuses a
+mismatch.
+
 **Every GitHub Action is pinned to a commit SHA** (ADR-073), written as
 `uses: owner/action@<40-character SHA> # vX.Y.Z`. A tag can be moved to other
 code; a SHA can't. Dependabot moves the SHA and the comment together. To add
@@ -357,15 +371,15 @@ updates itself, so the scanner only needs a bump every few months:
 
 **The door scanner's decoder is upgraded by hand** (ADR-030). `barcode-detector`
 pins an exact `zxing-wasm`, the scanner runs that copy, and its `.wasm` is
-served from `public/vendor/`. Dependabot ignores `zxing-wasm`. To upgrade:
+served from `public/vendor/`. `pnpm build` and `pnpm dev` copy it there from
+`node_modules` (`pnpm vendor:build`, ADR-084); it is never committed.
+Dependabot ignores `zxing-wasm`. To upgrade:
 
 1. Bump `barcode-detector`, and set our `zxing-wasm` to the version it now
    pins.
-2. Copy `node_modules/zxing-wasm/dist/reader/zxing_reader.wasm` to
-   `public/vendor/zxing_reader-<version>.wasm`, delete the old file, and
-   update `ZXING_WASM_URL` in `src/app/door/decoder.ts`.
+2. Update the version in `ZXING_WASM_URL` in `src/app/door/decoder.ts`.
 3. `tests/unit/door-rules.test.ts` fails until the versions agree and the
-   file's SHA-256 matches. Then test a real scan on a phone.
+   copied file's SHA-256 matches. Then test a real scan on a phone.
 
 ## Definition of Done
 

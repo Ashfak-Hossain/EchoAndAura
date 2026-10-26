@@ -62,6 +62,7 @@ dist/
 
 # ADR-035: the /door service worker, built by `pnpm sw:build`
 /public/door/
+/public/vendor/
 
 # Wrangler (gate relay, ADR-058): local Durable Object state and builds
 .wrangler/

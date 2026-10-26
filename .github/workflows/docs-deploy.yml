@@ -71,8 +71,12 @@ jobs:
           DOCS_HEAD_SHA: ${{ needs.select.outputs.sha }}
       # Isolated tooling, never pnpm install or build in the artifact/PR tree.
       # Install before the only step that receives Cloudflare credentials.
+      # npm ci from main's lockfile: every package checked by hash (ADR-084).
       - name: Install the pinned uploader
-        run: npm install --prefix "$RUNNER_TEMP/docs-tools" --ignore-scripts --no-audit --no-fund wrangler@4.147.0
+        run: |
+          mkdir -p "$RUNNER_TEMP/docs-tools"
+          cp .github/docs-tools/package.json .github/docs-tools/package-lock.json "$RUNNER_TEMP/docs-tools/"
+          npm ci --prefix "$RUNNER_TEMP/docs-tools" --ignore-scripts --no-audit --no-fund
       - name: Recheck current main or open PR after any approval delay
         id: current
         run: node .github/scripts/docs-release.mjs

@@ -1,0 +1,12 @@
+{
+  "name": "echoandaura-docs-tools",
+  "private": true,
+  "description": "The docs uploader, installed by docs-deploy.yml with npm ci from this lockfile (ADR-065, ADR-084).",
+  "dependencies": {
+    "wrangler": "4.148.0"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "undici": "7.30.1"
+  }
+}

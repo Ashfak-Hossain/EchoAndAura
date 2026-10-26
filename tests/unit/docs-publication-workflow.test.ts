@@ -33,6 +33,66 @@ describe('docs publication trust boundary', () => {
     expect(workflow.jobs.publish.steps.at(-1)['working-directory']).toBe('${{ runner.temp }}');
   });
 
+  it('installs the uploader from its lockfile, every package by hash (ADR-084)', () => {
+    const runs: string[] = workflow.jobs.publish.steps.map(
+      (step: { run?: string }) => step.run ?? '',
+    );
+    const install = runs.find((run) => run.includes('npm ci'));
+    expect(install).toContain('.github/docs-tools/package-lock.json');
+    expect(install).toContain('npm ci --prefix "$RUNNER_TEMP/docs-tools" --ignore-scripts');
+    // Scorecard counts `npm install` as unpinned; only `npm ci` checks the lock.
+    expect(runs.join('\n')).not.toMatch(/(?<![\w-])npm (?:install|i)\b/);
+    const lock = JSON.parse(readFileSync('.github/docs-tools/package-lock.json', 'utf8')) as {
+      packages: Record<string, { version?: string; resolved?: string; integrity?: string }>;
+    };
+    const { dependencies } = JSON.parse(
+      readFileSync('.github/docs-tools/package.json', 'utf8'),
+    ) as { dependencies: Record<string, string> };
+    expect(lock.packages['node_modules/wrangler']?.version).toBe(dependencies.wrangler);
+    for (const [path, pkg] of Object.entries(lock.packages)) {
+      if (path === '') continue;
+      expect(pkg.integrity, path).toMatch(/^sha512-/);
+      expect(pkg.resolved, path).toMatch(/^https:\/\/registry\.npmjs\.org\//);
+    }
+  });
+
+  it("patches the uploader's transitive packages as the root does", () => {
+    // npm doesn't read pnpm-workspace.yaml, so each audit patch the uploader's
+    // tree needs is repeated here; this keeps the two from drifting apart.
+    const { overrides } = JSON.parse(readFileSync('.github/docs-tools/package.json', 'utf8')) as {
+      overrides: Record<string, string>;
+    };
+    const root = parse(readFileSync('pnpm-workspace.yaml', 'utf8')).overrides as Record<
+      string,
+      string
+    >;
+    const lock = JSON.parse(readFileSync('.github/docs-tools/package-lock.json', 'utf8')) as {
+      packages: Record<string, { version?: string }>;
+    };
+    expect(Object.keys(overrides).length).toBeGreaterThan(0);
+    for (const [name, version] of Object.entries(overrides)) {
+      const major = version.split('.')[0];
+      expect(root[`${name}@${major}`] ?? root[name], name).toBe(version);
+      for (const [path, pkg] of Object.entries(lock.packages)) {
+        if (path.endsWith(`node_modules/${name}`)) expect(pkg.version, path).toBe(version);
+      }
+    }
+    // And the other way: a root patch for a package the uploader also installs
+    // must be repeated here. Scoped keys (`a>b`) reach only the app's tree.
+    for (const [key, version] of Object.entries(root)) {
+      if (key.includes('>')) continue;
+      const at = key.lastIndexOf('@');
+      const name = at > 0 ? key.slice(0, at) : key;
+      const major = at > 0 ? key.slice(at + 1) : undefined;
+      const installed = Object.entries(lock.packages).some(
+        ([path, pkg]) =>
+          path.endsWith(`node_modules/${name}`) &&
+          (major === undefined || pkg.version?.split('.')[0] === major),
+      );
+      if (installed) expect(overrides[name], key).toBe(version);
+    }
+  });
+
   it('exposes Cloudflare credentials only to the final upload, after validation and recheck', () => {
     const steps = workflow.jobs.publish.steps;
     const credentialSteps = steps.filter(
@@ -42,7 +102,7 @@ describe('docs publication trust boundary', () => {
     expect(steps.at(-1).env.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.CLOUDFLARE_PAGES_API_TOKEN }}');
     const runs: string[] = steps.map((step: { run?: string }) => step.run ?? '');
     expect(runs.findIndex((run) => run.includes('docs-artifact.mjs validate'))).toBeLessThan(
-      runs.findIndex((run) => run.includes('npm install')),
+      runs.findIndex((run) => run.includes('npm ci')),
     );
     expect(steps.at(-2).id).toBe('current');
     expect(steps.at(-1).if).toContain("steps.current.outputs.publish == 'true'");
