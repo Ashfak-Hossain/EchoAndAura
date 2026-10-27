@@ -46,6 +46,8 @@ OWNER='Give the owner the exact command to type instead, then check the result r
 # swapon --show, docker ps/inspect/logs, health checks, pg_restore --list,
 # pg_dump to stdout.
 if has '(^|[^[:alnum:]_-])ssh[[:space:]]' && has_i 'echoandaura|160\.25\.226\.166'; then
+  has 'restore-drill\.sh' &&
+    refuse 'the restore drill on the server.' 'The owner runs `pnpm backup:drill` (ADR-088); `pnpm backup:drill-lab` tests it locally.'
   has_i "(insert[[:space:]]+into|update[[:space:]]+[[:alnum:]_.\"]+[[:space:]]+set[[:space:]]|delete[[:space:]]+from|(^|[^[:alnum:]_])truncate$E|drop[[:space:]]+(table|database|schema|index|role|user|view|type|extension|owned)|alter[[:space:]]+(table|role|user|database|schema|type|default)|(^|[^[:alnum:]_])(grant|revoke|vacuum|reindex|cluster)[[:space:]]|create[[:space:]]+(table|role|user|database|schema|index|extension|type|view|function|trigger)|copy[[:space:]].*[[:space:]]from[[:space:]])" &&
     refuse 'SQL that writes to the production database.' "$OWNER"
   if has "(^|[^[:alnum:]_])pg_restore$E" && ! has "pg_restore[[:space:]]+(-l|--list)$E"; then
@@ -67,6 +69,24 @@ if has '(^|[^[:alnum:]_-])ssh[[:space:]]' && has_i 'echoandaura|160\.25\.226\.16
     refuse 'a service change on the server.' "$OWNER"
   has_i "(^|[^[:alnum:]_-])(ufw[[:space:]]+(allow|deny|reject|limit|delete|insert|route|enable|disable|reset|reload)|ip6?tables[[:space:]]+-[ADIRFXNPZ]|nft[[:space:]]+(add|delete|flush|insert|replace|create)|apt(-get)?[[:space:]]+(install|remove|purge|upgrade|full-upgrade|dist-upgrade|autoremove)|dpkg[[:space:]]+-[ir]|snap[[:space:]]+(install|remove|refresh)|reboot|shutdown|poweroff|halt|crontab[[:space:]]+-[er]|useradd|userdel|usermod|passwd|sysctl[[:space:]]+-w|kill|killall|pkill|growpart|resize2fs|mkfs|umount|swapoff)$E" &&
     refuse 'a system change on the server.' "$OWNER"
+fi
+
+# --- The restore drill: the owner's (ADR-088) ----------------------------
+# It streams every buyer's data from S3 into the server, so a session runs
+# only the lab, which never leaves the laptop. The ssh inside it is out of
+# this hook's sight, hence rules for the command itself, matched anywhere:
+# package managers take flags before the script name (`pnpm -s`, `-C .`).
+# The script refuses a Claude Code session too; this stops it sooner.
+DRILL='The owner runs `pnpm backup:drill` (RUNBOOK → Restore drill); `pnpm backup:drill-lab` tests it locally.'
+if has '(^|[^[:alnum:]_-])(pnpm|npm|yarn|bun|corepack)([[:space:]]|$)' &&
+  has 'backup:drill([^-[:alnum:]_]|$)'; then
+  refuse 'the production restore drill.' "$DRILL"
+fi
+# The script itself, run by any runner, unless `--local` follows its name.
+if has 'restore-drill(\.[cm]?[jt]s)?([^.[:alnum:]_-]|$)' &&
+  has '(^|[^[:alnum:]_.-])(tsx|node|bun|bunx|deno|vite-node|ts-node)([^[:alnum:]_-]|$)|node_modules/\.bin/' &&
+  ! has 'restore-drill(\.[cm]?[jt]s)?[[:space:]]+--local([[:space:]]|$)'; then
+  refuse 'the production restore drill.' "$DRILL"
 fi
 
 # --- Releases: the owner's ------------------------------------------------
