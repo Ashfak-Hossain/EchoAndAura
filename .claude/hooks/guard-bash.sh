@@ -41,11 +41,52 @@ E='([^[:alnum:]_-]|$)' # the end of a word
 OWNER='Give the owner the exact command to type instead, then check the result read-only (CLAUDE.md, ADR-072).'
 
 # --- Production: read-only ------------------------------------------------
-# Any command that reaches the server over ssh (the `echoandaura` alias or
-# its address). Reads stay allowed: SELECTs, counts, ls, df, free, mount,
-# swapon --show, docker ps/inspect/logs, health checks, pg_restore --list,
-# pg_dump to stdout.
-if has '(^|[^[:alnum:]_-])ssh[[:space:]]' && has_i 'echoandaura|160\.25\.226\.166'; then
+SERVER='(echoandaura|160\.25\.226\.166)' # the ssh alias or its address
+# The server as a host (`echoandaura`, `root@…`, `echoandaura:/root`), not
+# a local path like `~/Development/echoandaura/` or the lab VM
+# `echoandaura-lab`.
+HOST="(^|[[:space:]'\"@])$SERVER([:[:space:]'\"]|$)"
+# A URL to it: `ssh://`, `scp://`, `sftp://`, with or without a user.
+URL="(ssh|scp|sftp)://([^[:space:]@/]*@)?$SERVER([:/[:space:]'\"]|$)"
+# Docker's global flags, which may sit between `docker` and its subcommand
+# (`docker -H ssh://… restart web`).
+DG='docker(([[:space:]]+(-H|--host|-c|--context|--config|-l|--log-level|--tlscacert|--tlscert|--tlskey)([[:space:]]+|=)[^[:space:]]+)|[[:space:]]+(-D|--debug|--tls|--tlsverify))*[[:space:]]+'
+
+# Copying files to or from the server, in either direction: to it changes
+# files; from it can bring buyer data to the laptop (ADR-051). Matched
+# where a command starts, so a search of the docs for one still runs.
+if runs '([^[:space:];&|]*/)?(scp|rsync|sftp|sshfs|ssh-copy-id)[[:space:]]' &&
+  { has_i "$HOST" || has_i "$URL"; }; then
+  refuse 'copying files to or from the server.' "Read a file with \`ssh echoandaura 'tail …'\`. $OWNER"
+fi
+
+# Any command that reaches the server: over ssh, docker through `-H
+# ssh://…`, `--host=ssh://…` or `DOCKER_HOST=ssh://…`, or ad-hoc Ansible
+# against production's inventory. Reads stay allowed: SELECTs, counts, ls,
+# df, free, mount, swapon --show, docker ps/inspect/logs, health checks,
+# pg_restore --list, and pg_dump to stdout as long as it stays on the
+# server's side of the pipe (`| wc -c`).
+if { has '(^|[^[:alnum:]_-])ssh[[:space:]]' && has_i "$HOST"; } || has_i "$URL" ||
+  { runs 'ansible[[:space:]]' && { has_i "$HOST" || has 'inventory/production'; }; }; then
+  # A context would let a later `docker --context x …` reach the server
+  # without naming it.
+  has_i 'docker[[:space:]]+context[[:space:]]+(create|update)[[:space:]]' &&
+    refuse 'a docker context that points at the server.' "Use \`ssh echoandaura 'docker …'\` for reads. $OWNER"
+  # Ad-hoc modules write as easily as they read; facts and ping are enough
+  # to look, and `pnpm ansible check` shows what a change would do.
+  runs 'ansible[[:space:]]' && ! has '[[:space:]](-m|--module-name)[[:space:]=]*(ansible\.builtin\.)?(ping|setup)([[:space:]]|$)' &&
+    refuse 'an ad-hoc Ansible command on the server.' "Use \`pnpm ansible check\` or a read over ssh. $OWNER"
+  # Output saved on the laptop, or a local file fed to the server: the
+  # former brings buyer data to the laptop (ADR-051), the latter is a
+  # write by another name. `<<` heredocs and /dev/null stay allowed.
+  if has "['\"][[:space:]]*>{1,2}[[:space:]]*[^&[:space:]]" &&
+    ! has "['\"][[:space:]]*>{1,2}[[:space:]]*/dev/(null|stdout|stderr)"; then
+    refuse "the server's output saved to a file." "Pipe it to a count or a filter instead. $OWNER"
+  fi
+  has "['\"][[:space:]]*<[[:space:]]*[^<[:space:]]" &&
+    refuse 'a local file fed to the server.' "$OWNER"
+  has '(^|[^[:alnum:]_-])tar[[:space:]]+(-?[[:alpha:]]*x|--extract)' &&
+    refuse 'an archive unpacked on the server.' "$OWNER"
   has 'restore-drill\.sh' &&
     refuse 'the restore drill on the server.' 'The owner runs `pnpm backup:drill` (ADR-088); `pnpm backup:drill-lab` tests it locally.'
   has_i "(insert[[:space:]]+into|update[[:space:]]+[[:alnum:]_.\"]+[[:space:]]+set[[:space:]]|delete[[:space:]]+from|(^|[^[:alnum:]_])truncate$E|drop[[:space:]]+(table|database|schema|index|role|user|view|type|extension|owned)|alter[[:space:]]+(table|role|user|database|schema|type|default)|(^|[^[:alnum:]_])(grant|revoke|vacuum|reindex|cluster)[[:space:]]|create[[:space:]]+(table|role|user|database|schema|index|extension|type|view|function|trigger)|copy[[:space:]].*[[:space:]]from[[:space:]])" &&
@@ -53,13 +94,16 @@ if has '(^|[^[:alnum:]_-])ssh[[:space:]]' && has_i 'echoandaura|160\.25\.226\.16
   if has "(^|[^[:alnum:]_])pg_restore$E" && ! has "pg_restore[[:space:]]+(-l|--list)$E"; then
     refuse 'pg_restore into a production database.' "$OWNER"
   fi
-  has '(^|[^[:alnum:]_.-])(rm|mv|shred|dd|truncate|chmod|chown|chattr|ln|install|tee)[[:space:]]' &&
+  has '(^|[^[:alnum:]_.-])(rm|mv|shred|dd|truncate|chmod|chown|chattr|ln|install|tee|touch)[[:space:]]' &&
     refuse 'a command that changes files on the server.' "$OWNER"
-  has '>{1,2}[[:space:]]*/(root|etc|var|opt|home|srv|usr|tmp)/' &&
+  # /app is the containers' working directory, reached through docker exec.
+  has '>{1,2}[[:space:]]*/(root|etc|var|opt|home|srv|usr|tmp|app)/' &&
     refuse 'a redirect that writes a file on the server.' "$OWNER"
-  has_i "docker[[:space:]]+(container[[:space:]]+)?(rm|rmi|stop|kill|restart|pause|unpause|update|rename|commit|cp|prune)$E" &&
+  # `exec` stays allowed: `docker exec $C psql -c "select …"` is the main
+  # read, and file writes through it meet the rm/tee/redirect rules above.
+  has_i "$DG(container[[:space:]]+)?(rm|rmi|stop|kill|restart|pause|unpause|update|rename|commit|cp|prune|start|run|create|pull|load|import|tag|build)$E" &&
     refuse 'a docker command that changes containers.' "$OWNER"
-  has_i "docker[[:space:]]+(compose|stack|service|volume|network|image|system|builder|swarm|node|secret|config)[[:space:]]+([^|;&]*[[:space:]])?(up|down|rm|restart|stop|start|kill|scale|update|rollback|prune|create|deploy|leave|init|join)$E" &&
+  has_i "$DG(compose|stack|service|volume|network|image|system|builder|swarm|node|secret|config)[[:space:]]+([^|;&]*[[:space:]])?(up|down|rm|restart|stop|start|kill|scale|update|rollback|prune|create|deploy|leave|init|join|pull|build|run|pause|unpause|cp)$E" &&
     refuse 'a docker command that changes services, volumes or images.' "$OWNER"
   has_i '\.(clean|obliterate|drain|remove|retryJobs|promoteJobs|removeJobScheduler|upsertJobScheduler|add|addBulk)\(' &&
     refuse 'a BullMQ call that changes the production queues.' "$OWNER"
