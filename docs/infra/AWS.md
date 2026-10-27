@@ -1,6 +1,6 @@
 # AWS
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-03
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-28
 
 This project uses two AWS services: **Amazon SES**, now only the
 **rollback** for outbound email (Cloudflare Email Service sends since
@@ -55,7 +55,10 @@ flowchart LR
     sns["SNS topic ses-feedback\nstandard · no KMS"]
     offsite["IAM user echoandaura-offsite-backups-dokploy\ninline upload-only\n1 access key, no console"]
     bucket["S3 echoandaura-offsite-backups\nversioned · 35-day expiry"]
+    drift["IAM role echoandaura-drift-check\nReadOnlyAccess + deny data reads\nGitHub OIDC, 15-min sessions"]
   end
+  gha[(GitHub Actions\ndrift.yml, env drift)] -->|OIDC token, no key| drift
+  drift -.->|reading objects denied| bucket
   evan((Evan)) -->|console| admin
   evan -.->|rare| root
   app[(worker process\n.env)] -->|AWS_SES_* key| worker
@@ -68,17 +71,19 @@ flowchart LR
   sns -->|email| dev((developer's Gmail))
 ```
 
-| Principal                             | Type     | Permissions                                                                    | Credentials                          | Purpose                             |
-| ------------------------------------- | -------- | ------------------------------------------------------------------------------ | ------------------------------------ | ----------------------------------- |
-| root                                  | root     | everything                                                                     | password + MFA; **0 access keys**    | account-level settings only         |
-| `ash-admin`                           | IAM user | `AdministratorAccess`, `IAMUserChangePassword` (managed)                       | password + MFA; **0 access keys**    | console and `aws login` for humans  |
-| `echoandaura-worker`                  | IAM user | inline `ses-send-only` (below)                                                 | 1 access key → `AWS_SES_*` in `.env` | the worker process sends email      |
-| `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (Terraform)                                               | 1 access key → Dokploy `aws-offsite` | Dokploy uploads the off-site backup |
-| `BudgetsActionsRole`                  | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com` | —                                    | lets the hard-stop budget act       |
+| Principal                             | Type     | Permissions                                                                                                                                                                                                                                                                                      | Credentials                                             | Purpose                                                                                     |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| root                                  | root     | everything                                                                                                                                                                                                                                                                                       | password + MFA; **0 access keys**                       | account-level settings only                                                                 |
+| `ash-admin`                           | IAM user | `AdministratorAccess`, `IAMUserChangePassword` (managed)                                                                                                                                                                                                                                         | password + MFA; **0 access keys**                       | console and `aws login` for humans                                                          |
+| `echoandaura-worker`                  | IAM user | inline `ses-send-only` (below)                                                                                                                                                                                                                                                                   | 1 access key → `AWS_SES_*` in `.env`                    | the worker process sends email                                                              |
+| `echoandaura-offsite-backups-dokploy` | IAM user | inline `upload-only` (Terraform)                                                                                                                                                                                                                                                                 | 1 access key → Dokploy `aws-offsite`                    | Dokploy uploads the off-site backup                                                         |
+| `BudgetsActionsRole`                  | IAM role | `AWSBudgetsActionsWithAWSResourceControlAccess`; trust `budgets.amazonaws.com`                                                                                                                                                                                                                   | —                                                       | lets the hard-stop budget act                                                               |
+| `echoandaura-drift-check`             | IAM role | `ReadOnlyAccess` + inline Deny `no-data-reads` (every S3 object but the state, secret/parameter values, KMS decrypt, logs, DynamoDB items, SQS messages, Athena results, SES suppression list and contacts); trust: the GitHub OIDC provider, `sub` = this repository's environment `drift` only | none stored; 15-minute session from GitHub's OIDC token | the weekly drift check's read-only plan ([TERRAFORM.md](TERRAFORM.md#drift-check), ADR-089) |
 
 **Terraform** (`iam.tf`): `echoandaura-worker` and `ses-send-only`. Not
 its access key (made by hand, so the secret never reaches state), and not
-root or `ash-admin`. The offsite user is in `offsite_backups.tf`.
+root or `ash-admin`. The offsite user is in `offsite_backups.tf`. The
+drift-check role and the GitHub OIDC provider are in `drift_check.tf`.
 
 ### `ses-send-only` (inline policy on `echoandaura-worker`)
 
@@ -470,3 +475,4 @@ pnpm email:test <verified address>                            # "SES accepted th
 | 2026-10-05 | Budgets under Terraform (ADR-062, `budgets.tf`): 3 budgets, hard-stop action, `BudgetsActionsRole` + attachment, anomaly monitor + subscription; 8 imported, 0 changed. The monthly budget's third alert (100 % actual) recorded                                                                                                                                         |
 | 2026-10-06 | Limits raised: zero-spend alert > $0.25, monthly $5, hard stop $10 (see Budgets and cost). AWS Budgets email verification: both alert addresses verified. Action status Standby                                                                                                                                                                                          |
 | 2026-10-06 | Off-site backups moved from CloudFormation to Terraform (ADR-062): Retain on the bucket policy and user, stack updated, then deleted (bucket, policy, user `DELETE_SKIPPED`); before/after snapshots identical apart from CloudFormation's own `aws:cloudformation:*` bucket tags, which it removed. 9 imported, 0 changed; plan = No changes. Key and Dokploy untouched |
+| 2026-10-28 | Drift check (ADR-089, `drift_check.tf`): GitHub OIDC provider and role `echoandaura-drift-check` in code. Not yet applied; the owner applies after merge ([TERRAFORM.md → Drift check](TERRAFORM.md#drift-check))                                                                                                                                                        |

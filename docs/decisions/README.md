@@ -101,6 +101,8 @@ flowchart LR
         Docker from signed apt`"]
         a086["`**ADR-086**
         Releases carry provenance`"]
+        a089["`**ADR-089**
+        Weekly drift check`"]
         a036 -.-> a066
         a040 -.-> a066
         a054 -.-> a066
@@ -122,6 +124,8 @@ flowchart LR
         a084 -.-> a085
         a075 -.-> a086
         a082 -.-> a086
+        a062 -.-> a089
+        a082 -.-> a089
     end
     %% Mermaid draws the last group on top, so the groups are declared bottom first.
     subgraph analytics ["Visit counts"]
@@ -376,6 +380,7 @@ flowchart LR
 | 085 | [Docker from its signed apt repository, before Dokploy's script](085-docker-from-signed-apt.md)                              | Accepted                                                                   | 2026-10-26 |
 | 086 | [Each GitHub Release carries its images' signed provenance](086-releases-carry-provenance.md)                                | Accepted                                                                   | 2026-10-26 |
 | 088 | [Restore drill: the newest off-site backup, restored on the server in a throwaway, compared with live](088-restore-drill.md) | Accepted                                                                   | 2026-10-27 |
+| 089 | [Weekly drift check: a read-only plan in GitHub Actions, results without details](089-drift-check.md)                        | Accepted                                                                   | 2026-10-28 |
 
 ### Code structure and tooling
 

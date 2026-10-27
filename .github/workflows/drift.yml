@@ -1,0 +1,140 @@
+name: Drift check
+
+# ADR-089: has anyone changed Cloudflare or AWS outside the code? A
+# read-only `terraform plan` of both modules, weekly. If either is not
+# clean it opens (or comments on) one issue, without details: the
+# repository is public, and a plan prints private identifiers. The details
+# come from `pnpm tf:<module> plan` on a laptop (TERRAFORM.md → Drift check).
+on:
+  # Mondays 03:00 Asia/Dhaka: a quiet hour, after the weekend's Dependabot
+  # and Scorecard runs.
+  schedule:
+    - cron: '0 21 * * 0'
+  # By hand after setting it up, or to confirm a fix.
+  workflow_dispatch:
+
+# Nothing at the top level: each job below gets only what it needs.
+permissions: {}
+
+concurrency:
+  group: drift-check
+  cancel-in-progress: false
+
+jobs:
+  # Holds the credentials; can't write to the repository.
+  plan:
+    runs-on: ubuntu-24.04
+    # The AWS role trusts this environment only, and GitHub lets only `main`
+    # use it, so its secrets never reach a branch or a pull request.
+    environment: drift
+    permissions:
+      contents: read
+      # Sign in to AWS with this job's OIDC token, no stored key.
+      id-token: write
+    outputs:
+      aws: ${{ steps.aws.outputs.result }}
+      cloudflare: ${{ steps.cloudflare.outputs.result }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.15.6
+          terraform_wrapper: false
+
+      # Into the profile both backends and the AWS provider name, so the
+      # .tf files are the same on a laptop and here. The runner is thrown
+      # away after the job, and the credentials expire in 15 minutes.
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DRIFT_ROLE_ARN }}
+          aws-region: ap-south-1
+          aws-profile: echoandaura
+          role-session-name: drift-check
+          role-duration-seconds: 900
+          mask-aws-account-id: true
+
+      - id: aws
+        env:
+          TF_IN_AUTOMATION: '1'
+          TF_VAR_ses_feedback_email: ${{ secrets.TF_VAR_SES_FEEDBACK_EMAIL }}
+          TF_VAR_alerts_developer_email: ${{ secrets.TF_VAR_ALERTS_DEVELOPER_EMAIL }}
+          TF_VAR_alerts_account_email: ${{ secrets.TF_VAR_ALERTS_ACCOUNT_EMAIL }}
+        run: ops/terraform/drift-plan.sh aws
+
+      # Its state is in the same S3 bucket, so it needs the AWS sign-in too.
+      - id: cloudflare
+        env:
+          TF_IN_AUTOMATION: '1'
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DRIFT_TOKEN }}
+          TF_VAR_cloudflare_account_id: ${{ secrets.TF_VAR_CLOUDFLARE_ACCOUNT_ID }}
+          TF_VAR_cloudflare_zone_id: ${{ secrets.TF_VAR_CLOUDFLARE_ZONE_ID }}
+          TF_VAR_access_admin_emails: ${{ secrets.TF_VAR_ACCESS_ADMIN_EMAILS }}
+          TF_VAR_access_developer_emails: ${{ secrets.TF_VAR_ACCESS_DEVELOPER_EMAILS }}
+          # The docs domain is live; the laptop's .env says true as well
+          # (TERRAFORM.md). If they ever differ, every week reports drift.
+          TF_VAR_docs_custom_domain_enabled: 'true'
+        run: ops/terraform/drift-plan.sh cloudflare
+
+  # Writes the issue; holds no credentials and runs no repository code.
+  report:
+    needs: plan
+    # Also when `plan` failed (an expired token, an outage): a check that
+    # can't run must say so, not stay quiet.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    env:
+      AWS_RESULT: ${{ needs.plan.outputs.aws }}
+      CLOUDFLARE_RESULT: ${{ needs.plan.outputs.cloudflare }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - run: |
+          set -euo pipefail
+          # Anything but the three words (an empty output when `plan` died
+          # early) counts as failed.
+          word() { case "$1" in clean | drift) echo "$1" ;; *) echo failed ;; esac; }
+          aws=$(word "$AWS_RESULT")
+          cloudflare=$(word "$CLOUDFLARE_RESULT")
+          summary="aws: $aws, cloudflare: $cloudflare"
+          today=$(date -u +%F)
+
+          title='Drift check needs attention'
+          open=$(gh issue list --state open --search "\"$title\" in:title" \
+            --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n 1)
+
+          if [ "$aws" = clean ] && [ "$cloudflare" = clean ]; then
+            echo "$summary"
+            if [ -n "$open" ]; then
+              gh issue close "$open" --comment "Clean again on $today ($summary). $RUN_URL"
+            fi
+            exit 0
+          fi
+
+          body=$(cat <<EOF
+          The drift check on $today did not come back clean:
+
+          - aws: **$aws**
+          - cloudflare: **$cloudflare**
+
+          **drift**: something was changed outside the code. **failed**: the check could not run (an expired token, a missing permission, an outage).
+
+          No details here: the repository is public. On a laptop, \`pnpm tf:aws plan\` or \`pnpm tf:cloudflare plan\` shows them. What to do: docs/infra/TERRAFORM.md → Drift check.
+
+          Run: $RUN_URL
+          EOF
+          )
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$body"
+          else
+            gh issue create --title "$title" --label infra --body "$body"
+          fi
+          echo "::error::$summary"
+          exit 1

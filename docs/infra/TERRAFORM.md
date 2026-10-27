@@ -1,6 +1,6 @@
 # Terraform
 
-Status: ACTIVE · Owner: Evan · Last updated: 2026-10-08
+Status: ACTIVE · Owner: Evan · Last updated: 2026-10-28
 
 Terraform keeps the Cloudflare and AWS set-up as code in
 `ops/terraform/` (ADR-062). Before Terraform, every setting was a click in
@@ -54,6 +54,7 @@ ops/aws/terraform-state.yaml     the S3 bucket for the state (CloudFormation, ma
 ops/terraform/aws/               AWS: SES, SNS, IAM, budgets, the off-site bucket
 ops/terraform/cloudflare/        Cloudflare: DNS, Pages, zone rules and settings, Access
 ops/terraform/.tflint.hcl        lint rules for both folders
+ops/terraform/drift-plan.sh      the weekly drift check's plan, reduced to one word (Drift check)
 ```
 
 Two folders, two state files. A Cloudflare apply can never change AWS.
@@ -70,7 +71,12 @@ request, for both folders: `terraform fmt -check`, `init -backend=false`
 from the lock file, `validate`, and `tflint`. It has no credentials and
 never touches the state, so it can't plan or change anything. A red
 `terraform` check usually means: run `terraform fmt -recursive
-ops/terraform` and commit. Plan and apply stay on a laptop.
+ops/terraform` and commit.
+
+The one plan that runs outside a laptop is the weekly **drift check**
+(`.github/workflows/drift.yml`, below). It uses read-only credentials and
+prints one word per folder, never the plan. Every plan you read and every
+apply still happen on a laptop.
 
 ## Before you start (once per laptop)
 
@@ -126,18 +132,19 @@ a `plan` that says no changes.
 
 ## What is managed
 
-| Folder        | File                 | Resources                                                                                                                                                        | Since               |
-| ------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `cloudflare/` | `dns.tf`             | 12 owned DNS records: the original 11 plus the docs CNAME ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                              | 2026-10-05          |
-| `cloudflare/` | `pages.tf`           | Static Direct Upload project `echoandaura-docs` and custom domain `docs.echoandaura.com`; destruction guards on both                                             | 2026-10-08 verified |
-| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                                            | 2026-10-05          |
-| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                                             | 2026-10-05          |
-| `cloudflare/` | `analytics.tf`       | Web Analytics site for the zone, `auto_install = false`, destruction guard; output `web_analytics_token` (public) ([ADR-077](../decisions/077-web-analytics.md)) | 2026-10-15          |
-| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                                                  | 2026-10-05          |
-| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription                             | 2026-10-05          |
-| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                                         | 2026-10-05          |
-| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                                              | 2026-10-05          |
-| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation                       | 2026-10-06          |
+| Folder        | File                 | Resources                                                                                                                                                            | Since               |
+| ------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `cloudflare/` | `dns.tf`             | 12 owned DNS records: the original 11 plus the docs CNAME ([CLOUDFLARE.md → DNS](CLOUDFLARE.md#dns--the-authoritative-record-list))                                  | 2026-10-05          |
+| `cloudflare/` | `pages.tf`           | Static Direct Upload project `echoandaura-docs` and custom domain `docs.echoandaura.com`; destruction guards on both                                                 | 2026-10-08 verified |
+| `cloudflare/` | `rules.tf`           | the 4 zone rule lists: WAF custom (3 rules), rate limit, cache, www→root redirect. Terraform owns each **whole** list                                                | 2026-10-05          |
+| `cloudflare/` | `zone.tf`            | email obfuscation (off), DNSSEC (on)                                                                                                                                 | 2026-10-05          |
+| `cloudflare/` | `analytics.tf`       | Web Analytics site for the zone, `auto_install = false`, destruction guard; output `web_analytics_token` (public) ([ADR-077](../decisions/077-web-analytics.md))     | 2026-10-15          |
+| `cloudflare/` | `access.tf`          | Access apps `Admin`, `Dokploy`; policies `admins`, `developer`, `github deploy`. Emails from `.env` (sensitive)                                                      | 2026-10-05          |
+| `aws/`        | `ses.tf`             | SES domain identity, MAIL FROM, feedback forwarding, Bounce/Complaint topics; SNS `ses-feedback`, its policy, the email subscription                                 | 2026-10-05          |
+| `aws/`        | `iam.tf`             | user `echoandaura-worker` and its `ses-send-only` policy (never its key)                                                                                             | 2026-10-05          |
+| `aws/`        | `budgets.tf`         | 3 budgets, the hard-stop action and `BudgetsActionsRole`, the cost-anomaly monitor and subscription                                                                  | 2026-10-05          |
+| `aws/`        | `drift_check.tf`     | the GitHub OIDC provider and role `echoandaura-drift-check` (ReadOnlyAccess + a Deny on data reads) for the drift check ([ADR-089](../decisions/089-drift-check.md)) | 2026-10-28 (code)   |
+| `aws/`        | `offsite_backups.tf` | the off-site backup bucket (versioning, lifecycle, encryption, policy) and its upload-only user (never its key). Moved from CloudFormation                           | 2026-10-06          |
 
 Adopting something that already exists: write the resource in code, add
 an `import { to = …, id = "…" }` block, run `plan`. It must say
@@ -192,6 +199,88 @@ Terraform itself (`required_version` in both `versions.tf`, and
 `terraform_version` in `.github/workflows/ci.yml`) is not updated by
 Dependabot: upgrade all three together, by hand, in their own PR.
 
+## Drift check
+
+Once a week a GitHub Action asks both folders "does reality still match
+the code?" ([ADR-089](../decisions/089-drift-check.md)). It is a `plan`
+that nobody has to remember to run. Mondays 03:00 Dhaka, or by hand:
+GitHub → Actions → **Drift check** → Run workflow.
+
+The repository is public, so the run's log is too, and a plan prints
+resource ids, the AWS account id and email addresses. So the check never
+shows the plan. Each folder comes back as one word:
+
+| Word       | Meaning                                                                        | What to do                                                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **clean**  | The plan said No changes                                                       | Nothing. If an issue was open, the check closes it                                                                                                                                              |
+| **drift**  | The plan wants to change something: someone changed a setting outside the code | On a laptop, `pnpm tf:<folder> plan` and read it. Find who and why (Cloudflare audit log, AWS CloudTrail). Then apply (the code wins) or change the code (reality wins). Plan again: No changes |
+| **failed** | The check could not run                                                        | Usually an expired or under-permissioned Cloudflare read token, or a provider outage. Run `pnpm tf:<folder> plan` on a laptop: if that works, check the token and the `drift` secrets (below)   |
+
+If either folder isn't clean, the check opens one issue, **Drift check
+needs attention** (label `infra`), or adds a comment to it while it is
+open. The first clean run after that closes it. Run the check by hand to
+confirm a fix.
+
+How it stays harmless:
+
+- **AWS without a stored key.** GitHub hands the job a short-lived
+  identity token, and AWS swaps it for the role `echoandaura-drift-check`
+  (`aws/drift_check.tf`) for 15 minutes. The role trusts only this
+  repository's `drift` environment, and that environment allows only
+  `main`. The role reads configuration (AWS's `ReadOnlyAccess`) but is
+  denied every S3 object except the state files (the off-site backups hold
+  buyers' details), secret and parameter values, logs, SES's suppression
+  list (buyers' addresses) and other data.
+- **No lock.** The role can't write the lock file to the state bucket, so
+  the check plans with `-lock=false`. A plan changes nothing. The one
+  side effect: a check that runs while you apply on a laptop can see
+  things half-changed and say `drift` or `failed`. Run it again by hand.
+- **Two jobs.** `plan` holds the credentials and can't write to the
+  repository. `report` writes the issue and holds no credentials.
+- **Cloudflare with a read-only token** (below). It can't change anything.
+
+### The drift check's Cloudflare token
+
+An **account** API token named `drift-check`, made by hand like
+`terraform`. Bitwarden `Cloudflare drift check token`; only in the GitHub
+environment `drift`, never in `.env`. It has **Read** on each permission
+group the `terraform` token has Edit or Read on, and nothing else:
+
+| Scope                              | Permission                                  |
+| ---------------------------------- | ------------------------------------------- |
+| Specified domain `echoandaura.com` | Zone → Read                                 |
+| Specified domain `echoandaura.com` | DNS → Read                                  |
+| Specified domain `echoandaura.com` | Zone WAF → Read                             |
+| Specified domain `echoandaura.com` | Cache Rules → Read                          |
+| Specified domain `echoandaura.com` | Single Redirect → Read                      |
+| Specified domain `echoandaura.com` | Zone Settings → Read                        |
+| Entire account                     | Access (Cloudflare One / Zero Trust) → Read |
+| Intended account                   | Cloudflare Pages → Read                     |
+| Intended account                   | Account Settings → Read                     |
+
+**When the `terraform` token gains a permission, this one gains Read on
+it in the same change.** Otherwise the next check comes back `failed`.
+
+### Setting it up (once, after the PR merges)
+
+1. `aws login --profile echoandaura`, then
+   `aws iam list-open-id-connect-providers --profile echoandaura`. If one
+   for `token.actions.githubusercontent.com` already exists, add an
+   `import` block for it first (What is managed → Adopting).
+2. `pnpm tf:aws plan`: **4 to add, 0 to change, 0 to destroy** (the OIDC
+   provider, the role, its policy attachment, its inline policy). Apply,
+   then plan again: No changes.
+3. Cloudflare: make the `drift-check` token (table above) and save it in
+   Bitwarden.
+4. GitHub → Settings → Environments → **New environment** `drift`.
+   Deployment branches: **Selected branches**, `main` only. Add its
+   secrets ([SECRETS.md](SECRETS.md#github-environment-drift)): the role's
+   ARN (`aws iam get-role --role-name echoandaura-drift-check --profile
+echoandaura`), the token, and the same `TF_VAR_*` values as the
+   laptop's `.env`.
+5. Actions → Drift check → Run workflow. Both folders should come back
+   **clean**, and no issue should open.
+
 ## When something goes wrong
 
 - **`Error acquiring the state lock`**: another plan/apply is running, or
@@ -200,7 +289,8 @@ Dependabot: upgrade all three together, by hand, in their own PR.
 - **`ExpiredToken` / `session has expired`**: `aws login --profile echoandaura`.
 - **Plan wants to change something nobody touched**: drift. Find out who
   changed it and why (Cloudflare audit log, AWS CloudTrail), then either
-  apply (the code wins) or update the code (reality wins).
+  apply (the code wins) or update the code (reality wins). The weekly
+  check finds this too (Drift check).
 - **A bad apply**: fix forward in code and apply again. If the state
   itself is damaged, restore the previous version of the state file in S3
   ([AWS.md](AWS.md#terraform-state)).
@@ -220,3 +310,4 @@ Dependabot: upgrade all three together, by hand, in their own PR.
 | 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                                                                                                                                                                                                                 |
 | 2026-10-08 | D3A production rollout confirmed (ADR-065). Local token gained account Pages Edit. Owner reviewed/applied Stage A (1 add, 1 change, 0 destroy) and Stage B (2 add, 0 change, 0 destroy), then explicitly confirmed No changes after each. Static Pages upload and live custom-domain checks passed; PR preview remains pending. No new Terraform apply is required for this documentation record |
 | 2026-10-15 | Web Analytics site (ADR-077): token + Account Settings Read, with Edit for the apply only. Plan 1 add, 0 change, 0 destroy; applied; token back to Read; plan = No changes                                                                                                                                                                                                                       |
+| 2026-10-28 | Weekly drift check (ADR-089, Phase 9.8): `aws/drift_check.tf` (GitHub OIDC provider, read-only role), `drift-plan.sh`, `drift.yml`. Code only; the apply, the `drift-check` token and the `drift` environment follow the merge (Drift check → Setting it up)                                                                                                                                     |
