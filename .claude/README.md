@@ -8,18 +8,20 @@ the guardrails are in [ADR-072](../docs/decisions/072-ai-guardrails.md).
 
 ## May and never
 
-| Claude may                                                  | Claude never (the owner does it)                                            |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Edit code, run tests, builds and `pnpm verify`              | Commit, push, tag, merge, or publish a release                              |
-| Read production over `ssh echoandaura`: counts, logs, state | Change production: SQL writes, files, containers, queues, services          |
-| `terraform plan`, `pnpm ansible check`, read-only `aws`     | Apply Terraform or Ansible, deploy to Cloudflare, push images, write to AWS |
-| Read GitHub: PRs, runs, releases                            | Change repo settings, secrets, variables, or start workflows                |
-| Prepare commit messages, PR bodies and the owner's commands | Write a secret into a file (`no-secrets.sh`), read `.env`                   |
+| Claude may                                                  | Claude never (the owner does it)                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Edit code, run tests, builds and `pnpm verify`              | Commit, push, tag, merge, or publish a release                                               |
+| Read production over `ssh echoandaura`: counts, logs, state | Change production: SQL writes, files, containers, queues, services; copy files to or from it |
+| `terraform plan`, `pnpm ansible check`, read-only `aws`     | Apply Terraform or Ansible, deploy to Cloudflare, push images, write to AWS                  |
+| Read GitHub: PRs, runs, releases                            | Change repo settings, secrets, variables, or start workflows                                 |
+| Prepare commit messages, PR bodies and the owner's commands | Write a secret into a file (`no-secrets.sh`), read `.env`                                    |
 
 The right-hand column is enforced twice: [settings.json](settings.json) denies
 those commands where they start, and [hooks/guard-bash.sh](hooks/guard-bash.sh)
 refuses them even inside `cd x && …` or `ssh echoandaura '…'`, with a message
-to hand the command to the owner instead.
+to hand the command to the owner instead. A few are the hook's alone, where a
+settings rule would also deny local work: `rsync` (only to or from the server
+is refused), docker through `-H ssh://…`, and ad-hoc `ansible`.
 [claude-hooks.test.ts](../tests/unit/claude-hooks.test.ts) proves each rule
 both ways.
 

@@ -34,6 +34,51 @@ describe('guard-bash: production is read-only for Claude', () => {
     ['a firewall change', `ssh echoandaura 'ufw allow 3000'`],
     ['a reboot', `ssh echoandaura 'reboot'`],
     ['by address', `ssh root@160.25.226.166 'systemctl restart docker'`],
+    // Docker reaches the server without `ssh ` in the command.
+    ['a restart through -H', 'docker -H ssh://echoandaura restart echoandaura-app-web-1'],
+    [
+      'a service update through --host=',
+      'docker --host=ssh://root@160.25.226.166 service update --force echoandaura-db',
+    ],
+    ['a restart through DOCKER_HOST', 'DOCKER_HOST=ssh://echoandaura docker restart web'],
+    [
+      'SQL through DOCKER_HOST',
+      `DOCKER_HOST=ssh://echoandaura docker exec $C psql -c "delete from orders"`,
+    ],
+    ['a context to the server', 'docker context create prod --docker host=ssh://echoandaura'],
+    ['a start through -H', 'docker -H ssh://echoandaura start echoandaura-app-web-1'],
+    ['a new container through -H', 'docker -H ssh://echoandaura run -d --name x alpine sleep 1'],
+    [
+      'a compose pull through DOCKER_HOST',
+      'DOCKER_HOST=ssh://echoandaura docker compose -f docker-compose.prod.yml pull',
+    ],
+    ['global flags first', 'docker --log-level debug -H ssh://echoandaura restart web'],
+    ['a TLS flag with a value', 'docker -H ssh://echoandaura --tlscacert x restart web'],
+    // Ad-hoc Ansible reaches the server without ssh in the command.
+    [
+      'an Ansible shell',
+      `ansible echoandaura -i ops/ansible/inventory/production.yml -b -m shell -a 'docker restart web'`,
+    ],
+    [
+      'an Ansible service restart',
+      `ansible all -i ops/ansible/inventory/production.yml -b -m service -a 'name=docker state=restarted'`,
+    ],
+    // Copies over plain ssh.
+    ['a dump saved on the laptop', `ssh echoandaura 'pg_dump -Fc echoandaura' > before.dump`],
+    ['a file saved on the laptop', `ssh echoandaura 'cat /root/before-wipe.dump' > x.dump`],
+    ['a local file fed to psql', `ssh echoandaura 'docker exec -i $C psql' < fix.sql`],
+    ['an archive unpacked', `tar c ops | ssh echoandaura 'tar x -C /tmp/x'`],
+    // Copying files, either way.
+    ['a copy to the server', 'scp ops/db/x.sh echoandaura:/root/'],
+    ['a copy from the server', 'scp echoandaura:/root/before-wipe.dump .'],
+    ['a copy by address', 'scp -P 22 x root@160.25.226.166:/tmp/x'],
+    ['an rsync to the server', 'rsync -av ./ops/ echoandaura:/tmp/x/'],
+    ['an rsync over ssh', `rsync -e 'ssh -o BatchMode=yes' echoandaura:/var/log/x .`],
+    ['an sftp session', 'sftp echoandaura'],
+    ['a mount', 'sshfs echoandaura:/ /tmp/server'],
+    ['a key install', 'ssh-copy-id -i ~/.ssh/id_ed25519.pub echoandaura'],
+    ['a copy by URL', 'scp x scp://echoandaura//root/x'],
+    ['a copy by full path', '/usr/bin/scp x echoandaura:/root/'],
   ])('refuses %s', (_, command) => {
     const result = bash(command);
     expect(result.status).toBe(2);
@@ -61,8 +106,37 @@ describe('guard-bash: production is read-only for Claude', () => {
     ],
     ['redis reads', `ssh echoandaura 'r(){ redis-cli "$@"; }; r ZRANGE bull:orders:failed 0 -1'`],
     ['logs', `ssh echoandaura 'docker logs --since 1h echoandaura-app-worker-1 2>&1 | tail'`],
+    ['containers through -H', 'docker -H ssh://echoandaura ps --format "{{.Names}}"'],
+    ['logs through DOCKER_HOST', 'DOCKER_HOST=ssh://echoandaura docker logs --since 1h x'],
+    // Local work that names the repository folder or the tools.
+    ['a local rsync', 'rsync -a ~/Development/echoandaura/src/ /tmp/x/'],
+    ['a local restart', 'docker restart echoandaura-postgres'],
+    ['a search', 'grep -rn scp docs/infra/SERVER.md'],
+    ['a search for the owner’s copy', `grep -n 'scp ' docs/infra/SERVER.md | grep echoandaura`],
+    ['a git remote', 'git ls-remote ssh://git@github.com/Ashfak-Hossain/echoandaura.git'],
+    ['a copy to another host', 'rsync -a x backup:/srv/'],
+    ['a local context', 'docker context create colima --docker host=unix:///tmp/x.sock'],
+    ['the lab VM', `ssh echoandaura-lab 'docker restart web'`],
+    ['an Ansible ping', 'ansible echoandaura -i ops/ansible/inventory/production.yml -m ping'],
+    ['output kept on the server side', `ssh echoandaura 'pg_dump -s echoandaura | wc -c'`],
+    ['output thrown away', `ssh echoandaura 'docker ps' >/dev/null 2>&1`],
+    ['a heredoc of reads', `ssh echoandaura bash <<'EOF'\ndocker ps\nEOF`],
   ])('allows %s', (_, command) => {
     expect(bash(command).status).toBe(0);
+  });
+
+  it('denies the copy tools in the settings too', () => {
+    const { permissions } = JSON.parse(readFileSync('.claude/settings.json', 'utf8')) as {
+      permissions: { deny: string[] };
+    };
+    expect(permissions.deny).toEqual(
+      expect.arrayContaining([
+        'Bash(scp *)',
+        'Bash(sftp *)',
+        'Bash(sshfs *)',
+        'Bash(ssh-copy-id *)',
+      ]),
+    );
   });
 });
 

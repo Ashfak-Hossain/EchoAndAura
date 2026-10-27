@@ -31,10 +31,18 @@ nothing technical keeping it that way.
   the backstop, because permission patterns miss `cd x && …` and
   `ssh host '…'`. It refuses, with a message telling Claude to hand the
   command to the owner:
-  - over ssh to production: SQL that writes, `pg_restore` (except
-    `--list`), file changes, container/service/volume changes, BullMQ and
-    Redis writes, and system changes. Reads, counts, logs, `docker ps`
+  - over ssh to production, docker through `-H`/`--host`/`DOCKER_HOST`
+    `ssh://…` (global flags before the subcommand included), or ad-hoc
+    `ansible` against production's inventory: SQL that writes,
+    `pg_restore` (except `--list`), file changes, an archive unpacked,
+    container/service/volume/image changes, BullMQ and Redis writes, system
+    changes, a docker context that points at the server, and any ad-hoc
+    Ansible module but `ping` and `setup`. Reads, counts, logs, `docker ps`
     and health checks stay allowed;
+  - copying files to or from the server (added 2026-10-27): `scp`,
+    `rsync`, `sftp`, `sshfs`, `ssh-copy-id`, the server's output saved to a
+    local file, and a local file fed to it. To it changes files; from it
+    can bring buyer data to the laptop (ADR-051);
   - anywhere: creating, moving or deleting tags; pushing tags; changing
     GitHub Releases; merging or closing PRs; repository settings, secrets,
     variables and workflow runs; GitHub API writes; Terraform applies and

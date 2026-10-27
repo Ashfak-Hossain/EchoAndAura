@@ -107,7 +107,11 @@
       "Bash(npx wrangler deploy*)",
       "Bash(wrangler deploy*)",
       "Bash(docker push*)",
-      "Bash(docker buildx imagetools create*)"
+      "Bash(docker buildx imagetools create*)",
+      "Bash(scp *)",
+      "Bash(sftp *)",
+      "Bash(sshfs *)",
+      "Bash(ssh-copy-id *)"
     ]
   },
   "hooks": {
