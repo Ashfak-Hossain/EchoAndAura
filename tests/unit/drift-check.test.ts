@@ -74,6 +74,9 @@ describe('drift_check.tf', () => {
     expect(tf).toContain(
       '"token.actions.githubusercontent.com:sub" = "repo:${local.github_repo}:environment:drift"',
     );
+    // The immutable subject GitHub issues for this repository: names alone
+    // never match, so a role trusting them refuses every run.
+    expect(tf).toContain('github_repo  = "Ashfak-Hossain@73357589/EchoAndAura@1371305158"');
     expect(tf).toContain('"token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"');
     expect(tf).not.toMatch(/StringLike/);
   });

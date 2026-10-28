@@ -35,8 +35,12 @@ account id and email addresses.
   but holds no secrets and checks out no code.
 - **AWS without a stored key.** A GitHub OIDC provider and the role
   `echoandaura-drift-check` ([drift_check.tf](../../ops/terraform/aws/drift_check.tf)).
-  The role trusts only `repo:Ashfak-Hossain/echoandaura:environment:drift`,
-  and the GitHub environment `drift` allows only `main`. Credentials last
+  The role trusts only
+  `repo:Ashfak-Hossain@73357589/EchoAndAura@1371305158:environment:drift`,
+  and the GitHub environment `drift` allows only `main`. That is GitHub's
+  immutable subject, with the owner's and the repository's numeric ids,
+  which this repository's tokens carry. AWS compares it exactly, capitals
+  included; the first run, trusting the lowercase names alone, was refused. Credentials last
   15 minutes. They are written to the `echoandaura` profile that both
   backends and the AWS provider already name, so the `.tf` files are the
   same in CI and on a laptop.
@@ -81,8 +85,6 @@ the same, and the details need a laptop. The Cloudflare read token must
 gain Read on each new permission group the `terraform` token gains Edit on.
 
 **Revisit when:** the repository or its owner is renamed or transferred
-(the trust names the repository, so whoever takes the old name would
-match it: switch the OIDC subject to the numeric ids), a second
-maintainer can merge to `main`, the repository
+(the subject changes, and the check fails until the trust is updated), a second maintainer can merge to `main`, the repository
 becomes private (then the plan could be printed), Cloudflare tokens can be
 issued by OIDC, or a resource needs a permission that ReadOnlyAccess lacks.
