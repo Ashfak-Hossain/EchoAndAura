@@ -111,17 +111,17 @@ changes. Bitwarden `Cloudflare Terraform token`; only in the laptop's
 here when a new area comes under Terraform. Editing a token's
 permissions keeps its value, so `.env` does not change.
 
-| Scope                              | Permission                                  | Needed for                             |
-| ---------------------------------- | ------------------------------------------- | -------------------------------------- |
-| Specified domain `echoandaura.com` | Zone → Read                                 | everything in the zone                 |
-| Specified domain `echoandaura.com` | DNS → Edit                                  | `dns.tf`                               |
-| Specified domain `echoandaura.com` | Zone WAF → Edit                             | `rules.tf`: `waf_custom`, `rate_limit` |
-| Specified domain `echoandaura.com` | Cache Rules → Edit                          | `rules.tf`: `cache`                    |
-| Specified domain `echoandaura.com` | Single Redirect → Edit                      | `rules.tf`: `redirect`                 |
-| Specified domain `echoandaura.com` | Zone Settings → Edit                        | `zone.tf`: email obfuscation, DNSSEC   |
-| Entire account                     | Access (Cloudflare One / Zero Trust) → Edit | `access.tf`: apps and policies         |
-| Intended account                   | Cloudflare Pages → Edit                     | `pages.tf`: project and domain         |
-| Intended account                   | Account Settings → Read                     | `analytics.tf`: reading the site       |
+| Scope                              | Permission                                         | Needed for                             |
+| ---------------------------------- | -------------------------------------------------- | -------------------------------------- |
+| Specified domain `echoandaura.com` | Zone → Read                                        | everything in the zone                 |
+| Specified domain `echoandaura.com` | DNS → Edit                                         | `dns.tf`                               |
+| Specified domain `echoandaura.com` | Zone WAF → Edit                                    | `rules.tf`: `waf_custom`, `rate_limit` |
+| Specified domain `echoandaura.com` | Cache Settings → Edit (was Cache Rules)            | `rules.tf`: `cache`                    |
+| Specified domain `echoandaura.com` | Dynamic URL Redirects → Edit (was Single Redirect) | `rules.tf`: `redirect`                 |
+| Specified domain `echoandaura.com` | Zone Settings → Edit                               | `zone.tf`: email obfuscation, DNSSEC   |
+| Entire account                     | Access: Apps and Policies → Edit                   | `access.tf`: apps and policies         |
+| Intended account                   | Pages → Edit                                       | `pages.tf`: project and domain         |
+| Intended account                   | Account Settings → Read                            | `analytics.tf`: reading the site       |
 
 **Account Settings → Edit, only for the apply that changes `analytics.tf`.**
 Cloudflare accepts no narrower permission for creating, changing or
@@ -246,17 +246,17 @@ An **account** API token named `drift-check`, made by hand like
 environment `drift`, never in `.env`. It has **Read** on each permission
 group the `terraform` token has Edit or Read on, and nothing else:
 
-| Scope                              | Permission                                  |
-| ---------------------------------- | ------------------------------------------- |
-| Specified domain `echoandaura.com` | Zone → Read                                 |
-| Specified domain `echoandaura.com` | DNS → Read                                  |
-| Specified domain `echoandaura.com` | Zone WAF → Read                             |
-| Specified domain `echoandaura.com` | Cache Rules → Read                          |
-| Specified domain `echoandaura.com` | Single Redirect → Read                      |
-| Specified domain `echoandaura.com` | Zone Settings → Read                        |
-| Entire account                     | Access (Cloudflare One / Zero Trust) → Read |
-| Intended account                   | Cloudflare Pages → Read                     |
-| Intended account                   | Account Settings → Read                     |
+| Scope                              | Permission                                         |
+| ---------------------------------- | -------------------------------------------------- |
+| Specified domain `echoandaura.com` | Zone → Read                                        |
+| Specified domain `echoandaura.com` | DNS → Read                                         |
+| Specified domain `echoandaura.com` | Zone WAF → Read                                    |
+| Specified domain `echoandaura.com` | Cache Settings → Read (was Cache Rules)            |
+| Specified domain `echoandaura.com` | Dynamic URL Redirects → Read (was Single Redirect) |
+| Specified domain `echoandaura.com` | Zone Settings → Read                               |
+| Entire account                     | Access: Apps and Policies → Read                   |
+| Entire account                     | Pages → Read                                       |
+| Entire account                     | Account Settings → Read                            |
 
 **When the `terraform` token gains a permission, this one gains Read on
 it in the same change.** Otherwise the next check comes back `failed`.
@@ -297,17 +297,18 @@ echoandaura`), the token, and the same `TF_VAR_*` values as the
 
 ## History
 
-| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                           |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                                                                                                                                                                                                                                                    |
-| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                                                                                                                                                                                                                                                    |
-| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                                                                                                                                                                                                                           |
-| 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed                                                                                                                                                                                               |
-| 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                                                                                                                                                                                                                         |
-| 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                                                                                                                                                                                                                        |
-| 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                                                                                                                                                                                                               |
-| 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                                                                                                                                                                                                                 |
-| 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                                                                                                                                                                                                                 |
-| 2026-10-08 | D3A production rollout confirmed (ADR-065). Local token gained account Pages Edit. Owner reviewed/applied Stage A (1 add, 1 change, 0 destroy) and Stage B (2 add, 0 change, 0 destroy), then explicitly confirmed No changes after each. Static Pages upload and live custom-domain checks passed; PR preview remains pending. No new Terraform apply is required for this documentation record |
-| 2026-10-15 | Web Analytics site (ADR-077): token + Account Settings Read, with Edit for the apply only. Plan 1 add, 0 change, 0 destroy; applied; token back to Read; plan = No changes                                                                                                                                                                                                                       |
-| 2026-10-28 | Weekly drift check (ADR-089, Phase 9.8): `aws/drift_check.tf` (GitHub OIDC provider, read-only role), `drift-plan.sh`, `drift.yml`. Code only; the apply, the `drift-check` token and the `drift` environment follow the merge (Drift check → Setting it up)                                                                                                                                     |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-05 | ADR-062. State bucket created. `ops/terraform/{aws,cloudflare}` set up with pinned versions; no resources yet                                                                                                                                                                                                                                                                                      |
+| 2026-10-05 | Cloudflare token `terraform` (Zone Read, DNS Edit). 11 DNS records imported with no change; plan = No changes                                                                                                                                                                                                                                                                                      |
+| 2026-10-05 | Token: + Zone WAF, Cache Rules, Single Redirect, Zone Settings (Edit). 4 rulesets and 2 zone settings imported with no change; plan = No changes. 17 resources managed                                                                                                                                                                                                                             |
+| 2026-10-05 | R2 and Email Routing kept out (ADR-062 addendum). Token: + Access Edit (account). Access apps and policies imported; emails as sensitive `.env` variables. Plan = No changes. 22 resources managed                                                                                                                                                                                                 |
+| 2026-10-05 | AWS: SES, SNS feedback, the worker user imported (10); plan = No changes. `pnpm tf:aws` now loads `.env`                                                                                                                                                                                                                                                                                           |
+| 2026-10-05 | AWS budgets, hard-stop action and role, anomaly detection imported (8); plan = No changes                                                                                                                                                                                                                                                                                                          |
+| 2026-10-06 | First real change through Terraform: budget limits raised (3 changed). 40 resources managed: 22 Cloudflare, 18 AWS                                                                                                                                                                                                                                                                                 |
+| 2026-10-06 | Off-site backups moved from CloudFormation (Retain, delete stack, import 9, 0 changed). Migration complete: 49 resources, 22 Cloudflare + 27 AWS                                                                                                                                                                                                                                                   |
+| 2026-10-06 | Dependabot watches the `aws` and `cloudflare` providers weekly (Phase 9.1); see Provider updates                                                                                                                                                                                                                                                                                                   |
+| 2026-10-08 | D3A production rollout confirmed (ADR-065). Local token gained account Pages Edit. Owner reviewed/applied Stage A (1 add, 1 change, 0 destroy) and Stage B (2 add, 0 change, 0 destroy), then explicitly confirmed No changes after each. Static Pages upload and live custom-domain checks passed; PR preview remains pending. No new Terraform apply is required for this documentation record   |
+| 2026-10-15 | Web Analytics site (ADR-077): token + Account Settings Read, with Edit for the apply only. Plan 1 add, 0 change, 0 destroy; applied; token back to Read; plan = No changes                                                                                                                                                                                                                         |
+| 2026-10-28 | Weekly drift check (ADR-089, Phase 9.8): `aws/drift_check.tf` (GitHub OIDC provider, read-only role), `drift-plan.sh`, `drift.yml`. Code only; the apply, the `drift-check` token and the `drift` environment follow the merge (Drift check → Setting it up)                                                                                                                                       |
+| 2026-10-28 | Drift check set up: OIDC provider + role applied (4 add), `drift-check` token (Cloudflare's current names: Cache Settings, Dynamic URL Redirects, Access: Apps and Policies, Pages), environment `drift` with 9 secrets. First run refused by AWS: the repository's tokens carry GitHub's immutable subject (numeric ids), so the trust now names that. Then: plan 1 to change, apply, run by hand |

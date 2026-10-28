@@ -3,7 +3,10 @@
 # role's credentials, which last 15 minutes. Nothing to rotate, nothing to leak.
 
 locals {
-  github_repo  = "Ashfak-Hossain/echoandaura"
+  # GitHub's immutable subject: owner and repository with their numeric ids,
+  # which this repository's tokens carry (actions/oidc/customization/sub).
+  # Whoever later takes the name after a rename gets other ids and is refused.
+  github_repo  = "Ashfak-Hossain@73357589/EchoAndAura@1371305158"
   state_bucket = "echoandaura-terraform-state"
 }
 
