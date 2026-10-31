@@ -19,7 +19,7 @@
 
 # ADR-081: literal FROM references let Dependabot update both Dockerfiles
 # together. Keep both production stages and the dev image on this digest.
-FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS base
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS base
 # Node 25+ ships without corepack. pnpm has no dependencies, so its registry
 # tarball is the whole tool: ADD checks its sha256 before anything runs it
 # (ADR-084); a global npm install cannot be pinned by hash. Keep this block the
@@ -114,7 +114,7 @@ RUN for entry in $(ls -A .next-build/standalone); do \
 
 # ---- plain Node runtime, without build tooling ----------------------------
 # Start fresh, not from base: pnpm belongs only in the build stages.
-FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS runtime-base
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS runtime-base
 # The runtimes run node only. npm ships dependencies the app never uses,
 # which otherwise become findings in both runtime image scans (9.9).
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
