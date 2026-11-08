@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { bkashAccountType } from '@/db/schema';
-import { bdMobile } from './orders';
+import { bdMobileWith } from './orders';
 
 /**
  * B14 settings form. Every field is quoted somewhere a buyer can see, so the
@@ -15,15 +15,20 @@ export const ORGANIZER_NAME_MAX = 60;
 export const ORGANIZER_ADDRESS_MAX = 200;
 export const ACCOUNT_NAME_MAX = 80;
 
-/** E.164 `+8801712345678` → the display form `01712 345678`. Only for `bdMobile` output. */
+/** E.164 `+8801712345678` → the display form `01712 345678`. Only for `bdMobileWith` output. */
 export function formatBdMobile(e164: string): string {
   if (!/^\+8801[3-9]\d{8}$/.test(e164)) throw new Error(`not a BD mobile in E.164: ${e164}`);
   const local = `0${e164.slice(4)}`;
   return `${local.slice(0, 5)} ${local.slice(5)}`;
 }
 
-/** A BD mobile in any accepted form, stored in the display form. */
-const displayMobile = bdMobile.transform(formatBdMobile);
+/**
+ * A BD mobile in any accepted form, stored in the display form. Admin is
+ * English only, so its message stays a sentence.
+ */
+const displayMobile = bdMobileWith('A bKash number is 10 digits after +880.').transform(
+  formatBdMobile,
+);
 
 /** "" → null: a cleared optional field is stored as NULL ("none"). */
 const blankToNull = <T extends z.ZodType>(schema: T) =>

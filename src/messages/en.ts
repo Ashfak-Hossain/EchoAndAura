@@ -269,6 +269,279 @@ const en = {
     ticketsFrom: 'tickets from {price}',
     coverAlt: 'Cover image for {title}',
   },
+  // L3: the order flow. Text people copy elsewhere (the bKash number, the
+  // order reference, the TrxID, ticket codes) is never in here: it stays in
+  // Latin digits on every page.
+  common: {
+    dhaka: '{when} (Dhaka)',
+  },
+  status: {
+    order: {
+      pending_payment: 'Awaiting payment',
+      pending_verification: 'Checking payment',
+      paid: 'Paid',
+      issued: 'Tickets issued',
+      rejected: 'Rejected',
+      expired: 'Expired',
+      cancelled: 'Cancelled',
+    },
+    ticket: {
+      issued: 'Issued',
+      cancelled: 'Cancelled',
+    },
+  },
+  // Server actions return these keys, never sentences (LOCALISATION.md §4).
+  formErrors: {
+    invalid: 'Check this field.',
+    ticketType: 'Choose a ticket type.',
+    quantity: 'Choose how many tickets.',
+    quantityMin: 'At least {min} ticket.',
+    quantityMax: 'Max {max} per order.',
+    buyerName: 'Enter your full name.',
+    buyerNameLong: 'Your full name is too long.',
+    attendeeName: 'Enter a name for every ticket.',
+    attendeeNameLong: 'A name for every ticket is too long.',
+    guestName: 'Enter the name the guest will give at the door.',
+    guestNameLong: 'The name the guest will give at the door is too long.',
+    email: 'Enter a complete email address.',
+    emailRequired: 'Enter your email address.',
+    phone: 'A bKash number is 10 digits after +880.',
+    terms: 'Accept the terms to continue.',
+    promoInvalid: 'That code is not valid for this event.',
+    promoNotForType: 'That code does not apply to the ticket type you chose.',
+    tooManyTries: 'Too many tries. Please wait a minute and try again.',
+    trxIdRequired: 'Enter the transaction ID from your bKash history.',
+    trxIdLength: 'A TrxID is exactly {length} letters and numbers — you have entered {entered}.',
+    referenceRequired: 'Enter your order reference.',
+    reference: 'An order reference looks like EA-7K3M9Q.',
+  },
+  register: {
+    metaTitle: 'Register — {title}',
+    headingOpen: 'Choose your ticket',
+    heading: 'Registration',
+    past: 'This event has already happened.',
+    backToEvent: 'Back to the event',
+    soldOut: 'Sold out',
+    salesEnded: 'Sales ended {when} (Dhaka)',
+    salesClosed: 'Sales window closed',
+    onSaleFrom: 'On sale from {when} (Dhaka)',
+    notOnSaleYet: 'Not on sale yet',
+    fixCount: '{count, plural, one {{n} thing needs fixing} other {{n} things need fixing}}',
+    ticketType: 'Ticket type',
+    ticketTypeHint: 'One ticket type per order, up to {max} tickets.',
+    onlyLeft: 'Only {n} left',
+    left: '{n} left',
+    quantity: 'Number of tickets',
+    fewer: 'Fewer tickets',
+    more: 'More tickets',
+    maxPerOrder: 'Max {max} per order.',
+    leftAtPrice: '{n} left at this price.',
+    overStock: 'Only {n} {name} tickets are left. Lower the quantity to {n} or fewer to continue.',
+    details: 'Your details',
+    detailsHint:
+      'Tickets are emailed to this address once your payment is checked. Each ticket carries your name.',
+    detailsHintUntil:
+      'Tickets are emailed to this address once your payment is checked. Each ticket carries your name — you can change it on the ticket until {when}.',
+    fullName: 'Full name',
+    email: 'Email address',
+    emailHint: 'Check it carefully — this is where the tickets go.',
+    mobile: 'Mobile number',
+    mobileHint: 'The number you will send the bKash payment from.',
+    promo: 'Promo code',
+    optional: '· optional',
+    promoApplied: '{code} applied — {label}',
+    promoNotFor: '{code} does not apply to {name} tickets',
+    promoPercent: '{pct}% off',
+    promoFixed: '{amount} off each ticket',
+    remove: 'Remove',
+    checking: 'Checking…',
+    apply: 'Apply',
+    promoEnterFirst: 'Enter a code first.',
+    promoChooseFirst: 'Choose a ticket type first.',
+    promoUnavailable: 'We could not check the code just now. Try again, or continue without it.',
+    promoNotForType: 'That code does not apply to {name} tickets.',
+    summary: 'Order summary',
+    summaryLine: '{name} × {qty}',
+    noTicket: 'No ticket chosen',
+    discount: 'Discount · {code}',
+    total: 'Total',
+    finalPrice:
+      'The final price is confirmed by our server when you submit, so what you pay always matches what you see here.',
+    terms:
+      'I agree to the <terms>terms</terms> and understand that payments are checked by hand and there are <refund>no refunds in the app</refund>.',
+    saving: 'Saving…',
+    continue: 'Continue to payment',
+    banner: {
+      humanCheck: {
+        title: 'Your order was not placed',
+        body: "We couldn't confirm you're not a bot. Please try again — if it keeps happening, refresh the page.",
+      },
+      tooManyOrders: {
+        title: 'Too many orders from this network',
+        body: 'Please wait a few minutes and try again. Nothing has been charged.',
+      },
+      soldOutMany: {
+        title: 'Not that many tickets are left',
+        body: 'Nothing has been charged. Choose fewer tickets, or another ticket type — it may also have sold out while you were choosing.',
+      },
+      soldOutOne: {
+        title: 'That ticket type sold out while you were choosing',
+        body: 'Nothing has been charged. Pick another ticket type to carry on.',
+      },
+      closed: {
+        title: 'Registration is not open',
+        body: 'The registration window for this event has closed or has not opened yet.',
+      },
+      notOnSale: {
+        title: 'That ticket type is not on sale',
+        body: 'Its sales window is over or has not started. Choose another ticket type.',
+      },
+      tooManyOpen: {
+        title: 'You already have orders waiting for this event',
+        body: 'This mobile number has {limit} orders waiting for payment or checking. Pay for one, or let its {minutes}-minute hold end, before ordering again (an order already waiting for checking stays until the organizer answers). You can find them with Find my order.',
+      },
+      quantity: {
+        title: 'Choose between {min} and {max} tickets',
+        body: 'One ticket type per order, up to {max}.',
+      },
+      unexpected: {
+        title: 'We could not place your order',
+        body: 'Nothing has been charged. Please try again in a moment.',
+      },
+    },
+  },
+  order: {
+    metaTitle: 'Order {reference}',
+    eyebrow: 'Order',
+    amountDue: 'Amount due',
+    line: '{qty} × {name} at <price></price>',
+    discountWith: '<subtotal></subtotal> − <discount></discount> with {code}',
+    discountPlain: '<subtotal></subtotal> − <discount></discount> discount',
+    held: 'Your tickets are held for you. Send the money and paste the transaction ID below before the clock runs out.',
+    holdEnds: 'Hold ends <when>{date} (Dhaka)</when>.',
+    howToPay: 'How to pay with bKash',
+    step1: 'Open the bKash app and choose <menu></menu>.',
+    menuPayment: 'Payment',
+    menuSendMoney: 'Send Money',
+    step2Named:
+      'Send exactly <amount></amount> to this number — the account is in the name of {name}.',
+    step2Merchant: 'Send exactly <amount></amount> to this number — it is a merchant account.',
+    step2Personal: 'Send exactly <amount></amount> to this number — it is a personal account.',
+    bkashNumber: 'bKash number',
+    numberTba: 'bKash number to be announced — the organizer will send it to <email></email>.',
+    step3: 'In the reference field, put your order reference.',
+    orderReference: 'order reference',
+    step4: 'Come back here and paste the transaction ID below.',
+    pasteTrx: 'Paste your transaction ID',
+    sentMoney: 'I have sent the money',
+    nextTitle: 'What happens next',
+    nextBody:
+      'A person checks your transaction against the bKash statement — {promise}. When it matches, your tickets arrive by email at <email></email> straight away. Nothing else is needed from you.',
+    stuck: 'Stuck? Message the organizer at <email>{address}</email>.',
+    expiredTitle: 'This hold has expired',
+    expiredBody:
+      'We held {qty} × {name} until <when>{date} (Dhaka)</when>. No transaction ID arrived, so the seats go back on sale and nothing was charged.',
+    heldLabel: 'Held',
+    qtyName: '{qty} × {name}',
+    amount: 'Amount',
+    unpaid: '<amount></amount> · unpaid',
+    alreadySent: 'Already sent the money? Do not send it again.',
+    alreadySentBody:
+      '{contact, select, email {Message the organizer at <email>{address}</email> with your order reference and TrxID and they will sort it out by hand.} other {Message the organizer with your order reference and TrxID and they will sort it out by hand.}}',
+    registerAgain: 'Register again',
+    youreIn: "You're in.",
+    compLine:
+      '{count, plural, one {Complimentary ticket} other {Complimentary tickets}} from {organizer}.',
+    compLineOn:
+      '{count, plural, one {Complimentary ticket} other {Complimentary tickets}} from {organizer}, issued on {when} (Dhaka).',
+    paidLine: 'Payment confirmed.',
+    paidLineOn: 'Payment confirmed on {when} (Dhaka).',
+    inbox:
+      '{count, plural, one {Your ticket is} other {{n} tickets are}} in your inbox at <email></email>.',
+    ticketN: 'Ticket {n} · {name}',
+    openTicket: 'Open ticket',
+    paidTrx: 'Paid · trxID {trxId} · <amount></amount>',
+    paidTitle: 'Payment confirmed',
+    paidBody:
+      'Your tickets are being prepared and will be emailed to <email></email>. This page updates itself.',
+    rejectedTitle: "We couldn't match your payment",
+    rejectedBody: 'Checked. Your tickets were not issued and the seats have gone back on sale.',
+    rejectedBodyOn:
+      'Checked on {when} (Dhaka). Your tickets were not issued and the seats have gone back on sale.',
+    reasonLabel: 'Reason given by the organizer',
+    noReason: 'No reason recorded',
+    // The fixed list in rejection-reasons.ts, worded for the buyer.
+    rejection: {
+      no_matching_credit: 'No matching credit in the bKash statement',
+      amount_mismatch: 'The amount sent does not match the order total',
+      trx_id_already_used: 'This transaction ID belongs to another payment',
+      sender_mismatch: 'The sending number does not match the statement',
+      duplicate_order: 'Duplicate of another order',
+      buyer_cancelled: 'Cancelled at the buyer’s request',
+    },
+    todo: 'What to do now',
+    todo1:
+      'Check the TrxID in your bKash history — it is ten letters and numbers, easy to mistype.',
+    todo2:
+      '{contact, select, email {If the money did leave your account, send a screenshot of the bKash receipt to the organizer at <email>{address}</email>.} other {If the money did leave your account, send a screenshot of the bKash receipt to the organizer.}}',
+    todo3: 'If it never left, register again and pay with the new reference.',
+    cancelled: 'This order was cancelled.',
+    questions: 'Questions? Message the organizer at <email>{address}</email>.',
+    checkingTitle: 'Checking your payment',
+    checkingBody:
+      'Thanks, {name}. We have your transaction ID and a person is matching it against the bKash statement — {promise}. You will get an email either way, and this page updates itself.',
+    amountSent: 'Amount sent',
+    trxId: 'Transaction ID',
+    sentFrom: 'Sent from',
+    submitted: 'Submitted',
+    editTrx: 'Edit transaction ID',
+    saveTrx: 'Save transaction ID',
+    wrongDetails:
+      '{contact, select, email {Sent the wrong amount or the wrong reference? Edit the transaction ID, or message the organizer at <email>{address}</email>.} other {Sent the wrong amount or the wrong reference? Edit the transaction ID, or message the organizer.}}',
+  },
+  payment: {
+    trxLabel: 'bKash transaction ID (TrxID)',
+    trxHint: 'bKash app → History → tap the transaction → TrxID. Ten letters and numbers.',
+    senderLabel: 'Number you sent from',
+    saving: 'Saving…',
+    banner: {
+      trxIdUsed: {
+        title: 'This transaction ID has already been used',
+        body: 'Each bKash transaction pays for one order. Check that you copied the right one from your history — or, if you think this is our mistake, message the organizer.',
+      },
+      holdExpired: {
+        title: 'The hold expired before your transaction ID was saved',
+        body: 'Already sent the money? Do not send it again — message the organizer with your order reference and TrxID.',
+      },
+      noLongerAccepts: {
+        title: 'This order can no longer take a transaction ID',
+        body: 'Already sent the money? Do not send it again — message the organizer with your order reference and TrxID.',
+      },
+      unexpected: {
+        title: 'We could not save your transaction ID',
+        body: 'Nothing was lost — please try again in a moment.',
+      },
+    },
+  },
+  holdClock: {
+    minutesLeft: '{count, plural, one {{n} minute left to pay} other {{n} minutes left to pay}}',
+    timeUpLive: 'Time is up',
+    timeUp: "Time's up.",
+  },
+  copyField: {
+    copy: 'Copy',
+    copied: 'Copied',
+    copyLabel: 'Copy {label}',
+  },
+  // ADR-048's status lines under a form. Turnstile's own iframe has no Bangla.
+  botCheck: {
+    waiting: 'Checking you are not a bot — your form will send in a moment.',
+    interactive: 'Tick the box above to send the form.',
+    failed:
+      'The bot check could not load. Refresh the page, or try another browser — a strict content blocker can stop it.',
+    noscript:
+      'Please turn on JavaScript to send this form — it runs a quick check that you are not a bot.',
+  },
 };
 
 export type Messages = typeof en;

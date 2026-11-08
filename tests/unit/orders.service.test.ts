@@ -110,6 +110,23 @@ describe('ordersService.createOrder', () => {
     });
   });
 
+  it('stores the language the order was placed in, English when none is given (L3)', async () => {
+    const db = fakeDb({ events: [event()], ticketTypes: [ticketType()] });
+    const svc = build(db);
+    await svc.createOrder({ ...input, locale: 'bn' });
+    await svc.createOrder({ ...input, buyerPhone: '+8801812345678' });
+    expect(db.orders.insert).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ locale: 'bn' }),
+      expect.anything(),
+    );
+    expect(db.orders.insert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ locale: 'en' }),
+      expect.anything(),
+    );
+  });
+
   it('sold out: throws inside the transaction so nothing is written', async () => {
     const db = fakeDb({
       events: [event()],

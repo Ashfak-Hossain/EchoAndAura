@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { z } from 'zod';
 import { ticketsService } from '@/server/container';
 import {
@@ -12,6 +13,8 @@ import {
 } from '@/server/lib/errors';
 import { logger } from '@/server/lib/logger';
 import { formatDhakaLong } from '@/lib/time';
+import { formErrorText } from '@/lib/form-error-text';
+import { firstFormError } from '@/lib/validation/form-errors';
 import { personName } from '@/lib/validation/orders';
 
 export interface RenameState {
@@ -22,7 +25,7 @@ export interface RenameState {
   savedAt?: number;
 }
 
-const schema = z.object({ attendeeName: personName('the name the guest will give at the door') });
+const schema = z.object({ attendeeName: personName('guestName') });
 
 /** Thin: Zod → ticketsService.renameAttendee → revalidate. */
 export async function renameAttendeeAction(
@@ -33,7 +36,9 @@ export async function renameAttendeeAction(
   const parsed = schema.safeParse({ attendeeName: formData.get('attendeeName') });
   // Errors keep the previous save's stamp so the form stays open and shows them.
   if (!parsed.success) {
-    return { ...prev, error: parsed.error.issues[0]?.message ?? 'Invalid name' };
+    // Until L3b moves this form to codes, the code is worded here.
+    const [tf, locale] = await Promise.all([getTranslations('formErrors'), getLocale()]);
+    return { ...prev, error: formErrorText(tf, firstFormError(parsed.error), locale) };
   }
 
   try {

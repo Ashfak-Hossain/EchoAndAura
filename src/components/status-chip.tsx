@@ -63,10 +63,15 @@ export function Chip({ tone, children, dot, strike, size = 'default', className 
   );
 }
 
-type StatusChipProps =
-  | { kind?: 'event'; status: EventStatus; className?: string }
-  | { kind: 'order'; status: OrderStatus; className?: string }
-  | { kind: 'ticket'; status: TicketStatus; className?: string };
+type StatusChipProps = (
+  | { kind?: 'event'; status: EventStatus }
+  | { kind: 'order'; status: OrderStatus }
+  | { kind: 'ticket'; status: TicketStatus }
+) & {
+  className?: string;
+  /** The label in the page's language (public pages, L3); admin keeps the English one. */
+  label?: string;
+};
 
 /** A chip for a real schema status — label and styling come from status-labels.ts. */
 export function StatusChip(props: StatusChipProps) {
@@ -78,7 +83,7 @@ export function StatusChip(props: StatusChipProps) {
         : EVENT_STATUS_LABELS[props.status];
   return (
     <Chip tone={entry.tone} dot={entry.dot} strike={entry.strike} className={props.className}>
-      {entry.label}
+      {props.label ?? entry.label}
     </Chip>
   );
 }

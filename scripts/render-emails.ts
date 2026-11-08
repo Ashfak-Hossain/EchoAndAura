@@ -38,6 +38,7 @@ const view: EmailView = {
     rejectionNote:
       'No credit of ৳3,600.00 from 01712345678 appears in the statement for 9AB12CD34E.',
     complimentaryReason: null,
+    locale: 'en',
     holdExpiresAt: holdEndsAt(NOW),
     createdAt: T0,
     updatedAt: T0,

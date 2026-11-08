@@ -71,6 +71,11 @@ describe('find my order: human check', () => {
     expect(allow).not.toHaveBeenCalled();
   });
 
+  it('a malformed reference keeps the English sentence on / (until L3b)', async () => {
+    const state = await findOrderAction({}, form({ reference: 'XYZ' }));
+    expect(state.error).toBe('An order reference looks like EA-7K3M9Q.');
+  });
+
   it('a passed check goes on to the limiter, then the service, and redirects', async () => {
     findByReferenceAndPhone.mockResolvedValue({ id: 'o-1' });
     await expect(findOrderAction({}, form())).rejects.toThrow('redirect /orders/o-1');

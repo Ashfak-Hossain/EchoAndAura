@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_TICKETS_PER_ORDER, MIN_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
-import { personName } from '@/lib/validation/orders';
+import { NAME_MAX, NAME_MIN } from '@/server/lib/attendee-name';
 
 /**
  * B13 "Issue complimentary tickets" sheet. A ticket type id and a quantity
@@ -20,7 +20,13 @@ export const complimentaryTicketsFormSchema = z.object({
     .max(MAX_TICKETS_PER_ORDER, {
       error: `Max ${MAX_TICKETS_PER_ORDER} at a time — issue again for more.`,
     }),
-  guestName: personName('the name on the tickets'),
+  // Admin is English only, so its messages stay sentences (the public
+  // forms' messages are catalogue codes, L3).
+  guestName: z
+    .string({ error: 'Enter the name on the tickets.' })
+    .trim()
+    .min(NAME_MIN, { error: 'Enter the name on the tickets.' })
+    .max(NAME_MAX, { error: 'The name on the tickets is too long.' }),
   guestEmail: z
     .string({ error: 'Enter the guest’s email address.' })
     .trim()

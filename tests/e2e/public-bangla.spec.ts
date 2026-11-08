@@ -99,3 +99,67 @@ test('L2: the shell, home, events, archive and event page read in Bangla, at pho
   expect(errors.filter((e) => /hydrat|did not match/i.test(e))).toEqual([]);
   await phone.close();
 });
+
+// L3: the order flow in Bangla. A /bn form posts to its /bn path, so the
+// action reads the language from the proxy's header: the order is placed
+// in Bangla and the buyer lands on the Bangla order page. Bangla digits are
+// accepted everywhere a number is typed; what people copy into bKash stays
+// in Latin digits.
+test('a Bangla buyer registers and pays in Bangla, typing Bangla digits', async ({ page }) => {
+  await signInAsAdmin(page);
+  const { slug } = await publishedEvent(page, `Bangla order ${Date.now()}`);
+  const trxId = `B${Date.now().toString(36).toUpperCase().slice(-9)}`.padEnd(10, 'X');
+  const bangla = (s: string) => s.replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[Number(d)]!);
+
+  const register = async (name: string) => {
+    await page.goto(`/bn/events/${slug}/register`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('আপনার টিকিট বেছে নিন');
+    await page.getByRole('radio', { name: /general/i }).check();
+    await page.getByLabel('পুরো নাম').fill(name);
+    await page.getByLabel('ইমেইল ঠিকানা').fill('buyer@example.com');
+    await page.getByLabel('মোবাইল নম্বর').fill('১৭১২৩');
+    await page.getByLabel(/শর্তাবলিতে রাজি/).check();
+    await page.getByRole('button', { name: 'পেমেন্টে এগোন' }).click();
+    // Refused in Bangla, and nothing typed is lost.
+    await expect(page.getByText('বিকাশ নম্বর হয় +880-এর পরে ১০টি অঙ্ক।').first()).toBeVisible();
+    await expect(page.getByLabel('পুরো নাম')).toHaveValue(name);
+
+    await page.getByLabel('মোবাইল নম্বর').fill('১৭১২৩৪৫৬৭৮');
+    await page.getByRole('button', { name: 'পেমেন্টে এগোন' }).click();
+    await expect(page).toHaveURL(/\/bn\/orders\/[0-9a-f-]{36}$/);
+    return page.url();
+  };
+
+  const first = await register('নুসরাত জাহান');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
+  await expect(page.getByRole('heading', { name: 'বিকাশে কীভাবে পেমেন্ট করবেন' })).toBeVisible();
+  await expect(page.getByText('পেমেন্টের অপেক্ষায়')).toBeVisible();
+  await expect(page.getByText('৳১,২০০.০০').first()).toBeVisible();
+  // The reference people paste into bKash stays Latin.
+  await expect(page.getByTestId('order-reference')).toHaveText(/^EA-[A-Z0-9]{6}$/);
+
+  // A short TrxID, typed with Bangla digits, is counted in Bangla.
+  await page.getByLabel(/বিকাশ ট্রানজেকশন আইডি/).fill(bangla('9AB12'));
+  await page.getByLabel('যে নম্বর থেকে পাঠিয়েছেন').fill('০১৭১২৩৪৫৬৭৮');
+  await page.getByRole('button', { name: 'আমি টাকা পাঠিয়েছি' }).click();
+  await expect(page.getByText(/আপনি লিখেছেন ৫টি/)).toBeVisible();
+
+  // The real one, in Bangla digits: saved in Latin, shown in Latin.
+  await page.getByLabel(/বিকাশ ট্রানজেকশন আইডি/).fill(bangla(trxId.toLowerCase()));
+  await page.getByRole('button', { name: 'আমি টাকা পাঠিয়েছি' }).click();
+  await expect(page.getByRole('heading', { name: 'আপনার পেমেন্ট যাচাই হচ্ছে' })).toBeVisible();
+  await expect(page.getByTestId('payment-summary')).toContainText(trxId);
+  await expect(page.getByTestId('payment-summary')).toContainText('+880 1712345678');
+
+  // A second order cannot reuse it (Invariant 3), and the page says why in Bangla.
+  const second = await register('তানভীর আলম');
+  expect(second).not.toBe(first);
+  await page.getByLabel(/বিকাশ ট্রানজেকশন আইডি/).fill(trxId);
+  await page.getByLabel('যে নম্বর থেকে পাঠিয়েছেন').fill('1712345678');
+  await page.getByRole('button', { name: 'আমি টাকা পাঠিয়েছি' }).click();
+  await expect(page.getByRole('alert').first()).toContainText(
+    'এই ট্রানজেকশন আইডি আগেই ব্যবহার হয়েছে',
+  );
+  await expect(page.getByText('পেমেন্টের অপেক্ষায়')).toBeVisible();
+});

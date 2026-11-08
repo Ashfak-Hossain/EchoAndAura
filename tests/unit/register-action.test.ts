@@ -35,6 +35,17 @@ const { registerAction, checkPromoCodeAction } =
   await import('@/app/(public)/events/[slug]/register/actions');
 const { SoldOutError, TooManyOpenOrdersError } = await import('@/server/lib/errors');
 const { HUMAN_CHECK_FAILED } = await import('@/lib/human-check');
+const { useTestLocale } = await import('./setup/intl');
+const { createTranslator } = await import('use-intl/core');
+const { default: en } = await import('@/messages/en');
+
+/** L3: the action returns a code; this is the banner the English page shows. */
+function bannerText(banner: { code: string; values?: Record<string, number> } | undefined) {
+  if (!banner) return { title: undefined, body: undefined };
+  const t = createTranslator({ locale: 'en', messages: en, namespace: 'register.banner' });
+  const key = banner.code as keyof typeof en.register.banner;
+  return { title: t(`${key}.title`), body: t(`${key}.body`, banner.values) };
+}
 
 /** The order limiter says yes, the promo budget is spent: they are separate. */
 const onlyOrdersAllowed = async (rules: { scope: string }[]) =>
@@ -69,9 +80,7 @@ beforeEach(() => {
 describe('code checks share one throttle', () => {
   it('a submit carrying a code is refused when the budget is spent — no order is attempted', async () => {
     const state = await registerAction('live-dhaka', {}, form({ promoCode: 'dhaka15' }));
-    expect(state.fieldErrors?.promoCode).toBe(
-      'Too many tries. Please wait a minute and try again.',
-    );
+    expect(state.fieldErrors?.promoCode).toEqual({ code: 'tooManyTries' });
     expect(createOrder).not.toHaveBeenCalled();
     expect(allow).toHaveBeenCalledWith([
       expect.objectContaining({ scope: 'promo-check:ip', subject: '203.0.113.7', limit: 20 }),
@@ -112,7 +121,7 @@ describe('code checks share one throttle', () => {
 describe('placing orders is limited per network', () => {
   it('spends 20 per IP per 15 minutes and refuses beyond it without touching the service', async () => {
     const state = await registerAction('live-dhaka', {}, form());
-    expect(state.banner?.title).toBe('Too many orders from this network');
+    expect(bannerText(state.banner).title).toBe('Too many orders from this network');
     expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan' });
     expect(createOrder).not.toHaveBeenCalled();
     expect(allow).toHaveBeenCalledWith([
@@ -148,9 +157,11 @@ describe('placing orders is limited per network', () => {
     allow.mockImplementation(onlyOrdersAllowed);
     createOrder.mockRejectedValue(new TooManyOpenOrdersError(2));
     const state = await registerAction('live-dhaka', {}, form());
-    expect(state.banner?.title).toBe('You already have orders waiting for this event');
-    expect(state.banner?.body).toMatch(/2 orders waiting/);
-    expect(state.banner?.body).toMatch(/Find my order/);
+    const { title, body } = bannerText(state.banner);
+    expect(title).toBe('You already have orders waiting for this event');
+    expect(body).toMatch(/2 orders waiting/);
+    expect(body).toMatch(/20-minute hold/);
+    expect(body).toMatch(/Find my order/);
   });
 });
 
@@ -161,7 +172,9 @@ describe('the human check comes first', () => {
     passesHumanCheck.mockResolvedValue(false);
     const f = form({ promoCode: 'dhaka15' });
     const state = await registerAction('live-dhaka', {}, f);
-    expect(state.banner?.body).toBe(HUMAN_CHECK_FAILED);
+    expect(state.banner).toEqual({ code: 'humanCheck' });
+    // The public copy says what every other protected form says.
+    expect(bannerText(state.banner).body).toBe(HUMAN_CHECK_FAILED);
     expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan', promoCode: 'dhaka15' });
     expect(passesHumanCheck).toHaveBeenCalledWith(f, 'register');
     expect(allow).not.toHaveBeenCalled();
@@ -207,7 +220,9 @@ describe('a refused hold says what the buyer can do next', () => {
   it('one ticket refused: the type sold out, and the form disables that row', async () => {
     createOrder.mockRejectedValue(new SoldOutError(TT, 1));
     const state = await registerAction('live-dhaka', {}, form({ quantity: '1' }));
-    expect(state.banner?.title).toBe('That ticket type sold out while you were choosing');
+    expect(bannerText(state.banner).title).toBe(
+      'That ticket type sold out while you were choosing',
+    );
     expect(state.banner?.soldOutTicketTypeId).toBe(TT);
     expect(state.values).toMatchObject({ buyerName: 'Nusrat Jahan' });
     expect(revalidatePath).toHaveBeenCalledWith('/events/live-dhaka/register');
@@ -216,13 +231,53 @@ describe('a refused hold says what the buyer can do next', () => {
   it('several refused: "not that many left", and the row stays choosable', async () => {
     createOrder.mockRejectedValue(new SoldOutError(TT, 3));
     const state = await registerAction('live-dhaka', {}, form({ quantity: '3' }));
-    expect(state.banner?.title).toBe('Not that many tickets are left');
-    expect(state.banner?.body).toMatch(/Choose fewer tickets/);
+    const { title, body } = bannerText(state.banner);
+    expect(title).toBe('Not that many tickets are left');
+    expect(body).toMatch(/Choose fewer tickets/);
     expect(state.banner).not.toHaveProperty('soldOutTicketTypeId');
     // Never a number: the event may hide its counts.
-    expect(`${state.banner?.title} ${state.banner?.body}`).not.toMatch(/\d/);
+    expect(`${title} ${body}`).not.toMatch(/\d/);
     expect(state.values).toMatchObject({ quantity: '3' });
     // Today's numbers for the form, so it never says "3 left" beside the banner.
     expect(revalidatePath).toHaveBeenCalledWith('/events/live-dhaka/register');
+  });
+});
+
+// L3: the language comes from the proxy's header (here, the mocked
+// getLocale), never the form, and the buyer lands on the order page in it.
+describe('the order remembers the page language', () => {
+  beforeEach(() => {
+    allow.mockImplementation(onlyOrdersAllowed);
+  });
+
+  it('a Bangla page places a Bangla order and opens the Bangla order page', async () => {
+    useTestLocale('bn');
+    try {
+      createOrder.mockResolvedValue({ id: 'o-4' });
+      await expect(registerAction('live-dhaka', {}, form())).rejects.toThrow(
+        'redirect /bn/orders/o-4',
+      );
+      expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ locale: 'bn' }));
+    } finally {
+      useTestLocale('en');
+    }
+  });
+
+  it('an English page places an English order, whatever the form says', async () => {
+    createOrder.mockResolvedValue({ id: 'o-5' });
+    await expect(registerAction('live-dhaka', {}, form({ locale: 'bn' }))).rejects.toThrow(
+      'redirect /orders/o-5',
+    );
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }));
+  });
+
+  it('a Bangla page gets codes, not English sentences', async () => {
+    useTestLocale('bn');
+    try {
+      const state = await registerAction('live-dhaka', {}, form({ buyerPhone: '12' }));
+      expect(state.fieldErrors?.buyerPhone).toEqual({ code: 'phone' });
+    } finally {
+      useTestLocale('en');
+    }
   });
 });

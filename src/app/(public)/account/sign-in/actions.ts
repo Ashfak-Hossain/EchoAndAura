@@ -2,12 +2,15 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { logger } from '@/server/lib/logger';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
 import { auth } from '@/lib/auth';
 import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { takeExposedMagicLink } from '@/server/auth/magic-link';
 import { requestIp } from '@/lib/request-ip';
+import { formErrorText } from '@/lib/form-error-text';
+import { firstFormError } from '@/lib/validation/form-errors';
 import { signInSchema } from '@/lib/validation/orders';
 
 export interface SignInState {
@@ -43,8 +46,11 @@ export async function requestSignInLinkAction(
   const raw = formData.get('email');
   const values = { email: typeof raw === 'string' ? raw : '' };
   const parsed = signInSchema.safeParse({ email: raw });
-  if (!parsed.success)
-    return { error: parsed.error.issues[0]?.message ?? 'Enter your email.', values };
+  if (!parsed.success) {
+    // Until L3b moves this form to codes, the code is worded here.
+    const [tf, locale] = await Promise.all([getTranslations('formErrors'), getLocale()]);
+    return { error: formErrorText(tf, firstFormError(parsed.error), locale), values };
+  }
   // ADR-048: before the limiter, so a bot neither spends a real address's
   // budget nor gets an email queued.
   if (!(await passesHumanCheck(formData, 'buyer-sign-in'))) {

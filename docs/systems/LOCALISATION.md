@@ -123,7 +123,12 @@ other {…}}`). Bangla has two plural forms, the same as English.
   `next/*`, so the architecture rule holds.
 - Server actions return **error codes**, never sentences; the page turns
   the code into text in the visitor's language. Zod messages become codes
-  the same way.
+  the same way: a schema's message is a key of `formErrors`, and anything
+  else (a library's own message) becomes `invalid`. Built in L3
+  (`src/lib/form-error-text.ts`, `src/lib/validation/form-errors.ts`;
+  ADR-061 L3 addendum).
+- An action takes the language from the proxy's header (`getLocale()`),
+  never from a form field: a `/bn` page posts to its `/bn` path.
 - Names, ticket codes, order references, trxIDs and amounts typed by people
   are never translated.
 
@@ -163,6 +168,12 @@ tests:
   and fallback text is wrapped in `lang="en"` so screen readers switch
   voice.
 - Sponsor names stay as entered.
+- The settings' verification promise ("usually within 4 hours…", ADR-025)
+  is quoted in the Bangla order page's sentences, so it needs a Bangla
+  twin too: `settings.verification_promise_bn`, falling back to a Bangla
+  default from the catalogue (not to the English text, which would put an
+  English clause inside a Bangla sentence). Found in L3's 360 px check;
+  built in L5.
 
 ## 7. Static and legal pages
 
@@ -176,8 +187,8 @@ tests:
 
 ## 8. Emails and the ticket PDF
 
-- `orders.locale` (`'en' | 'bn'`, default `'en'`): the language of the page
-  the order was placed from. **Every email about that order uses it**, the
+- `orders.locale` (`'en' | 'bn'`, default `'en'`; added in L3, migration
+  0027): the language of the page the order was placed from. **Every email about that order uses it**, the
   rejected and expired emails included, even though the admin's action
   triggered them. The sign-in email uses the page's language; waitlist
   emails use the entry's own `locale`.
@@ -197,7 +208,11 @@ tests:
 - Bangla needs about 1.2× the line height for vowel signs above and below
   the line, and runs 15–30 % longer: every Bangla page is checked at
   360 px wide (the UI notes already left room for this).
-- The Turnstile widget gets `language: 'bn'`.
+- Turnstile has no Bangla (Cloudflare's language list, checked
+  2026-10-28), so its own iframe stays in the browser's language. Our
+  status lines under the form (`botCheck` in the catalogue) are
+  translated: the public forms pass them to the widget, and the admin
+  forms keep its English defaults.
 
 ## 10. Search engines and sharing
 
@@ -229,14 +244,14 @@ a page view. `tests/e2e/public-edge-cache.spec.ts` gains the `/bn` paths.
 
 ## Slices
 
-| Slice  | What                                                                                                                                           | Size    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| **T0** | 12-hour time everywhere; Bangla digits accepted in every numeric field                                                                         | ½ day   |
-| **L1** | next-intl, `/bn` routing behind the switch, proxy order, `lang`, font, Bangla formatters, language switch + cookie                             | 1½ days |
-| **L2** | Extract every public string into `en.ts` (no visible change), then Bangla for the shell, home, events and event pages                          | 1½ days |
-| **L3** | Registration, order, ticket and account pages in Bangla; error codes; Turnstile language; `orders.locale`                                      | 1½ days |
-| **L4** | Emails and the PDF in Bangla (after the shaping spike)                                                                                         | 1 day   |
-| **L5** | Bangla event fields in the admin; static and legal pages (after Raj's review); hreflang, sitemap, JSON-LD; cache rule; switch on in production | 1½ days |
+| Slice  | What                                                                                                                                                                                             | Size    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| **T0** | 12-hour time everywhere; Bangla digits accepted in every numeric field                                                                                                                           | ½ day   |
+| **L1** | next-intl, `/bn` routing behind the switch, proxy order, `lang`, font, Bangla formatters, language switch + cookie                                                                               | 1½ days |
+| **L2** | Extract every public string into `en.ts` (no visible change), then Bangla for the shell, home, events and event pages                                                                            | 1½ days |
+| **L3** | Registration, order, ticket and account pages in Bangla; error codes; Turnstile status lines; `orders.locale`. Two PRs: **L3a** register + order/payment, **L3b** ticket, Find my order, sign-in | 1½ days |
+| **L4** | Emails and the PDF in Bangla (after the shaping spike)                                                                                                                                           | 1 day   |
+| **L5** | Bangla event and settings fields in the admin; static and legal pages (after Raj's review); hreflang, sitemap, JSON-LD; cache rule; switch on in production                                      | 1½ days |
 
 Bangla goes live only after L5, when every page a buyer can reach is
 translated and reviewed.
