@@ -67,10 +67,31 @@ function loadTurnstile(): Promise<TurnstileApi> {
   return scriptPromise;
 }
 
+/** The status lines under the form, in the page's language. */
+export interface TurnstileText {
+  waiting: string;
+  interactive: string;
+  failed: string;
+  noscript: string;
+}
+
+// The admin forms (English only, outside next-intl's provider) use these.
+// Public forms pass `messages.botCheck` from the catalogue, whose English
+// matches word for word.
+export const TURNSTILE_ENGLISH: TurnstileText = {
+  waiting: 'Checking you are not a bot — your form will send in a moment.',
+  interactive: 'Tick the box above to send the form.',
+  failed:
+    'The bot check could not load. Refresh the page, or try another browser — a strict content blocker can stop it.',
+  noscript:
+    'Please turn on JavaScript to send this form — it runs a quick check that you are not a bot.',
+};
+
 export function TurnstileWidget({
   siteKey,
   action,
   resetSignal,
+  text = TURNSTILE_ENGLISH,
 }: {
   siteKey: string;
   action: TurnstileAction;
@@ -80,6 +101,7 @@ export function TurnstileWidget({
    * submit after an error would always fail the check.
    */
   resetSignal: unknown;
+  text?: TurnstileText;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
@@ -227,22 +249,16 @@ export function TurnstileWidget({
       <div ref={container} />
       {waiting ? (
         <p role="status" className="text-sm leading-relaxed text-muted-foreground">
-          {interactive
-            ? 'Tick the box above to send the form.'
-            : 'Checking you are not a bot — your form will send in a moment.'}
+          {interactive ? text.interactive : text.waiting}
         </p>
       ) : null}
       {failed ? (
         <p role="status" className="text-sm leading-relaxed text-muted-foreground">
-          The bot check could not load. Refresh the page, or try another browser — a strict content
-          blocker can stop it.
+          {text.failed}
         </p>
       ) : null}
       <noscript>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Please turn on JavaScript to send this form — it runs a quick check that you are not a
-          bot.
-        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{text.noscript}</p>
       </noscript>
     </div>
   );

@@ -91,6 +91,44 @@ staying at `/`. The design proposed moving the public tree under
   type names, and the organizer's settings text (the verification promise).
   Bangla event fields come in L5.
 
+**L3 addendum (2026-11-08):** L3 ships as two PRs. L3a covers the register,
+order and payment pages; L3b covers the ticket page, Find my order and
+sign-in.
+
+- **Error codes, not sentences.** Server actions return a `FormError`
+  (`{ code, values? }`), where the code is a key of `formErrors` in the
+  catalogue ([form-error-text.ts](../../src/lib/form-error-text.ts)). A Zod
+  schema's message is that key, and a number the sentence needs travels
+  beside it. A message that isn't a key, such as Zod's own text, becomes
+  `invalid`, so a library's English never reaches a Bangla page
+  ([form-errors.ts](../../src/lib/validation/form-errors.ts)). Refusals
+  from the service map to banner codes in pure functions
+  (`register/errors.ts`, `orders/[id]/errors.ts`) that unit tests cover
+  branch by branch. The admin settings form keeps its English messages
+  (`bdMobileWith()`), because the admin stays English.
+- **An action learns the language from the proxy's header, not the form.**
+  A `/bn` page posts to its `/bn` path, and the proxy sets the header for
+  every request, so `getLocale()` in an action is the page's language. A
+  form field would be one more input to trust. The register action
+  redirects with `localisedPath`, which fixes the English-only redirect
+  noted under Consequences.
+- **`orders.locale`** records the page the order was placed from. It is a
+  `locale` enum, `NOT NULL DEFAULT 'en'`, added by migration 0027. Every
+  email about the order will use it (L4). Existing orders become `'en'`,
+  which is true: Bangla was never switched on.
+- **Turnstile has no Bangla** (Cloudflare's language list, checked
+  2026-10-28), so the widget gets no `language` option. Its iframe follows
+  the browser. The status lines we print under it are translated
+  (`botCheck`), and the widget takes them as an optional `text` prop. The
+  admin forms keep the English defaults.
+- **The verification promise** from the settings is English inside Bangla
+  sentences on the order page. It gets a Bangla twin in L5
+  (LOCALISATION.md §6). Until then the Bangla page quotes the English text.
+- Until L3b, the three forms it owns (rename, Find my order, sign-in) word
+  their codes on the server. On `/` they say exactly what they said before.
+  On `/bn` their validation line is already Bangla inside a page that is
+  still English, which nobody sees while Bangla is off.
+
 **Rejected:** the `[locale]` segment (about 60 files moved, multiple root
 layouts, and the root 404 and global error rebuilt for little gain);
 next-intl's own middleware (it expects that segment).

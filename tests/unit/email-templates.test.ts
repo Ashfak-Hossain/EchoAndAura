@@ -66,6 +66,7 @@ function view(over: Partial<EmailView> = {}): EmailView {
       rejectionReason: 'no_matching_credit',
       rejectionNote: 'No credit of ৳2,400.00 appears for 9AB12CD34E.',
       complimentaryReason: null,
+      locale: 'en',
       holdExpiresAt: new Date('2026-09-18T01:08:00Z'),
       createdAt: T0,
       updatedAt: T0,

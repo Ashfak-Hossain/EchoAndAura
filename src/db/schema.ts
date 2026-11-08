@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { LOCALES } from '../i18n/locales';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -42,6 +43,9 @@ export const bkashAccountType = pgEnum('bkash_account_type', ['personal', 'merch
 export const sponsorLevel = pgEnum('sponsor_level', ['presenting', 'partner', 'supporter']);
 // The tile behind the logo: dark for white or light-coloured marks.
 export const sponsorTileTone = pgEnum('sponsor_tile_tone', ['light', 'dark']);
+// ADR-061: the public site's languages. An order remembers the one it was
+// placed in so every email about it (L4) speaks the buyer's language.
+export const locale = pgEnum('locale', LOCALES);
 
 // ---------------------------------------------------------------------------
 // Events
@@ -237,6 +241,10 @@ export const orders = pgTable(
     // never shown to the guest). One column, so the flag and the reason can
     // never disagree.
     complimentaryReason: text('complimentary_reason'),
+    // The language of the page the order was placed from (L3). Taken from
+    // the proxy's header, never the form body. Complimentary orders and every
+    // order from before Bangla are English.
+    locale: locale('locale').notNull().default('en'),
     // 20-minute inventory hold (ADR-054; the buyer sees it count down). The expiry job releases stock
     // once this plus a 2-minute grace passes with no trxID submitted.
     holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),

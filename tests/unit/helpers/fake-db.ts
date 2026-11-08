@@ -163,6 +163,7 @@ export function fakeDb(seed: { events: EventRecord[]; ticketTypes: TicketTypeRec
         bkashSenderMsisdn: null,
         promoCodeId: null,
         complimentaryReason: null,
+        locale: 'en',
         holdExpiresAt: null,
         createdAt: stamp,
         updatedAt: stamp,

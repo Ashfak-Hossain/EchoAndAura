@@ -4,6 +4,7 @@ import {
   registrationFormSchema,
   registrationFormValues,
 } from '@/lib/validation/orders';
+import { worded } from './helpers/form-errors';
 
 const valid = {
   ticketTypeId: '7a1f2d3c-4b5e-4f60-8a9b-0c1d2e3f4a5b',
@@ -17,7 +18,7 @@ const valid = {
 
 const messagesOf = (input: unknown) => {
   const r = registrationFormSchema.safeParse(input);
-  return r.success ? [] : r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  return r.success ? [] : r.error.issues.map((i) => `${i.path.join('.')}: ${worded(i)}`);
 };
 
 describe('registrationFormSchema', () => {
@@ -106,11 +107,15 @@ describe('paymentFormSchema', () => {
   it('names the length the buyer typed when it is not ten characters', () => {
     const r = paymentFormSchema.safeParse({ trxId: '9AB12CD', senderPhone: '01712345678' });
     expect(r.success).toBe(false);
-    expect(r.error?.issues[0]?.message).toBe(
+    expect(worded(r.error?.issues[0])).toBe(
       'A TrxID is exactly 10 letters and numbers — you have entered 7.',
     );
+    // On /bn the counts are Bangla digits; the "TrxID" stays as bKash writes it.
+    expect(worded(r.error?.issues[0], 'bn')).toBe(
+      'TrxID ঠিক ১০টি অক্ষর ও সংখ্যা — আপনি লিখেছেন ৭টি।',
+    );
     const empty = paymentFormSchema.safeParse({ trxId: '', senderPhone: '01712345678' });
-    expect(empty.error?.issues[0]?.message).toBe(
+    expect(worded(empty.error?.issues[0])).toBe(
       'Enter the transaction ID from your bKash history.',
     );
     const punct = paymentFormSchema.safeParse({ trxId: '9AB12CD34-', senderPhone: '01712345678' });
@@ -119,6 +124,6 @@ describe('paymentFormSchema', () => {
 
   it('applies the same mobile rule as registration', () => {
     const r = paymentFormSchema.safeParse({ trxId: '9AB12CD34E', senderPhone: '17123' });
-    expect(r.error?.issues[0]?.message).toBe('A bKash number is 10 digits after +880.');
+    expect(worded(r.error?.issues[0])).toBe('A bKash number is 10 digits after +880.');
   });
 });

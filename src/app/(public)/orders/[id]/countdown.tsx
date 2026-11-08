@@ -1,7 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { plainDigits, toBanglaDigits } from '@/server/lib/digits';
 import { cn } from '@/lib/utils';
 
 /**
@@ -47,6 +49,8 @@ export function Countdown({
   /** The server's clock when it rendered the page (ISO). */
   serverNow: string;
 }) {
+  const t = useTranslations('holdClock');
+  const locale = useLocale();
   const router = useRouter();
   const target = Date.parse(until);
   const end = Date.parse(cutoff);
@@ -82,16 +86,17 @@ export function Countdown({
           left <= 0 ? 'text-[#a32e1e]' : left <= WARN_MS ? 'text-[#a65b00]' : 'text-foreground',
         )}
       >
-        {clock(left)}
+        {/* Read, not copied: Bangla digits on /bn. */}
+        {locale === 'bn' ? toBanglaDigits(clock(left)) : clock(left)}
       </span>
       {/* Once a minute for screen readers, not every second. */}
       <span className="sr-only" aria-live="polite">
         {left > 0
-          ? `${minutesLeft} ${minutesLeft === 1 ? 'minute' : 'minutes'} left to pay`
-          : 'Time is up'}
+          ? t('minutesLeft', { count: minutesLeft, n: plainDigits(minutesLeft, locale) })
+          : t('timeUpLive')}
       </span>
       {left <= 0 ? (
-        <span className="text-sm font-semibold text-[#a32e1e]">Time&apos;s up.</span>
+        <span className="text-sm font-semibold text-[#a32e1e]">{t('timeUp')}</span>
       ) : null}
     </span>
   );

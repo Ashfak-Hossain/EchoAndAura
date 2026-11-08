@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  HoldLapsedError,
   InventoryStateError,
+  OrderNotFoundError,
   OrderStatusConflictError,
   TrxIdAlreadyUsedError,
   TrxIdChangedError,
@@ -55,16 +57,16 @@ describe('report only unexpected controller failures after the service settles',
       expect(unwound).toBe(true);
     });
     const result = await submitPaymentAction(orderId, {}, payment());
-    expect(result.banner?.title).toBe('We could not save your transaction ID');
+    expect(result.banner).toEqual({ code: 'unexpected' });
     expect(mocks.report).toHaveBeenCalledExactlyOnceWith(error, 'payment.submit', {
       route: '/orders/[id]',
     });
   });
   it('does not report duplicate transaction IDs, status conflicts, invalid input or successful payment', async () => {
     mocks.submit.mockRejectedValueOnce(new TrxIdAlreadyUsedError('AB12CD34E5'));
-    expect((await submitPaymentAction(orderId, {}, payment())).banner?.title).toContain(
-      'already been used',
-    );
+    expect((await submitPaymentAction(orderId, {}, payment())).banner).toEqual({
+      code: 'trxIdUsed',
+    });
     mocks.submit.mockRejectedValueOnce(new OrderStatusConflictError(orderId, 'expired'));
     await submitPaymentAction(orderId, {}, payment());
     await submitPaymentAction(orderId, {}, new FormData());
@@ -97,6 +99,42 @@ describe('report only unexpected controller failures after the service settles',
     mocks.approve.mockRejectedValueOnce(new TrxIdChangedError(orderId, 'AB12CD34E5', 'OTHER12345'));
     await approveOrderAction(orderId, 'AB12CD34E5');
     await expect(approveOrderAction(orderId, 'AB12CD34E5')).rejects.toThrow('redirect:');
+    expect(mocks.report).not.toHaveBeenCalled();
+  });
+});
+
+describe('payment action: what the buyer is told', () => {
+  const kept = { values: expect.objectContaining({ trxId: 'AB12CD34E5' }) };
+
+  it('a lapsed hold says so, keeps the typed values and re-renders the page', async () => {
+    mocks.submit.mockRejectedValueOnce(new HoldLapsedError(orderId));
+    expect(await submitPaymentAction(orderId, {}, payment())).toEqual({
+      banner: { code: 'holdExpired' },
+      ...kept,
+    });
+    expect(mocks.revalidate).toHaveBeenCalledWith(`/orders/${orderId}`);
+  });
+
+  it('an order that already expired says the hold expired', async () => {
+    mocks.submit.mockRejectedValueOnce(new OrderStatusConflictError(orderId, 'expired'));
+    expect(await submitPaymentAction(orderId, {}, payment())).toEqual({
+      banner: { code: 'holdExpired' },
+      ...kept,
+    });
+    expect(mocks.revalidate).toHaveBeenCalledWith(`/orders/${orderId}`);
+  });
+
+  it('an order that moved on says it no longer accepts an ID', async () => {
+    mocks.submit.mockRejectedValueOnce(new OrderStatusConflictError(orderId, 'paid'));
+    expect((await submitPaymentAction(orderId, {}, payment())).banner).toEqual({
+      code: 'noLongerAccepts',
+    });
+  });
+
+  it('a missing order re-renders the page (its 404) instead of a banner', async () => {
+    mocks.submit.mockRejectedValueOnce(new OrderNotFoundError(orderId));
+    expect(await submitPaymentAction(orderId, {}, payment())).toEqual({ submitted: true });
+    expect(mocks.revalidate).toHaveBeenCalledWith(`/orders/${orderId}`);
     expect(mocks.report).not.toHaveBeenCalled();
   });
 });

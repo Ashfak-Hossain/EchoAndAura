@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db, queryClient } from '@/db/client';
@@ -111,6 +111,18 @@ describe('ordersService.createOrder (Postgres)', () => {
       action: 'order.created',
       toStatus: 'pending_payment',
     });
+  });
+
+  it('stores the order language; the column defaults to English and refuses any other (L3)', async () => {
+    const tt = await newTicketType(10);
+    const bn = await svc.createOrder({ ...input(tt, 1), locale: 'bn' });
+    const en = await svc.createOrder(input(tt, 1));
+    expect([bn.locale, en.locale]).toEqual(['bn', 'en']);
+
+    // The enum is the backstop: no code path can store a language the site lacks.
+    await expect(
+      db.execute(sql`UPDATE orders SET locale = 'fr' WHERE id = ${en.id}`),
+    ).rejects.toThrow();
   });
 
   it('a sold-out attempt writes nothing — no order, no audit row, no hold', async () => {

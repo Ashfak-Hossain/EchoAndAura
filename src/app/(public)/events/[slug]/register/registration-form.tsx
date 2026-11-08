@@ -2,7 +2,10 @@
 
 import Link from '@/i18n/link';
 import { Check, Minus, Plus } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { plainDigits } from '@/server/lib/digits';
+import { formatBDT } from '@/server/lib/money';
 import { MAX_TICKETS_PER_ORDER } from '@/server/lib/order-rules';
 import { promoAppliesTo, promoDiscountPaisa, promoDiscountPerTicket } from '@/server/lib/promo';
 import { Button } from '@/components/button';
@@ -11,6 +14,7 @@ import { Money } from '@/components/money';
 import { TurnstileWidget } from '@/components/turnstile-widget';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { type FormError, formErrorText } from '@/lib/form-error-text';
 import { BD_MOBILE_PREFIX } from '@/lib/validation/orders';
 import { cn } from '@/lib/utils';
 import type { PromoCheckResult, RegistrationFormState } from './actions';
@@ -26,7 +30,7 @@ export interface TicketOption {
   available: number | null;
   /** min(10, available) — 0 disables the row. 10 when the count is hidden: the server decides. */
   maxPerOrder: number;
-  /** Why the row is disabled, or null when it can be chosen. */
+  /** Why the row is disabled (in the page's language), or null when it can be chosen. */
   reason: string | null;
 }
 
@@ -58,6 +62,13 @@ export function RegistrationForm({
   prefill,
   siteKey,
 }: Props) {
+  const t = useTranslations('register');
+  const tf = useTranslations('formErrors');
+  const tb = useTranslations('botCheck');
+  const locale = useLocale();
+  // L3: the action returns codes; they are worded here, in the page's language.
+  const errorText = (e: FormError) => formErrorText(tf, e, locale);
+  const n = (count: number) => plainDigits(count, locale);
   const [state, formAction, pending] = useActionState(action, {});
   // After an action React resets uncontrolled inputs; seeding from the last
   // submission keeps the buyer's input on error (nothing is ever cleared).
@@ -108,6 +119,11 @@ export function RegistrationForm({
   const refusedOnSubmit = Boolean(errors.promoCode) && appliedResult?.at !== state;
   const applied = refusedOnSubmit ? null : (appliedResult?.rule ?? null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  // Worded from the rule, not the server's English label (B10).
+  const promoLabel = (rule: Extract<PromoCheckResult, { ok: true }>) =>
+    rule.type === 'percentage'
+      ? t('promoPercent', { pct: n(rule.value) })
+      : t('promoFixed', { amount: formatBDT(rule.value, locale) });
   const [checking, startCheck] = useTransition();
   // Mirrors the server's judgePromo for the chosen type: covered, and not
   // taking the whole price off (a ৳0 order cannot be paid by bKash).
@@ -121,17 +137,18 @@ export function RegistrationForm({
       ? Math.min(promoDiscountPaisa(applied, selected.pricePaisa, quantity), subtotal)
       : 0;
   const total = subtotal - discount;
-  const promoFieldError = (refusedOnSubmit ? errors.promoCode : undefined) ?? promoError;
+  const promoFieldError =
+    (refusedOnSubmit && errors.promoCode ? errorText(errors.promoCode) : undefined) ?? promoError;
 
   const applyPromo = () => {
     if (checking) return;
     const code = promoInput.trim();
     if (!code) {
-      setPromoError('Enter a code first.');
+      setPromoError(t('promoEnterFirst'));
       return;
     }
     if (!selected) {
-      setPromoError('Choose a ticket type first.');
+      setPromoError(t('promoChooseFirst'));
       return;
     }
     setPromoError(null);
@@ -141,7 +158,7 @@ export function RegistrationForm({
         result = await checkPromo({ code, ticketTypeId: selected.id });
       } catch {
         // A dropped connection must not throw away the whole form.
-        setPromoError('We could not check the code just now. Try again, or continue without it.');
+        setPromoError(t('promoUnavailable'));
         return;
       }
       if (result.ok) {
@@ -151,11 +168,13 @@ export function RegistrationForm({
       }
       setApplied(null);
       setPromoError(
-        'message' in result
-          ? result.message
-          : result.reason === 'unknown'
-            ? 'That code is not valid for this event.'
-            : `That code does not apply to ${selected.name} tickets.`,
+        result.reason === 'unavailable'
+          ? t('promoUnavailable')
+          : result.reason === 'throttled'
+            ? errorText({ code: 'tooManyTries' })
+            : result.reason === 'unknown' || result.reason === 'invalid_input'
+              ? errorText({ code: 'promoInvalid' })
+              : t('promoNotForType', { name: selected.name }),
       );
     });
   };
@@ -177,20 +196,22 @@ export function RegistrationForm({
         >
           <p className="text-[15px] font-semibold">
             {state.banner
-              ? state.banner.title
-              : `${errorCount} ${errorCount === 1 ? 'thing needs' : 'things need'} fixing`}
+              ? t(`banner.${state.banner.code}.title`, digitsOf(state.banner.values, locale))
+              : t('fixCount', { count: errorCount, n: n(errorCount) })}
           </p>
           <p className="text-sm leading-relaxed">
-            {state.banner ? state.banner.body : Object.values(errors).join(' ')}
+            {state.banner
+              ? t(`banner.${state.banner.code}.body`, digitsOf(state.banner.values, locale))
+              : Object.values(errors).map(errorText).join(' ')}
           </p>
         </div>
       ) : null}
 
       {/* Ticket type */}
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-[15px] font-semibold">Ticket type</legend>
+        <legend className="mb-1 text-[15px] font-semibold">{t('ticketType')}</legend>
         <p className="-mt-1 text-sm text-muted-foreground">
-          One ticket type per order, up to {MAX_TICKETS_PER_ORDER} tickets.
+          {t('ticketTypeHint', { max: n(MAX_TICKETS_PER_ORDER) })}
         </p>
         {options.map((o) => {
           const disabled = o.maxPerOrder === 0 || o.id === soldOutId;
@@ -222,7 +243,7 @@ export function RegistrationForm({
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="flex items-baseline justify-between gap-3">
                   <span className="font-semibold">{o.name}</span>
-                  <Money paisa={o.pricePaisa} className="font-semibold" />
+                  <Money paisa={o.pricePaisa} className="font-semibold" locale={locale} />
                 </span>
                 <span
                   className={cn(
@@ -234,27 +255,27 @@ export function RegistrationForm({
                   )}
                 >
                   {o.id === soldOutId
-                    ? 'Sold out'
+                    ? t('soldOut')
                     : (o.reason ??
                       (o.available === null
                         ? null
                         : o.available <= 10
-                          ? `Only ${o.available} left`
-                          : `${o.available} left`))}
+                          ? t('onlyLeft', { n: n(o.available) })
+                          : t('left', { n: n(o.available) })))}
                 </span>
               </span>
             </label>
           );
         })}
-        {errors.ticketTypeId ? <FieldError>{errors.ticketTypeId}</FieldError> : null}
+        {errors.ticketTypeId ? <FieldError>{errorText(errors.ticketTypeId)}</FieldError> : null}
       </fieldset>
 
       {/* Quantity */}
       <div className="flex flex-col gap-2">
-        <Label htmlFor="quantity">Number of tickets</Label>
+        <Label htmlFor="quantity">{t('quantity')}</Label>
         <div className="flex items-center gap-3">
           <StepButton
-            label="Fewer tickets"
+            label={t('fewer')}
             disabled={quantity <= 1}
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
           >
@@ -275,7 +296,7 @@ export function RegistrationForm({
             className="h-11 w-16 rounded-md border border-input bg-card text-center text-lg font-semibold tabular outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
           <StepButton
-            label="More tickets"
+            label={t('more')}
             disabled={quantity >= maxQty}
             onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
           >
@@ -283,33 +304,29 @@ export function RegistrationForm({
           </StepButton>
         </div>
         <FieldHint>
-          Max {MAX_TICKETS_PER_ORDER} per order.
+          {t('maxPerOrder', { max: n(MAX_TICKETS_PER_ORDER) })}
           {selected && selected.available !== null
-            ? ` ${selected.available} left at this price.`
+            ? ` ${t('leftAtPrice', { n: n(selected.available) })}`
             : ''}
         </FieldHint>
-        {overStock && selected ? (
+        {overStock && selected && selected.available !== null ? (
           <FieldError>
-            Only {selected.available} {selected.name} tickets are left. Lower the quantity to{' '}
-            {selected.available} or fewer to continue.
+            {t('overStock', { n: n(selected.available), name: selected.name })}
           </FieldError>
         ) : null}
-        {errors.quantity ? <FieldError>{errors.quantity}</FieldError> : null}
+        {errors.quantity ? <FieldError>{errorText(errors.quantity)}</FieldError> : null}
       </div>
 
       {/* Your details */}
       <fieldset className="flex flex-col gap-5">
-        <legend className="mb-1 text-[15px] font-semibold">Your details</legend>
+        <legend className="mb-1 text-[15px] font-semibold">{t('details')}</legend>
         <p className="-mt-1 text-sm text-muted-foreground">
-          Tickets are emailed to this address once your payment is checked. Each ticket carries your
-          name
           {registrationClosesAt
-            ? ` — you can change it on the ticket until ${registrationClosesAt}`
-            : ''}
-          .
+            ? t('detailsHintUntil', { when: registrationClosesAt })
+            : t('detailsHint')}
         </p>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="buyerName">Full name</Label>
+          <Label htmlFor="buyerName">{t('fullName')}</Label>
           <Input
             id="buyerName"
             name="buyerName"
@@ -319,10 +336,10 @@ export function RegistrationForm({
             aria-invalid={Boolean(errors.buyerName)}
             className="h-11 bg-card"
           />
-          {errors.buyerName ? <FieldError>{errors.buyerName}</FieldError> : null}
+          {errors.buyerName ? <FieldError>{errorText(errors.buyerName)}</FieldError> : null}
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="buyerEmail">Email address</Label>
+          <Label htmlFor="buyerEmail">{t('email')}</Label>
           <Input
             id="buyerEmail"
             name="buyerEmail"
@@ -334,13 +351,13 @@ export function RegistrationForm({
             className="h-11 bg-card"
           />
           {errors.buyerEmail ? (
-            <FieldError>{errors.buyerEmail}</FieldError>
+            <FieldError>{errorText(errors.buyerEmail)}</FieldError>
           ) : (
-            <FieldHint>Check it carefully — this is where the tickets go.</FieldHint>
+            <FieldHint>{t('emailHint')}</FieldHint>
           )}
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="buyerPhone">Mobile number</Label>
+          <Label htmlFor="buyerPhone">{t('mobile')}</Label>
           <div className="flex items-stretch">
             <span className="flex items-center rounded-l-md border border-r-0 border-input bg-secondary px-3 text-[15px] text-muted-foreground tabular">
               {BD_MOBILE_PREFIX}
@@ -358,9 +375,9 @@ export function RegistrationForm({
             />
           </div>
           {errors.buyerPhone ? (
-            <FieldError>{errors.buyerPhone}</FieldError>
+            <FieldError>{errorText(errors.buyerPhone)}</FieldError>
           ) : (
-            <FieldHint>The number you will send the bKash payment from.</FieldHint>
+            <FieldHint>{t('mobileHint')}</FieldHint>
           )}
         </div>
       </fieldset>
@@ -368,7 +385,7 @@ export function RegistrationForm({
       {/* Promo code (B10) */}
       <div className="flex flex-col gap-2">
         <Label htmlFor="promoCode">
-          Promo code <span className="font-normal text-muted-foreground">· optional</span>
+          {t('promo')} <span className="font-normal text-muted-foreground">{t('optional')}</span>
         </Label>
         {applied ? (
           <div
@@ -383,15 +400,15 @@ export function RegistrationForm({
             <span className="flex items-center gap-2 font-medium">
               <Check className="size-4 shrink-0" aria-hidden="true" />
               {promoCovers
-                ? `${applied.code} applied — ${applied.label}`
-                : `${applied.code} does not apply to ${selected?.name ?? 'this'} tickets`}
+                ? t('promoApplied', { code: applied.code, label: promoLabel(applied) })
+                : t('promoNotFor', { code: applied.code, name: selected?.name ?? '' })}
             </span>
             <button
               type="button"
               onClick={removePromo}
               className="text-sm font-semibold underline underline-offset-2"
             >
-              Remove
+              {t('remove')}
             </button>
             {/* Only a code that covers the chosen ticket is sent; the server decides. */}
             {promoCovers ? <input type="hidden" name="promoCode" value={applied.code} /> : null}
@@ -429,7 +446,7 @@ export function RegistrationForm({
               onClick={applyPromo}
               disabled={checking}
             >
-              {checking ? 'Checking…' : 'Apply'}
+              {checking ? t('checking') : t('apply')}
             </Button>
           </div>
         )}
@@ -453,13 +470,17 @@ export function RegistrationForm({
           id="summary-heading"
           className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase"
         >
-          Order summary
+          {t('summary')}
         </h2>
         <dl className="flex flex-col gap-1.5 text-[15px]">
           <div className="flex justify-between gap-4">
-            <dt>{selected ? `${selected.name} × ${quantity}` : 'No ticket chosen'}</dt>
+            <dt>
+              {selected
+                ? t('summaryLine', { name: selected.name, qty: n(quantity) })
+                : t('noTicket')}
+            </dt>
             <dd>
-              <Money paisa={subtotal} />
+              <Money paisa={subtotal} locale={locale} />
             </dd>
           </div>
           {discount > 0 && applied ? (
@@ -467,23 +488,20 @@ export function RegistrationForm({
               className="flex justify-between gap-4 text-[#17603b]"
               data-testid="summary-discount"
             >
-              <dt>Discount · {applied.code}</dt>
+              <dt>{t('discount', { code: applied.code })}</dt>
               <dd>
-                −<Money paisa={discount} />
+                −<Money paisa={discount} locale={locale} />
               </dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-4 border-t border-border pt-2 text-lg font-semibold">
-            <dt>Total</dt>
+            <dt>{t('total')}</dt>
             <dd data-testid="summary-total">
-              <Money paisa={total} />
+              <Money paisa={total} locale={locale} />
             </dd>
           </div>
         </dl>
-        <p className="text-[13px] leading-snug text-muted-foreground">
-          The final price is confirmed by our server when you submit, so what you pay always matches
-          what you see here.
-        </p>
+        <p className="text-[13px] leading-snug text-muted-foreground">{t('finalPrice')}</p>
       </section>
 
       {/* Terms */}
@@ -497,22 +515,35 @@ export function RegistrationForm({
             className="mt-1 size-4 shrink-0 accent-foreground"
           />
           <span>
-            I agree to the{' '}
-            <Link href="/terms" target="_blank" rel="noreferrer" className="underline">
-              terms
-            </Link>{' '}
-            and understand that payments are checked by hand and there are{' '}
-            <Link href="/refund" target="_blank" rel="noreferrer" className="underline">
-              no refunds in the app
-            </Link>
-            .
+            {t.rich('terms', {
+              terms: (chunks) => (
+                <Link href="/terms" target="_blank" rel="noreferrer" className="underline">
+                  {chunks}
+                </Link>
+              ),
+              refund: (chunks) => (
+                <Link href="/refund" target="_blank" rel="noreferrer" className="underline">
+                  {chunks}
+                </Link>
+              ),
+            })}
           </span>
         </label>
-        {errors.terms ? <FieldError>{errors.terms}</FieldError> : null}
+        {errors.terms ? <FieldError>{errorText(errors.terms)}</FieldError> : null}
       </div>
 
       {/* In the flow, not the sticky bar: a challenge must not cover the form on mobile. */}
-      <TurnstileWidget siteKey={siteKey} action="register" resetSignal={state} />
+      <TurnstileWidget
+        siteKey={siteKey}
+        action="register"
+        resetSignal={state}
+        text={{
+          waiting: tb('waiting'),
+          interactive: tb('interactive'),
+          failed: tb('failed'),
+          noscript: tb('noscript'),
+        }}
+      />
 
       {/* Sticky on mobile (design A3), inline on desktop */}
       <div className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 p-4 backdrop-blur lg:static lg:border-0 lg:bg-transparent lg:p-0">
@@ -524,12 +555,19 @@ export function RegistrationForm({
             className="w-full"
             disabled={pending || !selected || overStock}
           >
-            {pending ? 'Saving…' : 'Continue to payment'}
+            {pending ? t('saving') : t('continue')}
           </Button>
         </div>
       </div>
     </form>
   );
+}
+
+/** A banner's numbers in the page's digits. */
+function digitsOf(values: Record<string, number> | undefined, locale: 'en' | 'bn') {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(values ?? {})) out[k] = plainDigits(v, locale);
+  return out;
 }
 
 function FieldError({ children }: { children: React.ReactNode }) {

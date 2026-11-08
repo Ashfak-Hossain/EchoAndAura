@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from '@/i18n/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { cache } from 'react';
 import { z } from 'zod';
 import { ordersService } from '@/server/container';
 import { OrderNotFoundError } from '@/server/lib/errors';
 import { holdCutoff, holdLapsed } from '@/server/lib/hold';
-import { REJECTION_REASONS, isRejectionReason } from '@/server/lib/rejection-reasons';
+import { plainDigits } from '@/server/lib/digits';
+import { isRejectionReason } from '@/server/lib/rejection-reasons';
 import type { OrderView } from '@/server/services/orders.service';
 import { Money } from '@/components/money';
 import { StatusChip } from '@/components/status-chip';
@@ -28,8 +30,11 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { order } = await load(id);
-  return { title: `Order ${order.reference}`, robots: { index: false, follow: false } };
+  const [{ order }, t] = await Promise.all([load(id), getTranslations('order')]);
+  return {
+    title: t('metaTitle', { reference: order.reference }),
+    robots: { index: false, follow: false },
+  };
 }
 
 // generateMetadata and the page both need it; one set of queries per request.
@@ -64,7 +69,23 @@ function frameOf({ order }: OrderView, now: Date): Frame {
 // left them.
 export default async function OrderPage({ params }: Props) {
   const { id } = await params;
-  const [view, settings] = await Promise.all([load(id), getSiteSettings()]);
+  const [view, settings, locale, t, tc, ts, tst] = await Promise.all([
+    load(id),
+    getSiteSettings(),
+    getLocale(),
+    getTranslations('order'),
+    getTranslations('common'),
+    getTranslations('status.order'),
+    getTranslations('status.ticket'),
+  ]);
+  // L3: the order reference, the bKash number, the TrxID and ticket codes
+  // stay in Latin digits; everything people only read follows the page.
+  const when = (d: Date) => formatDhakaLong(d, locale);
+  const dhaka = (d: Date) => tc('dhaka', { when: when(d) });
+  const n = (count: number) => plainDigits(count, locale);
+  const money = (paisa: number, className?: string) => (
+    <Money paisa={paisa} locale={locale} className={className} />
+  );
   const { order, event, ticketType, events, tickets, promoCode } = view;
   const renderedAt = new Date();
   const frame = frameOf(view, renderedAt);
@@ -73,15 +94,16 @@ export default async function OrderPage({ params }: Props) {
   // The bKash menu item differs by account type (B14): personal accounts
   // receive by "Send Money", merchant accounts by "Payment".
   const merchant = settings.bkashAccountType === 'merchant';
-  const contact = contactEmail ? (
-    <>
-      {' '}
-      at{' '}
+  // For sentences that name the organizer's address when there is one.
+  const contact = {
+    contact: contactEmail ? 'email' : 'none',
+    address: contactEmail ?? '',
+    email: (chunks: React.ReactNode) => (
       <a href={`mailto:${contactEmail}`} className="underline">
-        {contactEmail}
+        {chunks}
       </a>
-    </>
-  ) : null;
+    ),
+  };
   const newestFirst = [...events].reverse();
   const lastSubmission = newestFirst.find(
     (e) => e.action === 'payment.submitted' || e.action === 'payment.updated',
@@ -96,7 +118,7 @@ export default async function OrderPage({ params }: Props) {
     <div className="mx-auto flex w-full max-w-160 flex-1 flex-col gap-6 px-4 py-6 lg:py-10">
       <header className="flex flex-col gap-2">
         <p className="font-sans text-xs font-medium tracking-widest text-muted-foreground uppercase">
-          Order
+          {t('eyebrow')}
         </p>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1
@@ -105,14 +127,18 @@ export default async function OrderPage({ params }: Props) {
           >
             {order.reference}
           </h1>
-          <StatusChip kind="order" status={frame === 'expired' ? 'expired' : order.status} />
+          <StatusChip
+            kind="order"
+            status={frame === 'expired' ? 'expired' : order.status}
+            label={ts(frame === 'expired' ? 'expired' : order.status)}
+          />
         </div>
         <p className="text-[15px] text-[#4a4640]">
           <Link href={`/events/${event.slug}`} className="font-medium hover:underline">
             {event.title}
           </Link>
           {' · '}
-          <span className="tabular">{formatDhakaLong(event.startsAt)} (Dhaka)</span>
+          <span className="tabular">{dhaka(event.startsAt)}</span>
         </p>
       </header>
 
@@ -120,33 +146,39 @@ export default async function OrderPage({ params }: Props) {
         <>
           <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:p-5">
             <div className="flex items-baseline justify-between gap-4">
-              <span className="text-[15px] text-muted-foreground">Amount due</span>
-              <Money paisa={order.totalPaisa} className="text-[26px] font-semibold" />
+              <span className="text-[15px] text-muted-foreground">{t('amountDue')}</span>
+              {money(order.totalPaisa, 'text-[26px] font-semibold')}
             </div>
             <p className="text-sm text-muted-foreground tabular">
-              {order.quantity} × {ticketType.name} at <Money paisa={order.unitPricePaisa} />
+              {t.rich('line', {
+                qty: n(order.quantity),
+                name: ticketType.name,
+                price: () => money(order.unitPricePaisa),
+              })}
               {order.discountPaisa > 0 ? (
                 <span className="text-[#17603b]" data-testid="order-discount">
                   {' · '}
-                  <Money paisa={order.subtotalPaisa} /> − <Money paisa={order.discountPaisa} />{' '}
-                  {promoCode ? `with ${promoCode}` : 'discount'}
+                  {t.rich(promoCode ? 'discountWith' : 'discountPlain', {
+                    code: promoCode ?? '',
+                    subtotal: () => money(order.subtotalPaisa),
+                    discount: () => money(order.discountPaisa),
+                  })}
                 </span>
               ) : null}
             </p>
             {order.holdExpiresAt ? (
               <div className="flex flex-col gap-2 border-t border-border pt-3">
-                <p className="text-sm leading-relaxed">
-                  Your tickets are held for you. Send the money and paste the transaction ID below
-                  before the clock runs out.
-                </p>
+                <p className="text-sm leading-relaxed">{t('held')}</p>
                 <Countdown
                   until={order.holdExpiresAt.toISOString()}
                   cutoff={holdCutoff(order.holdExpiresAt).toISOString()}
                   serverNow={renderedAt.toISOString()}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Hold ends{' '}
-                  <span className="tabular">{formatDhakaLong(order.holdExpiresAt)} (Dhaka)</span>.
+                  {t.rich('holdEnds', {
+                    date: when(order.holdExpiresAt),
+                    when: (chunks) => <span className="tabular">{chunks}</span>,
+                  })}
                 </p>
               </div>
             ) : null}
@@ -154,39 +186,51 @@ export default async function OrderPage({ params }: Props) {
 
           <section aria-labelledby="pay-heading" className="flex flex-col gap-4">
             <h2 id="pay-heading" className="font-heading text-xl font-semibold">
-              How to pay with bKash
+              {t('howToPay')}
             </h2>
             <ol className="flex flex-col gap-4">
-              <Step n={1}>
-                Open the bKash app and choose{' '}
-                <strong data-testid="bkash-menu">{merchant ? 'Payment' : 'Send Money'}</strong>.
+              <Step n={n(1)}>
+                {t.rich('step1', {
+                  menu: () => (
+                    <strong data-testid="bkash-menu">
+                      {merchant ? t('menuPayment') : t('menuSendMoney')}
+                    </strong>
+                  ),
+                })}
               </Step>
-              <Step n={2}>
-                Send exactly <Money paisa={order.totalPaisa} className="font-semibold" /> to this
-                number
-                {settings.bkashAccountName
-                  ? ` — the account is in the name of ${settings.bkashAccountName}.`
-                  : merchant
-                    ? ' — it is a merchant account.'
-                    : ' — it is a personal account.'}
+              <Step n={n(2)}>
+                {t.rich(
+                  settings.bkashAccountName
+                    ? 'step2Named'
+                    : merchant
+                      ? 'step2Merchant'
+                      : 'step2Personal',
+                  {
+                    name: settings.bkashAccountName ?? '',
+                    amount: () => money(order.totalPaisa, 'font-semibold'),
+                  },
+                )}
                 <div className="mt-2">
                   {receiveNumber ? (
-                    <CopyField label="bKash number" value={receiveNumber} />
+                    <CopyField label={t('bkashNumber')} value={receiveNumber} />
                   ) : (
                     <p className="rounded-lg border border-dashed border-border-strong px-3.5 py-2.5 text-sm text-muted-foreground">
-                      bKash number to be announced — the organizer will send it to{' '}
-                      <span className="font-medium text-foreground">{order.buyerEmail}</span>.
+                      {t.rich('numberTba', {
+                        email: () => (
+                          <span className="font-medium text-foreground">{order.buyerEmail}</span>
+                        ),
+                      })}
                     </p>
                   )}
                 </div>
               </Step>
-              <Step n={3}>
-                In the reference field, put your order reference.
+              <Step n={n(3)}>
+                {t('step3')}
                 <div className="mt-2">
-                  <CopyField label="order reference" value={order.reference} />
+                  <CopyField label={t('orderReference')} value={order.reference} />
                 </div>
               </Step>
-              <Step n={4}>Come back here and paste the transaction ID below.</Step>
+              <Step n={n(4)}>{t('step4')}</Step>
             </ol>
           </section>
 
@@ -195,26 +239,26 @@ export default async function OrderPage({ params }: Props) {
             className="flex flex-col gap-4 rounded-xl border border-border-strong bg-card p-4 lg:p-5"
           >
             <h2 id="trx-heading" className="font-heading text-lg font-semibold">
-              Paste your transaction ID
+              {t('pasteTrx')}
             </h2>
             <PaymentForm
               action={submitPaymentAction.bind(null, order.id)}
-              submitLabel="I have sent the money"
+              submitLabel={t('sentMoney')}
             />
           </section>
 
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-            <h2 className="text-[15px] font-semibold">What happens next</h2>
+            <h2 className="text-[15px] font-semibold">{t('nextTitle')}</h2>
             <p className="text-sm leading-relaxed text-[#4a4640]">
-              A person checks your transaction against the bKash statement —{' '}
-              {settings.verificationPromise}. When it matches, your tickets arrive by email at{' '}
-              <span className="font-medium text-foreground">{order.buyerEmail}</span> straight away.
-              Nothing else is needed from you.
+              {t.rich('nextBody', {
+                promise: settings.verificationPromise,
+                email: () => (
+                  <span className="font-medium text-foreground">{order.buyerEmail}</span>
+                ),
+              })}
             </p>
             {contactEmail ? (
-              <p className="text-sm text-muted-foreground">
-                Stuck? Message the organizer{contact}.
-              </p>
+              <p className="text-sm text-muted-foreground">{t.rich('stuck', contact)}</p>
             ) : null}
           </section>
         </>
@@ -227,9 +271,7 @@ export default async function OrderPage({ params }: Props) {
           totalPaisa={order.totalPaisa}
           trxId={order.bkashTrxId ?? ''}
           senderMsisdn={order.bkashSenderMsisdn ?? ''}
-          submittedAt={
-            lastSubmission ? `${formatDhakaLong(lastSubmission.createdAt)} (Dhaka)` : null
-          }
+          submittedAt={lastSubmission ? dhaka(lastSubmission.createdAt) : null}
           contactEmail={contactEmail}
           action={submitPaymentAction.bind(null, order.id)}
         />
@@ -238,39 +280,35 @@ export default async function OrderPage({ params }: Props) {
       {frame === 'expired' ? (
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 lg:p-5">
-            <h2 className="font-heading text-xl font-semibold">This hold has expired</h2>
+            <h2 className="font-heading text-xl font-semibold">{t('expiredTitle')}</h2>
             <p className="text-sm leading-relaxed text-[#4a4640]">
-              We held {order.quantity} × {ticketType.name} until{' '}
-              <span className="tabular">
-                {order.holdExpiresAt ? formatDhakaLong(order.holdExpiresAt) : ''} (Dhaka)
-              </span>
-              . No transaction ID arrived, so the seats go back on sale and nothing was charged.
+              {t.rich('expiredBody', {
+                qty: n(order.quantity),
+                name: ticketType.name,
+                date: order.holdExpiresAt ? when(order.holdExpiresAt) : '',
+                when: (chunks) => <span className="tabular">{chunks}</span>,
+              })}
             </p>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-muted-foreground">Held</dt>
+              <dt className="text-muted-foreground">{t('heldLabel')}</dt>
               <dd className="tabular">
-                {order.quantity} × {ticketType.name}
+                {t('qtyName', { qty: n(order.quantity), name: ticketType.name })}
               </dd>
-              <dt className="text-muted-foreground">Amount</dt>
+              <dt className="text-muted-foreground">{t('amount')}</dt>
               <dd className="tabular">
-                <Money paisa={order.totalPaisa} /> · unpaid
+                {t.rich('unpaid', { amount: () => money(order.totalPaisa) })}
               </dd>
             </dl>
           </section>
           <section className="flex flex-col gap-2 rounded-xl border border-[#e8c48a] bg-warning-tint p-4 text-[#7a4600]">
-            <p className="text-[15px] font-semibold">
-              Already sent the money? Do not send it again.
-            </p>
-            <p className="text-sm leading-relaxed">
-              Message the organizer{contact} with your order reference and TrxID and they will sort
-              it out by hand.
-            </p>
+            <p className="text-[15px] font-semibold">{t('alreadySent')}</p>
+            <p className="text-sm leading-relaxed">{t.rich('alreadySentBody', contact)}</p>
           </section>
           <Link
             href={`/events/${event.slug}`}
             className="inline-flex h-13 w-full items-center justify-center rounded-lg border border-foreground bg-foreground px-7 text-[17px] font-semibold text-background hover:bg-[#33302a]"
           >
-            Register again
+            {t('registerAgain')}
           </Link>
         </>
       ) : null}
@@ -278,36 +316,46 @@ export default async function OrderPage({ params }: Props) {
       {frame === 'issued' ? (
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
-            <h2 className="font-heading text-xl font-semibold">You&apos;re in.</h2>
+            <h2 className="font-heading text-xl font-semibold">{t('youreIn')}</h2>
             <p className="text-sm leading-relaxed" data-testid="issued-line">
               {comp
-                ? `Complimentary ${tickets.length === 1 ? 'ticket' : 'tickets'} from ${settings.organizerName}${
-                    compIssued ? `, issued on ${formatDhakaLong(compIssued.createdAt)} (Dhaka)` : ''
-                  }.`
-                : `Payment confirmed${
-                    lastApproval ? ` on ${formatDhakaLong(lastApproval.createdAt)} (Dhaka)` : ''
-                  }.`}{' '}
-              {tickets.length === 1 ? 'Your ticket is' : `${tickets.length} tickets are`} in your
-              inbox at <strong>{order.buyerEmail}</strong>.
+                ? compIssued
+                  ? t('compLineOn', {
+                      count: tickets.length,
+                      organizer: settings.organizerName,
+                      when: when(compIssued.createdAt),
+                    })
+                  : t('compLine', { count: tickets.length, organizer: settings.organizerName })
+                : lastApproval
+                  ? t('paidLineOn', { when: when(lastApproval.createdAt) })
+                  : t('paidLine')}{' '}
+              {t.rich('inbox', {
+                count: tickets.length,
+                n: n(tickets.length),
+                email: () => <strong>{order.buyerEmail}</strong>,
+              })}
             </p>
           </section>
           <ul className="flex flex-col gap-2.5" data-testid="ticket-list">
-            {tickets.map((t, i) => (
+            {tickets.map((ticket, i) => (
               <li
-                key={t.id}
+                key={ticket.id}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
               >
                 <div className="min-w-0">
                   <div className="text-[13px] text-muted-foreground">
-                    Ticket {i + 1} · {ticketType.name}
+                    {t('ticketN', { n: n(i + 1), name: ticketType.name })}
                   </div>
-                  <div className="font-mono text-[15px] font-medium">{t.code}</div>
-                  <div className="text-[15px]">{t.attendeeName}</div>
+                  <div className="font-mono text-[15px] font-medium">{ticket.code}</div>
+                  <div className="text-[15px]">{ticket.attendeeName}</div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <StatusChip kind="ticket" status={t.status} />
-                  <Link href={`/tickets/${t.code}`} className="text-sm font-semibold underline">
-                    Open ticket
+                  <StatusChip kind="ticket" status={ticket.status} label={tst(ticket.status)} />
+                  <Link
+                    href={`/tickets/${ticket.code}`}
+                    className="text-sm font-semibold underline"
+                  >
+                    {t('openTicket')}
                   </Link>
                 </div>
               </li>
@@ -315,7 +363,10 @@ export default async function OrderPage({ params }: Props) {
           </ul>
           {comp ? null : (
             <p className="text-sm text-muted-foreground tabular">
-              Paid · trxID {order.bkashTrxId} · <Money paisa={order.totalPaisa} />
+              {t.rich('paidTrx', {
+                trxId: order.bkashTrxId ?? '',
+                amount: () => money(order.totalPaisa),
+              })}
             </p>
           )}
         </>
@@ -325,10 +376,9 @@ export default async function OrderPage({ params }: Props) {
         // Never expected to persist (ADR-014): approve moves straight to
         // issued. If it does, say the truth — no ticket rows exist yet.
         <section className="flex flex-col gap-2 rounded-xl border border-[#bfe0cd] bg-success-tint p-4 text-[#17603b] lg:p-5">
-          <h2 className="font-heading text-xl font-semibold">Payment confirmed</h2>
+          <h2 className="font-heading text-xl font-semibold">{t('paidTitle')}</h2>
           <p className="text-sm leading-relaxed">
-            Your tickets are being prepared and will be emailed to{' '}
-            <strong>{order.buyerEmail}</strong>. This page updates itself.
+            {t.rich('paidBody', { email: () => <strong>{order.buyerEmail}</strong> })}
           </p>
         </section>
       ) : null}
@@ -336,23 +386,20 @@ export default async function OrderPage({ params }: Props) {
       {frame === 'rejected' ? (
         <>
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 lg:p-5">
-            <h2 className="font-heading text-xl font-semibold">
-              We couldn&apos;t match your payment
-            </h2>
+            <h2 className="font-heading text-xl font-semibold">{t('rejectedTitle')}</h2>
             <p className="text-sm leading-relaxed text-[#4a4640]">
-              Checked
-              {lastRejection ? ` on ${formatDhakaLong(lastRejection.createdAt)} (Dhaka)` : ''}. Your
-              tickets were not issued and the seats have gone back on sale.
+              {lastRejection
+                ? t('rejectedBodyOn', { when: when(lastRejection.createdAt) })
+                : t('rejectedBody')}
             </p>
             <div className="mt-1 rounded-lg border border-[#efc4c0] bg-destructive-tint px-3.5 py-3 text-[#8e1e17]">
-              <p className="text-xs font-medium tracking-widest uppercase">
-                Reason given by the organizer
-              </p>
+              <p className="text-xs font-medium tracking-widest uppercase">{t('reasonLabel')}</p>
               <p className="mt-1 text-[15px] font-semibold" data-testid="rejection-reason">
                 {isRejectionReason(order.rejectionReason)
-                  ? REJECTION_REASONS[order.rejectionReason]
-                  : (order.rejectionReason ?? 'No reason recorded')}
+                  ? t(`rejection.${order.rejectionReason}`)
+                  : (order.rejectionReason ?? t('noReason'))}
               </p>
+              {/* The organizer's own words, shown as typed. */}
               {order.rejectionNote ? (
                 <p className="mt-1 text-sm" data-testid="rejection-note">
                   {order.rejectionNote}
@@ -361,17 +408,11 @@ export default async function OrderPage({ params }: Props) {
             </div>
           </section>
           <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-            <h2 className="text-[15px] font-semibold">What to do now</h2>
+            <h2 className="text-[15px] font-semibold">{t('todo')}</h2>
             <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-[#4a4640]">
-              <li>
-                Check the TrxID in your bKash history — it is ten letters and numbers, easy to
-                mistype.
-              </li>
-              <li>
-                If the money did leave your account, send a screenshot of the bKash receipt to the
-                organizer{contact}.
-              </li>
-              <li>If it never left, register again and pay with the new reference.</li>
+              <li>{t('todo1')}</li>
+              <li>{t.rich('todo2', contact)}</li>
+              <li>{t('todo3')}</li>
             </ol>
           </section>
           {order.rejectionReason !== 'buyer_cancelled' &&
@@ -380,7 +421,7 @@ export default async function OrderPage({ params }: Props) {
               href={`/events/${event.slug}`}
               className="inline-flex h-13 w-full items-center justify-center rounded-lg border border-foreground bg-card px-7 text-[17px] font-semibold hover:bg-secondary"
             >
-              Register again
+              {t('registerAgain')}
             </Link>
           ) : null}
         </>
@@ -388,11 +429,9 @@ export default async function OrderPage({ params }: Props) {
 
       {frame === 'other' ? (
         <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-          <p className="text-[15px] text-[#4a4640]">This order was cancelled.</p>
+          <p className="text-[15px] text-[#4a4640]">{t('cancelled')}</p>
           {contactEmail ? (
-            <p className="text-sm text-muted-foreground">
-              Questions? Message the organizer{contact}.
-            </p>
+            <p className="text-sm text-muted-foreground">{t.rich('questions', contact)}</p>
           ) : null}
         </section>
       ) : null}
@@ -400,7 +439,7 @@ export default async function OrderPage({ params }: Props) {
   );
 }
 
-function Step({ n, children }: { n: number; children: React.ReactNode }) {
+function Step({ n, children }: { n: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3.5">
       <span

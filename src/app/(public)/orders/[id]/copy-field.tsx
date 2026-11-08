@@ -1,9 +1,15 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-/** S6 CopyField: a mono value with a Copy button (order reference, bKash number). */
+/**
+ * S6 CopyField: a mono value with a Copy button (order reference, bKash
+ * number). The value stays in Latin digits on every page: a bKash app wants
+ * `01712…`, not `০১৭১২…` (LOCALISATION.md §5).
+ */
 export function CopyField({ label, value }: { label: string; value: string }) {
+  const t = useTranslations('copyField');
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -26,9 +32,9 @@ export function CopyField({ label, value }: { label: string; value: string }) {
         type="button"
         onClick={copy}
         className="border-l border-border-strong px-4 text-sm font-semibold hover:bg-secondary"
-        aria-label={`Copy ${label}`}
+        aria-label={t('copyLabel', { label })}
       >
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t('copied') : t('copy')}
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from '@/i18n/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { cache } from 'react';
 import { eventsService } from '@/server/container';
 import { EventNotFoundError } from '@/server/lib/errors';
@@ -21,8 +22,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const { event } = await load(slug);
-  return { title: `Register — ${event.title}`, robots: { index: false } };
+  const [{ event }, t] = await Promise.all([load(slug), getTranslations('register')]);
+  return { title: t('metaTitle', { title: event.title }), robots: { index: false } };
 }
 
 // generateMetadata and the page both need it; one set of queries per request.
@@ -39,23 +40,30 @@ const load = cache(async (slug: string) => {
 // whether to show the form at all and what each ticket row may offer.
 export default async function RegisterPage({ params }: Props) {
   const { slug } = await params;
-  const { event, ticketTypes } = await load(slug);
+  const [{ event, ticketTypes }, session, locale, t, tc] = await Promise.all([
+    load(slug),
+    getPublicSession(),
+    getLocale(),
+    getTranslations('register'),
+    getTranslations('common'),
+  ]);
   const now = new Date();
-  const session = await getPublicSession();
+  const when = (d: Date) => formatDhakaLong(d, locale);
 
   const availableTotal = ticketTypes.reduce(
-    (n, t) => n + Math.max(0, t.quantityTotal - t.quantitySold - t.quantityReserved),
+    (sum, type) =>
+      sum + Math.max(0, type.quantityTotal - type.quantitySold - type.quantityReserved),
     0,
   );
   const phase = eventPhase({ event, availableTotal, now });
   const open = phase === 'open' || phase === 'closing_soon';
 
-  const options: TicketOption[] = ticketTypes.map((t) => {
-    const a = ticketAvailability(t, now);
+  const options: TicketOption[] = ticketTypes.map((type) => {
+    const a = ticketAvailability(type, now);
     return {
-      id: t.id,
-      name: t.name,
-      pricePaisa: t.pricePaisa,
+      id: type.id,
+      name: type.name,
+      pricePaisa: type.pricePaisa,
       // ADR-055: a hidden count never leaves the server — not even in the
       // page payload. The stepper then allows the usual 10 and the order's
       // atomic hold answers "sold out" if there are not that many.
@@ -68,15 +76,15 @@ export default async function RegisterPage({ params }: Props) {
             : Math.min(MAX_TICKETS_PER_ORDER, a.count),
       reason:
         a.kind === 'sold_out'
-          ? 'Sold out'
+          ? t('soldOut')
           : a.kind === 'closed'
-            ? t.salesEndsAt
-              ? `Sales ended ${formatDhakaLong(t.salesEndsAt)} (Dhaka)`
-              : 'Sales window closed'
+            ? type.salesEndsAt
+              ? t('salesEnded', { when: when(type.salesEndsAt) })
+              : t('salesClosed')
             : a.kind === 'not_started'
-              ? t.salesStartsAt
-                ? `On sale from ${formatDhakaLong(t.salesStartsAt)} (Dhaka)`
-                : 'Not on sale yet'
+              ? type.salesStartsAt
+                ? t('onSaleFrom', { when: when(type.salesStartsAt) })
+                : t('notOnSaleYet')
               : null,
     };
   });
@@ -91,10 +99,10 @@ export default async function RegisterPage({ params }: Props) {
           ‹ {event.title}
         </Link>
         <h1 className="font-heading text-[26px] leading-tight font-bold tracking-[-0.02em] lg:text-[32px]">
-          {open ? 'Choose your ticket' : 'Registration'}
+          {open ? t('headingOpen') : t('heading')}
         </h1>
         <p className="text-[15px] text-[#4a4640] tabular">
-          {formatDhakaLong(event.startsAt)} (Dhaka)
+          {tc('dhaka', { when: when(event.startsAt) })}
           {publicVenueLine(event) ? ` · ${publicVenueLine(event)}` : ''}
         </p>
       </header>
@@ -105,7 +113,7 @@ export default async function RegisterPage({ params }: Props) {
           checkPromo={checkPromoCodeAction.bind(null, event.slug)}
           options={options}
           registrationClosesAt={
-            event.registrationClosesAt ? formatDhakaLong(event.registrationClosesAt) : null
+            event.registrationClosesAt ? when(event.registrationClosesAt) : null
           }
           prefill={session?.role === 'buyer' ? { name: session.name, email: session.email } : null}
           siteKey={readTurnstileConfig().siteKey}
@@ -117,7 +125,7 @@ export default async function RegisterPage({ params }: Props) {
               role="status"
               className="rounded-xl border border-border bg-secondary px-4 py-3.5 text-[15px]"
             >
-              This event has already happened.
+              {t('past')}
             </p>
           ) : (
             <PhaseNotice
@@ -128,7 +136,7 @@ export default async function RegisterPage({ params }: Props) {
             />
           )}
           <ButtonLink href={`/events/${event.slug}`} variant="secondary" className="self-start">
-            Back to the event
+            {t('backToEvent')}
           </ButtonLink>
         </div>
       )}

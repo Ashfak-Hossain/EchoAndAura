@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { Money } from '@/components/money';
 import { PaymentForm } from './payment-form';
@@ -28,6 +29,8 @@ export function CheckingPayment({
   contactEmail,
   action,
 }: Props) {
+  const t = useTranslations('order');
+  const locale = useLocale();
   const [editing, setEditing] = useState(false);
   const local = senderMsisdn.replace(/^\+880/, '');
 
@@ -43,27 +46,26 @@ export function CheckingPayment({
   return (
     <>
       <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 lg:p-5">
-        <h2 className="font-heading text-xl font-semibold">Checking your payment</h2>
+        <h2 className="font-heading text-xl font-semibold">{t('checkingTitle')}</h2>
         <p className="text-sm leading-relaxed text-[#4a4640]">
-          Thanks, {firstName}. We have your transaction ID and a person is matching it against the
-          bKash statement — {slaText}. You will get an email either way, and this page updates
-          itself.
+          {t('checkingBody', { name: firstName, promise: slaText })}
         </p>
         <dl
           className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-border pt-3 text-sm"
           data-testid="payment-summary"
         >
-          <dt className="text-muted-foreground">Amount sent</dt>
+          <dt className="text-muted-foreground">{t('amountSent')}</dt>
           <dd className="font-medium tabular">
-            <Money paisa={totalPaisa} />
+            <Money paisa={totalPaisa} locale={locale} />
           </dd>
-          <dt className="text-muted-foreground">Transaction ID</dt>
+          {/* The TrxID and the number stay Latin: people compare them with bKash. */}
+          <dt className="text-muted-foreground">{t('trxId')}</dt>
           <dd className="font-mono font-medium tabular">{trxId}</dd>
-          <dt className="text-muted-foreground">Sent from</dt>
+          <dt className="text-muted-foreground">{t('sentFrom')}</dt>
           <dd className="tabular">+880 {local}</dd>
           {submittedAt ? (
             <>
-              <dt className="text-muted-foreground">Submitted</dt>
+              <dt className="text-muted-foreground">{t('submitted')}</dt>
               <dd className="tabular">{submittedAt}</dd>
             </>
           ) : null}
@@ -76,37 +78,34 @@ export function CheckingPayment({
           className="flex flex-col gap-4 rounded-xl border border-border-strong bg-card p-4 lg:p-5"
         >
           <h2 id="edit-heading" className="font-heading text-lg font-semibold">
-            Edit transaction ID
+            {t('editTrx')}
           </h2>
           <PaymentForm
             action={action}
             initial={{ trxId, senderPhone: local }}
-            submitLabel="Save transaction ID"
+            submitLabel={t('saveTrx')}
             onSubmitted={() => setEditing(false)}
           />
         </section>
       ) : (
         <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
           <p className="text-sm leading-relaxed text-[#4a4640]">
-            Sent the wrong amount or the wrong reference? Edit the transaction ID, or message the
-            organizer
-            {contactEmail ? (
-              <>
-                {' '}
-                at{' '}
+            {t.rich('wrongDetails', {
+              contact: contactEmail ? 'email' : 'none',
+              address: contactEmail ?? '',
+              email: (chunks) => (
                 <a href={`mailto:${contactEmail}`} className="underline">
-                  {contactEmail}
+                  {chunks}
                 </a>
-              </>
-            ) : null}
-            .
+              ),
+            })}
           </p>
           <button
             type="button"
             onClick={() => setEditing(true)}
             className="self-start text-sm font-semibold underline underline-offset-2"
           >
-            Edit transaction ID
+            {t('editTrx')}
           </button>
         </section>
       )}

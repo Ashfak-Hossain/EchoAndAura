@@ -1,6 +1,7 @@
 import { addDays } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import type { DbExecutor } from '@/db/executor';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locales';
 import {
   AttendeeNamesMismatchError,
   OrderNotFoundError,
@@ -117,6 +118,12 @@ export interface CreateOrderInput {
   attendeeNames: string[];
   /** B10: the code as typed. The discount is worked out here, never sent (Invariant 5). */
   promoCode?: string;
+  /**
+   * L3: the language of the page the order was placed from, so its emails
+   * can speak it. The caller reads it from the proxy's header, never from
+   * the form. English when not given, like the column.
+   */
+  locale?: Locale;
 }
 
 /** What Apply on the registration form learns about a code (B10). */
@@ -385,6 +392,7 @@ export function createOrdersService({
                 buyerEmail: input.buyerEmail,
                 buyerPhone: input.buyerPhone,
                 attendeeNames: input.attendeeNames,
+                locale: input.locale ?? DEFAULT_LOCALE,
                 holdExpiresAt: holdEndsAt(at),
               },
               tx,

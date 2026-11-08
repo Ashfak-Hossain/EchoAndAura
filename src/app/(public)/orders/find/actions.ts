@@ -1,10 +1,13 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { ordersService } from '@/server/container';
 import { createRateLimiter, redisRateLimitStore } from '@/server/lib/rate-limit';
 import { HUMAN_CHECK_FAILED, passesHumanCheck } from '@/lib/human-check';
 import { requestIp } from '@/lib/request-ip';
+import { formErrorText } from '@/lib/form-error-text';
+import { firstFormError } from '@/lib/validation/form-errors';
 import { findOrderSchema } from '@/lib/validation/orders';
 
 export interface FindOrderState {
@@ -34,8 +37,11 @@ export async function findOrderAction(
     phone: typeof raw.phone === 'string' ? raw.phone : '',
   };
   const parsed = findOrderSchema.safeParse(raw);
-  if (!parsed.success)
-    return { error: parsed.error.issues[0]?.message ?? 'Check the details.', values };
+  if (!parsed.success) {
+    // Until L3b moves this form to codes, the code is worded here.
+    const [tf, locale] = await Promise.all([getTranslations('formErrors'), getLocale()]);
+    return { error: formErrorText(tf, firstFormError(parsed.error), locale), values };
+  }
 
   // ADR-048: before the limiter, so a bot's guesses don't spend a real
   // buyer's per-IP budget on a shared network.
