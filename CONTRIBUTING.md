@@ -75,7 +75,9 @@ links to where it is written down in full.
   Types used here: `feat`, `fix`, `docs`, `test`, `chore`, `ci`, `build`,
   `refactor`. For example:
   `fix(orders): release the hold when a payment is rejected`.
-- **Merge commits only**, no squash or rebase. GitHub deletes the branch
+- **Squash merges only** (ADR-090). The pull request becomes one commit
+  on `main`: its title is the subject, so write it as a conventional
+  commit, and its description is the message. GitHub deletes the branch
   after the merge.
 - **Every merge to `main` deploys** to production. `main` is always
   deployable, and CI must be green to merge.

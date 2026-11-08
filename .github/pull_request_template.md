@@ -1,6 +1,9 @@
 <!--
-Title: what this does, in the imperative, ≤ 72 characters. It must make
-sense alone in `git log`: "Hold inventory for 20 minutes", not "Fixes".
+Title: a conventional commit, `type(scope): what it does`, in the
+imperative, ≤ 72 characters. The squash merge makes it the commit subject
+on main and this description its message (ADR-090), so it must make sense
+alone in `git log`: "fix(orders): release the hold when a payment is
+rejected", not "Fixes".
 Label: one of feature · fix · security · infra · ci · documentation ·
 dependencies (release notes are grouped by label; .github/release.yml).
 Keep it to one reviewable idea. Comments like this one don't render.

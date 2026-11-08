@@ -6,9 +6,8 @@
 #   scripts/git-tidy.sh --hook    the same as one line, as hook JSON
 #
 # Safe by design. It never commits, pushes, resets or stashes, and it only
-# deletes a local branch when GitHub has deleted it AND every commit on it
-# is already in GitHub's main (the repo merges with merge commits, so a
-# merged branch is an ancestor of main). Anything else is reported, not
+# deletes a local branch when GitHub has deleted it AND main already holds
+# its work (merged_into_main below). Anything else is reported, not
 # touched. GitHub deletes merged branches by itself
 # (delete_branch_on_merge), so this is the local half.
 #
@@ -34,6 +33,35 @@ finish() {
   exit 0
 }
 
+# True when origin/main already holds everything on branch $1.
+# - An ancestor of main: branches merged with merge commits (before
+#   ADR-090), or a branch with nothing new.
+# - Squashed (ADR-090, squash merges only): the squash commit is new, so
+#   the branch is never an ancestor. patch-id finds the candidate: a commit
+#   on main since the fork point whose change matches the branch's whole
+#   change. But patch-id ignores whitespace (and, in older git, binary
+#   content and file modes), so the proof is exact: that commit's tree
+#   equals the branch on every path the branch changed, and outside those
+#   paths the branch is still the fork point. Read-only, writes no objects.
+#   A branch with anything added after its squash fails the proof and is
+#   kept. The plain-diff flags stop user config (color, external diff,
+#   textconv) from changing what is compared.
+merged_into_main() {
+  git merge-base --is-ancestor "$1" origin/main && return 0
+  _mim_base=$(git merge-base "$1" origin/main) || return 1
+  _mim_want=$(git diff --no-color --no-ext-diff --no-textconv "$_mim_base" "$1" |
+    git patch-id --stable | cut -d' ' -f1)
+  [ -n "$_mim_want" ] || return 1
+  for _mim_c in $(git diff --no-renames --name-only -z "$_mim_base" "$1" |
+    xargs -0 git log -p --no-merges --no-color --no-ext-diff --no-textconv \
+      --format='commit %H' "$_mim_base..origin/main" -- |
+    git patch-id --stable | awk -v w="$_mim_want" '$1 == w {print $2}'); do
+    git diff --no-renames --name-only -z "$_mim_base" "$1" |
+      xargs -0 git diff --quiet --no-ext-diff --no-textconv "$_mim_c" "$1" -- && return 0
+  done
+  return 1
+}
+
 root=$(git rev-parse --show-toplevel 2>/dev/null) || finish
 cd "$root" || finish
 
@@ -51,7 +79,7 @@ dirty=$(git status --porcelain | wc -l | tr -d ' ')
 #    nothing is uncommitted, step back to main so it can be removed.
 if [ -n "$current" ] && [ "$current" != main ]; then
   track=$(git for-each-ref --format='%(upstream:track)' "refs/heads/$current")
-  if [ "$track" = "[gone]" ] && git merge-base --is-ancestor "$current" origin/main; then
+  if [ "$track" = "[gone]" ] && merged_into_main "$current"; then
     if [ "$dirty" = 0 ]; then
       git switch --quiet main && did "left merged $current for main" && current=main
     else
@@ -81,7 +109,7 @@ fi
 removed=0
 for b in $(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | awk '$2=="[gone]" {print $1}'); do
   [ "$b" = "$current" ] && continue
-  if git merge-base --is-ancestor "$b" origin/main; then
+  if merged_into_main "$b"; then
     git branch -D "$b" >/dev/null && removed=$((removed + 1))
   else
     needs "$b was deleted on GitHub but has commits main doesn't, kept"

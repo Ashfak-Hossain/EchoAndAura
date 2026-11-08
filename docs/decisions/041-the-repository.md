@@ -17,6 +17,9 @@ The licence part of "Public, proprietary" below is replaced by
 the logo and event content left out. The repository stays public, and the
 other decisions remain in force.
 
+The merge method ("One merge method: merge commits" below) is replaced by
+[ADR-090](090-squash-merges.md): squash merges only, from 2026-11-08.
+
 **Context:** The repository had drifted from the project:
 
 - no description, license or security policy;

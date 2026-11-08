@@ -4,8 +4,12 @@
  * repository) and a clone in a temp folder, so the script is proven on
  * every case before it ever touches the real repository:
  *
- * - merged branches GitHub deleted are removed; everything else is kept;
- * - a branch GitHub deleted but main does not contain is never removed;
+ * - merged branches GitHub deleted are removed, whether merged with a merge
+ *   commit (the old way) or squashed (ADR-090), "Update branch" included;
+ *   everything else is kept;
+ * - a branch GitHub deleted but main does not contain is never removed, nor
+ *   one given more commits after it was squashed, even whitespace only
+ *   (patch-id ignores whitespace), nor one whose commits cancel out;
  * - a finished branch you are on is left for main only when nothing is
  *   uncommitted;
  * - main fast-forwards, and a second run has nothing to do;
@@ -28,13 +32,21 @@ const env = {
   GIT_CONFIG_NOSYSTEM: '1',
 };
 
+const merged = ['merged-a', 'merged-b', 'current-merged'];
+const squashed = ['squashed', 'squashed-updated', 'squash-then-more', 'squash-then-indent'];
+
 let dir: string;
 let hub: string;
 let work: string;
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd, env, encoding: 'utf8' }).trim();
+  execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: 'pipe' }).trim();
 const tidy = () => execFileSync('bash', [script], { cwd: work, env, encoding: 'utf8' });
+const commitFile = (cwd: string, name: string) => {
+  writeFileSync(join(cwd, name), `${name}\n`);
+  git(cwd, 'add', name);
+  git(cwd, 'commit', '-q', '-m', name);
+};
 const branches = () => git(work, 'branch', '--format=%(refname:short)').split('\n').sort();
 
 beforeEach(() => {
@@ -44,26 +56,61 @@ beforeEach(() => {
   git(dir, 'init', '-q', '--bare', '-b', 'main', hub);
   git(dir, 'init', '-q', '-b', 'main', work);
   git(work, 'commit', '-q', '--allow-empty', '-m', 'init');
-  for (const b of ['merged-a', 'merged-b', 'unmerged', 'current-merged', 'still-open']) {
+  for (const b of [...merged, 'unmerged', 'still-open']) {
     git(work, 'switch', '-q', '-c', b, 'main');
     git(work, 'commit', '-q', '--allow-empty', '-m', b);
+  }
+  // A squash is matched by its change, so these branches change files.
+  for (const b of squashed) {
+    git(work, 'switch', '-q', '-c', b, 'main');
+    commitFile(work, `${b}.txt`);
   }
   git(work, 'switch', '-q', 'main');
   // "GitHub" receives every branch, and the clone tracks them.
   git(hub, 'fetch', '-q', work, 'refs/heads/*:refs/heads/*');
   git(work, 'remote', 'add', 'origin', hub);
   git(work, 'fetch', '-q', 'origin');
-  for (const b of ['main', 'merged-a', 'merged-b', 'unmerged', 'current-merged', 'still-open']) {
+  for (const b of ['main', ...merged, 'unmerged', 'still-open', ...squashed]) {
     git(work, 'branch', '-q', '-u', `origin/${b}`, b);
   }
-  // "GitHub" merges three with merge commits, then deletes those and `unmerged`.
+  // "GitHub" merges three with merge commits, as before ADR-090.
   const gh = join(dir, 'gh');
   git(dir, 'clone', '-q', hub, gh);
-  for (const b of ['merged-a', 'merged-b', 'current-merged']) {
+  for (const b of merged) {
     git(gh, 'merge', '-q', '--no-ff', `origin/${b}`, '-m', `Merge ${b}`);
   }
+  // Main moves on, and "Update branch" merges it into `squashed-updated`,
+  // which the clone pulls.
+  commitFile(gh, 'unrelated.txt');
+  git(gh, 'switch', '-q', '-c', 'squashed-updated', 'origin/squashed-updated');
+  git(gh, 'merge', '-q', '--no-edit', 'main');
+  git(gh, 'push', '-q', 'origin', 'squashed-updated');
+  git(gh, 'switch', '-q', 'main');
+  git(work, 'fetch', '-q', 'origin', 'squashed-updated:squashed-updated');
+  // Then it squashes the rest (ADR-090).
+  for (const b of squashed) {
+    git(gh, 'merge', '-q', '--squash', `origin/${b}`);
+    git(gh, 'commit', '-q', '-m', `${b} (#1)`);
+  }
   git(hub, 'fetch', '-q', gh, 'main:main');
-  for (const b of ['merged-a', 'merged-b', 'current-merged', 'unmerged']) {
+  // Work added after a squash is not on main.
+  git(work, 'switch', '-q', 'squash-then-more');
+  commitFile(work, 'more.txt');
+  // A whitespace-only change after the squash: same patch-id, different
+  // file (in YAML, a different meaning).
+  git(work, 'switch', '-q', 'squash-then-indent');
+  writeFileSync(join(work, 'squash-then-indent.txt'), '  squash-then-indent.txt\n');
+  git(work, 'commit', '-q', '-am', 'indent');
+  // Commits that cancel out: nothing to match, nothing on main.
+  git(work, 'switch', '-q', '-c', 'net-empty', 'main');
+  commitFile(work, 'net-empty.txt');
+  git(work, 'revert', '--no-edit', 'HEAD');
+  git(hub, 'fetch', '-q', work, 'net-empty:net-empty');
+  git(work, 'fetch', '-q', 'origin');
+  git(work, 'branch', '-q', '-u', 'origin/net-empty', 'net-empty');
+  git(work, 'switch', '-q', 'main');
+  // GitHub deletes every finished branch, and `unmerged` and `net-empty`.
+  for (const b of [...merged, ...squashed, 'unmerged', 'net-empty']) {
     git(hub, 'branch', '-q', '-D', b);
   }
 });
@@ -75,11 +122,30 @@ describe('git-tidy', () => {
     git(work, 'switch', '-q', 'current-merged');
     const out = tidy();
 
-    expect(branches()).toEqual(['main', 'still-open', 'unmerged']);
+    expect(branches()).toEqual([
+      'main',
+      'net-empty',
+      'squash-then-indent',
+      'squash-then-more',
+      'still-open',
+      'unmerged',
+    ]);
     expect(git(work, 'branch', '--show-current')).toBe('main');
     expect(git(work, 'rev-parse', 'main')).toBe(git(hub, 'rev-parse', 'main'));
-    expect(out).toContain('removed 3 merged branch(es)');
+    expect(out).toContain('removed 5 merged branch(es)');
     expect(out).toMatch(/unmerged was deleted on GitHub but has commits main doesn't, kept/);
+    for (const b of ['squash-then-more', 'squash-then-indent', 'net-empty']) {
+      expect(out).toContain(`${b} was deleted on GitHub but has commits main doesn't, kept`);
+    }
+  });
+
+  it('steps off a branch GitHub squashed', () => {
+    git(work, 'switch', '-q', 'squashed-updated');
+    const out = tidy();
+
+    expect(git(work, 'branch', '--show-current')).toBe('main');
+    expect(branches()).not.toContain('squashed-updated');
+    expect(out).toContain('left merged squashed-updated for main');
   });
 
   it('has nothing to do the second time', () => {

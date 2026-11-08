@@ -8,7 +8,7 @@
     { "type": "non_fast_forward" },
     {
       "parameters": {
-        "allowed_merge_methods": ["merge"],
+        "allowed_merge_methods": ["squash"],
         "dismiss_stale_reviews_on_push": false,
         "require_code_owner_review": false,
         "require_extra_approval_for_unattributed_changes": true,
