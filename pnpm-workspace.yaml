@@ -77,3 +77,11 @@ overrides:
   # undici 7 moves miniflare's exact 7.29.1 pin (GHSA-xjj6-f33q-929c).
   'undici@6': 6.29.1
   'undici@7': 7.30.1
+  # minimatch globParts amplification (GHSA-g3hv-75wg-m249) is fixed only in
+  # 11. Sentry and react-email reach glob 14 / minimatch 11 on their own; the
+  # two dev tools still asking for ^10 (ESLint's TypeScript parser, shadcn's
+  # ts-morph) call only `minimatch(path, pattern)`, which 11 keeps. 11 drops
+  # `makeRe` and the `AST` export, so scope the override to these parents, and
+  # drop it once both ask for ^11 themselves.
+  '@typescript-eslint/typescript-estree>minimatch': 11.0.8
+  '@ts-morph/common>minimatch': 11.0.8
