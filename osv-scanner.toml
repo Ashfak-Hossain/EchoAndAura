@@ -1,0 +1,12 @@
+# Accepted OSV findings, read by the OpenSSF Scorecard "Vulnerabilities"
+# check (.github/workflows/scorecard.yml). Same rule as .trivyignore.yaml
+# (ADR-069): add an entry only when no fix can ship yet, by PR, with a reason
+# and an expiry no more than 30 days out. An expired entry counts again.
+#
+# Dismissing the Scorecard alert on GitHub instead would hide every later
+# vulnerability too: the check raises one repo-wide alert, not one per advisory.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-12-15T00:00:00Z
+reason = "deepmerge 4.3.1 has no patched release. In production it only merges html-to-text's own options (via @react-email/render 2.0.6); buyer input never reaches it. Other paths are dev-only (shadcn). Drop when @react-email/components moves off render 2.0.6 or deepmerge 4.3.2 ships."
