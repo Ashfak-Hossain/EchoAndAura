@@ -27,8 +27,8 @@ detailed history.
 ### Security
 
 Publicly known vulnerabilities fixed since 1.0.0 in what the site's
-images ship. All were patched on 2026-10-25, in production the same day.
-None is known to have been used against the site.
+images ship. Patched on 2026-10-25, in production the same day, unless
+noted. None is known to have been used against the site.
 
 - **Next.js** 16.4.0 → 16.4.1: two critical flaws that let anyone run code
   on the server without signing in (GHSA-2464-fhr4-w9xw,
@@ -53,6 +53,10 @@ None is known to have been used against the site.
   **vite** 8.3.0 → 8.3.3 with **launch-editor**, development-server code
   (CVE-2026-112942, CVE-2026-112943, CVE-2026-112944, CVE-2026-112945,
   CVE-2026-112946, CVE-2026-112947).
+- Patched in November 2026, also never fed outside input: **glob**
+  13.0.6 → 14.0.6 and **minimatch** 10.2.6 → 11.0.8, which come with the
+  error-reporting (Sentry) and email libraries and run only at build time
+  and in the email-preview tool (GHSA-3g3m-2fjr-6pw4, GHSA-g3hv-75wg-m249).
 
 ## [1.0.0] - 2026-10-14
 

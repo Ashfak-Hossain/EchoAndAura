@@ -110,6 +110,9 @@ export const privateDataCollection: DataCollection = {
   urlQueryParams: false,
   graphQL: { document: false, variables: false },
   genAI: { inputs: false, outputs: false },
+  // Added in Sentry 11.12; it falls back to genAI when unset. Set it
+  // explicitly so the opt-out does not lean on that fallback.
+  mcp: { inputs: false, outputs: false },
   databaseQueryData: false,
   queues: false,
   stackFrameVariables: false,
