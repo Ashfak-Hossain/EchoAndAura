@@ -34,8 +34,9 @@ noted. None is known to have been used against the site.
   on the server without signing in (GHSA-2464-fhr4-w9xw,
   GHSA-673q-mjm6-r5xr), and a server-action denial of service
   (CVE-2026-94482, GHSA-p3m5-59mp-jv5r). The two critical ones need SVG
-  through the image optimizer or `use cache` functions; the site used
-  neither.
+  through the image optimizer or `use cache` functions. The site has no
+  `use cache`, and the optimizer reads only the site's own storage, whose
+  only SVGs are sponsor logos the organizer uploads, cleaned on upload.
 - **Node.js** 26.10.0 → 26.12.1, the security release: CVE-2026-106069,
   CVE-2026-105482, CVE-2026-105483, CVE-2026-111497 (high);
   CVE-2026-105481, CVE-2026-106072, CVE-2026-106074 (medium);
@@ -57,6 +58,15 @@ noted. None is known to have been used against the site.
   13.0.6 → 14.0.6 and **minimatch** 10.2.6 → 11.0.8, which come with the
   error-reporting (Sentry) and email libraries and run only at build time
   and in the email-preview tool (GHSA-3g3m-2fjr-6pw4, GHSA-g3hv-75wg-m249).
+- **Next.js** 16.4.1 → 16.4.5 in the site and the developer docs, patched
+  in November 2026. An SVG check bypass in the image optimizer
+  (GHSA-7qx7-33qx-rqx2): the optimizer fetches only from the site's own
+  storage, whose only SVGs are sponsor logos the organizer uploads, cleaned
+  on upload. Two flaws need features the site doesn't use: cookie exposure
+  on Edge-runtime routes (GHSA-f3mh-rxg3-f5g2) and response mix-ups when a
+  route forwards a fetched response (GHSA-pc58-hwjq-p385). So do four cache
+  leaks in `use cache` and Cache Components (GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf,
+  GHSA-vc7v-qv4w-wrv8, GHSA-mfr8-8qww-v76h).
 
 ## [1.0.0] - 2026-10-14
 
